@@ -1,4 +1,4 @@
-import { getDb } from './connection';
+import { execute } from './turso-http';
 import type { ResultSet } from '@libsql/client';
 
 export function escape(val: unknown): string {
@@ -11,7 +11,13 @@ export function escape(val: unknown): string {
 export async function sql(query: string, ...args: unknown[]): Promise<ResultSet> {
   let idx = 0;
   const filled = query.replace(/\?/g, () => escape(args[idx++]));
-  return getDb().execute(filled);
+  const result = await execute(filled);
+  return {
+    rows: result.rows,
+    columns: result.columns,
+    rowsAffected: result.affectedRowCount || 0,
+    lastInsertRowid: result.lastInsertRowid ? { toString: () => result.lastInsertRowid! } : undefined,
+  } as ResultSet;
 }
 
 export async function sqlOne(query: string, ...args: unknown[]) {

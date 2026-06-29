@@ -18,7 +18,7 @@ export async function callGemini(
   messages: Message[],
   tools?: ToolParam[],
   keys?: string[],
-) {
+): Promise<any> {
   const allKeys = keys || [];
   const apiKey = allKeys[0] || process.env.GEMINI_API_KEY || '';
 

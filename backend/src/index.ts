@@ -70,6 +70,8 @@ if (process.env.NODE_ENV !== 'production') {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   });
+} else {
+  initializeDatabase().catch(e => console.error('DB init error:', e.message));
 }
 
 export default app;
