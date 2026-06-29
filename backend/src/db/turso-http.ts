@@ -15,7 +15,7 @@ export async function execute(sql: string): Promise<QueryResult> {
     const result = await client.execute(sql);
     return {
       rows: result.rows,
-      columns: result.columns.map(c => ({ name: c.name, decltype: c.decltype })),
+      columns: result.columns.map(c => ({ name: c.name, decltype: c.decltype as string | null })),
       lastInsertRowid: result.lastInsertRowid?.toString(),
       affectedRowCount: result.rowsAffected,
     };
@@ -25,7 +25,7 @@ export async function execute(sql: string): Promise<QueryResult> {
     headers: { 'Authorization': 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: [{ type: 'execute', stmt: { sql } }] }),
   });
-  const d = await r.json();
+  const d: any = await r.json();
   const result = d.results?.[0];
   if (result?.type === 'error') throw new Error(result.error?.message || 'Turso error');
   const resp = result?.response?.result;
@@ -58,7 +58,7 @@ export async function executeMultiple(sql: string): Promise<void> {
     headers: { 'Authorization': 'Bearer ' + AUTH_TOKEN, 'Content-Type': 'application/json' },
     body: JSON.stringify({ requests: statements }),
   });
-  const d = await r.json();
+  const d: any = await r.json();
   for (const result of d.results || []) {
     if (result?.type === 'error') throw new Error(result.error?.message || 'Turso error');
   }

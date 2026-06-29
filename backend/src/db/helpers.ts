@@ -17,7 +17,9 @@ export async function sql(query: string, ...args: unknown[]): Promise<ResultSet>
     columns: result.columns,
     rowsAffected: result.affectedRowCount || 0,
     lastInsertRowid: result.lastInsertRowid ? { toString: () => result.lastInsertRowid! } : undefined,
-  } as ResultSet;
+    columnTypes: [],
+    toJSON: () => ({ rows: result.rows, columns: result.columns }),
+  } as unknown as ResultSet;
 }
 
 export async function sqlOne(query: string, ...args: unknown[]) {
