@@ -8,3 +8,9 @@ dist/
 .vite/
 coverage/
 *.tgz
+playwright-report/
+test-results/
+.playwright-mcp/
+skills-lock.json
+backend/scripts/
+*.tsbuildinfo
