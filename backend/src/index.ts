@@ -32,24 +32,7 @@ app.get('/api/branding', async (_req, res) => {
   }
 });
 
-app.get('/api/debug', async (_req, res) => {
-  try {
-    const info: any = { env: {} };
-    info.env.TURSO_DATABASE_URL = process.env.TURSO_DATABASE_URL ? '✓ set' : '✗ NOT SET';
-    info.env.TURSO_AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN ? '✓ set' : '✗ NOT SET';
-    info.env.NODE_ENV = process.env.NODE_ENV || 'not set';
-    try {
-      const r = await sql('SELECT 1 as ok');
-      info.db_test = r.rows;
-    } catch (e: any) {
-      info.db_error = e.message || String(e);
-      info.db_stack = e.stack?.split('\n').slice(0, 5).join('\n');
-    }
-    res.json(info);
-  } catch (e: any) {
-    res.json({ fatal: e.message });
-  }
-});
+
 
 app.use('/api/auth', authRouter);
 app.use('/api/settings', settingsRouter);
