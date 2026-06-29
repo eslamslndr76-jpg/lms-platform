@@ -15,7 +15,7 @@ export async function execute(sql: string): Promise<QueryResult> {
     const result = await client.execute(sql);
     return {
       rows: result.rows,
-      columns: result.columns.map(c => ({ name: c.name, decltype: c.decltype as string | null })),
+      columns: (result as any).columns.map((c: any) => ({ name: c.name || c, decltype: c.decltype || null })),
       lastInsertRowid: result.lastInsertRowid?.toString(),
       affectedRowCount: result.rowsAffected,
     };
