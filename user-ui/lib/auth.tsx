@@ -8,6 +8,8 @@ interface User {
   name: string;
   email: string;
   role: string;
+  phone?: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -30,7 +32,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const saved = localStorage.getItem('token');
     if (saved) {
       setToken(saved);
-      api('/api/auth/me').then(setUser).catch(() => localStorage.removeItem('token')).finally(() => setLoading(false));
+      api('/api/auth/me').then(data => {
+        setUser({ ...data, role: data.role_name });
+      }).catch(() => localStorage.removeItem('token')).finally(() => setLoading(false));
     } else {
       setLoading(false);
     }

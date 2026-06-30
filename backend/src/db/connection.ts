@@ -9,8 +9,10 @@ export async function initializeDatabase() {
     "ALTER TABLE users ADD COLUMN avatar TEXT",
     "ALTER TABLE courses ADD COLUMN image_url TEXT",
     "ALTER TABLE courses ADD COLUMN lecture_count INTEGER DEFAULT 0",
-    "ALTER TABLE courses ADD COLUMN total_hours REAL DEFAULT 0",
+    "ALTER TABLE courses ADD COLUMN lecture_duration REAL DEFAULT 0",
     "ALTER TABLE courses ADD COLUMN instructor TEXT DEFAULT ''",
+    "ALTER TABLE courses ADD COLUMN course_mode TEXT DEFAULT 'online'",
+    "ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'cash'",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

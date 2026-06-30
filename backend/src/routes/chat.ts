@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { callGemini, getAiKeys } from '../utils/gemini';
-import { sql } from '../db/helpers';
+import { sql, escape } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
@@ -47,7 +47,7 @@ async function executeTool(name: string, args: any, userId: number, roleId: numb
     }
     case 'get_recent_orders': {
       if (roleId > 2) return 'غير مصرح لك';
-      const statusFilter = args?.status && args.status !== 'all' ? `WHERE o.status='${args.status}'` : '';
+      const statusFilter = args?.status && args.status !== 'all' ? `WHERE o.status=${escape(args.status)}` : '';
       const orders = await sql(
         `SELECT o.id, u.name as student, c.title_ar as course, o.amount, o.status
          FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id

@@ -20,12 +20,14 @@ export default function HomePage() {
   const { sloganAr } = useBranding();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api('/api/courses').then(setCourses).catch(() => {}).finally(() => setLoading(false));
+    api('/api/courses').then(setCourses).catch(() => setError('فشل تحميل الكورسات')).finally(() => setLoading(false));
   }, []);
 
   if (loading) return <PageSkeleton />;
+  if (error) return <div className="text-center py-12"><p className="text-red-500">{error}</p><button onClick={() => window.location.reload()} className="mt-4 px-4 py-2 rounded-xl text-white" style={{backgroundColor:'var(--primary)'}}>إعادة المحاولة</button></div>;
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg)' }}>

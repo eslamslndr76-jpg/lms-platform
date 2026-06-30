@@ -67,4 +67,13 @@ router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: R
   }
 });
 
+router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    await sql('DELETE FROM certificates WHERE id=?', req.params.id);
+    res.json({ message: 'Certificate deleted' });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete certificate' });
+  }
+});
+
 export default router;

@@ -84,7 +84,7 @@ router.get('/orders', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req:
        FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id
        ORDER BY o.created_at DESC`,
     );
-    const format = (req.query.format as string) || 'json';
+    const format = (_req.query.format as string) || 'json';
     const rows = result.rows.map((r: any) => ({ id: r.id, student: r.student, course: r.course, amount: r.amount, status: r.status, date: r.created_at }));
     if (format === 'xlsx') return sendExcel(res, rows, 'orders');
     if (format === 'pdf') return sendPDF(res, rows, 'جميع الطلبات', 'orders');
@@ -101,7 +101,7 @@ router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_
        FROM orders WHERE status='paid'
        GROUP BY month ORDER BY month DESC`,
     );
-    const format = (req.query.format as string) || 'json';
+    const format = (_req.query.format as string) || 'json';
     const rows = result.rows.map((r: any) => ({ month: r.month, count: Number(r.count), total: Number(r.total) }));
     if (format === 'xlsx') return sendExcel(res, rows, 'financials');
     if (format === 'pdf') return sendPDF(res, rows, 'التقارير المالية', 'financials');

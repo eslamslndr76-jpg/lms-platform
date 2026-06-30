@@ -37,7 +37,8 @@ router.get('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Re
       ...params, limit, offset,
     );
 
-    res.json({ users: result.rows, total, page, limit, pages: Math.ceil(total / limit) });
+    const users = result.rows.map((u: any) => ({ ...u, is_active: Number(u.is_active), role_id: Number(u.role_id) }));
+    res.json({ users, total, page, limit, pages: Math.ceil(total / limit) });
   } catch {
     res.status(500).json({ error: 'Failed to fetch users' });
   }
@@ -97,6 +98,20 @@ router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, r
   }
 });
 
+router.delete('/:id/hard', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    if (id === req.user!.userId) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await sql('DELETE FROM group_students WHERE user_id=?', id);
+    await sql('DELETE FROM orders WHERE user_id=?', id);
+    await sql('DELETE FROM certificates WHERE user_id=?', id);
+    await sql('DELETE FROM users WHERE id=?', id);
+    res.json({ message: 'User deleted permanently' });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
 router.put('/:id/reactivate', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
     await sql('UPDATE users SET is_active=1 WHERE id=?', req.params.id);
@@ -124,7 +139,7 @@ router.get('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res:
        WHERE gs.user_id=?`,
       req.params.id,
     );
-    res.json({ ...user.rows[0], orders: orders.rows, groups: groups.rows });
+    res.json({ ...user.rows[0], is_active: Number(user.rows[0].is_active), role_id: Number(user.rows[0].role_id), orders: orders.rows, groups: groups.rows });
   } catch {
     res.status(500).json({ error: 'Failed to fetch user' });
   }

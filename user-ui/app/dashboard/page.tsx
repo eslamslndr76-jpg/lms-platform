@@ -65,6 +65,9 @@ export default function DashboardPage() {
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
     if (user) load();
+    const onFocus = () => { if (user) load(); };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
   }, [user, authLoading, router]);
 
   if (authLoading || loading) {

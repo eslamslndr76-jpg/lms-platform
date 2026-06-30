@@ -13,7 +13,7 @@ export async function api(path: string, options: RequestInit = {}) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15000);
   try {
-    const res = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal });
+    const res = await fetch(`${API_URL}${path}`, { ...options, headers, signal: controller.signal, cache: 'no-cache' });
     const text = await res.text();
     let data: any;
     try { data = JSON.parse(text); } catch { throw new Error(res.ok ? 'Invalid response' : `Server error (${res.status})`); }

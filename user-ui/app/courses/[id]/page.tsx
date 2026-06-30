@@ -2,37 +2,47 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
 import { Skeleton } from '../../../components/Skeleton';
 import { useBranding } from '../../../components/BrandingProvider';
+import { useAuth } from '../../../lib/auth';
 
 interface Course {
   id: number;
   title_ar: string;
   title_en: string;
-  description: string;
+  description?: string;
   price: number;
-  category_name_ar: string;
-  category_name_en: string;
-  lecture_count: number;
-  total_hours: number;
-  instructor: string;
+  category_name_ar?: string;
+  category_name_en?: string;
+  lecture_count?: number;
+  lecture_duration?: number;
+  instructor?: string;
+  course_mode?: string;
+  image_url?: string;
 }
 
 export default function CourseDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
+  const { user } = useAuth();
   const { primaryColor } = useBranding();
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    api(`/api/courses/${id}`).then(setCourse).catch(() => router.push('/')).finally(() => setLoading(false));
-  }, [id, router]);
+    api(`/api/courses/${id}`).then(setCourse).catch(() => setError('فشل تحميل بيانات الكورس')).finally(() => setLoading(false));
+  }, [id]);
 
   if (loading) {
     return <div className="p-4 space-y-4"><Skeleton className="h-8 w-2/3" /><Skeleton className="h-48 w-full rounded-2xl" /><Skeleton className="h-4 w-full" /><Skeleton className="h-12 w-full rounded-xl" /></div>;
+  }
+
+  if (error) {
+    return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><Link href="/courses" className="px-4 py-2 rounded-xl text-white text-sm" style={{ backgroundColor: 'var(--primary)' }}>رجوع للكورسات</Link></div>;
   }
 
   if (!course) return null;
@@ -51,16 +61,22 @@ export default function CourseDetailPage() {
         )}
 
         <div className="flex gap-3 mt-4">
+          {course.course_mode && (
+            <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>{course.course_mode === 'offline' ? '🏫 حضوري' : '💻 أونلاين'}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>نوع الكورس</p>
+            </div>
+          )}
           {course.lecture_count > 0 && (
             <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
               <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_count}</p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>محاضرة</p>
             </div>
           )}
-          {course.total_hours > 0 && (
+          {course.lecture_duration > 0 && (
             <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
-              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.total_hours}</p>
-              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ساعة</p>
+              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_duration}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>مدة المحاضرة (ساعة)</p>
             </div>
           )}
           {course.instructor && (
@@ -83,7 +99,10 @@ export default function CourseDetailPage() {
             </span>
           </div>
           <button
-            onClick={() => router.push(`/checkout?course_id=${course.id}&amount=${course.price}`)}
+            onClick={() => {
+              if (!user) { router.push('/login'); return; }
+              router.push(`/checkout?course_id=${course.id}&amount=${course.price}`);
+            }}
             className="w-full py-4 rounded-2xl text-white font-bold text-lg shadow-lg"
             style={{ backgroundColor: primaryColor }}
           >

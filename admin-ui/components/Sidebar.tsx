@@ -26,13 +26,13 @@ export default function Sidebar() {
   const { dark, toggle: toggleDark } = useDarkMode();
   const { systemName, logoHeader } = useBranding();
   const [open, setOpen] = useState(false);
-  const isActive = (href: string) => pathname === href || pathname?.startsWith(href + '/');
+  const isActive = (href: string) => pathname === href || (href !== '/' && pathname?.startsWith(href + '/'));
 
   const canView = (section: string) => {
     if (!user) return false;
     if (user.role === 'admin') return true;
     if (section === 'dashboard') return true;
-    if (section === 'settings' || section === 'employees') return false;
+    if (section === 'students' || section === 'employees' || section === 'settings') return false;
     return true;
   };
 

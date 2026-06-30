@@ -4,15 +4,17 @@ import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../lib/api';
+import { compressAndEncode } from '../../lib/imageUtils';
 import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 
-export default function CheckoutPage() {
+function CheckoutContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const { show } = useToast();
   const { primaryColor } = useBranding();
   const [file, setFile] = useState<File | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   const [loading, setLoading] = useState(false);
 
   const courseId = searchParams.get('course_id');
@@ -20,16 +22,15 @@ export default function CheckoutPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!courseId || !amount) return;
+    if (!courseId || !amount) {
+      router.push('/courses');
+      return;
+    }
     setLoading(true);
     try {
-      const data: any = { course_id: Number(courseId), amount: Number(amount) };
+      const data: any = { course_id: Number(courseId), amount: Number(amount), payment_method: paymentMethod };
       if (file) {
-        const formData = new FormData();
-        formData.append('receipt', file);
-        const uploadRes = await fetch(`http://localhost:3001/api/upload`, { method: 'POST', body: formData });
-        const uploadData = await uploadRes.json();
-        data.receipt_url = uploadData.url;
+        data.receipt_url = await compressAndEncode(file);
       }
       await api('/api/orders', {
         method: 'POST',
@@ -47,19 +48,34 @@ export default function CheckoutPage() {
   return (
     <div className="min-h-screen p-4">
       <Link href="/" className="text-sm mb-4 block" style={{ color: primaryColor }}>← رجوع</Link>
-      <h1 className="text-2xl font-bold mb-6">إتمام الشراء</h1>
+      <h1 className="text-2xl font-bold mb-6" style={{ color: 'var(--text)' }}>إتمام الشراء</h1>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <p className="text-gray-600 mb-1">المبلغ المطلوب</p>
+        <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+          <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>المبلغ المطلوب</p>
           <p className="text-3xl font-bold" style={{ color: primaryColor }}>{amount} ج.م</p>
         </div>
 
-        <div className="bg-white rounded-2xl p-4 shadow-sm">
-          <label className="block text-sm font-medium text-gray-700 mb-2">إرفاق إيصال الدفع (اختياري)</label>
-          <input type="file" accept="image/*,.pdf" onChange={e => setFile(e.target.files?.[0] || null)}
-            className="w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-medium file:text-white"
-            style={{ '--file-bg': primaryColor } as any} />
+        <div className="rounded-2xl p-4 shadow-sm space-y-3" style={{ backgroundColor: 'var(--card)' }}>
+          <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>طريقة الدفع</p>
+          {[
+            { value: 'wallet', label: 'محفظة إلكترونية (Wallet)' },
+            { value: 'instapay', label: 'إنستاباي (InstaPay)' },
+            { value: 'cash', label: 'كاش' },
+          ].map(opt => (
+            <label key={opt.value} className="flex items-center gap-3 p-3 rounded-xl cursor-pointer"
+              style={{ backgroundColor: paymentMethod === opt.value ? 'var(--primary)' + '15' : 'var(--bg)', border: paymentMethod === opt.value ? '2px solid var(--primary)' : '2px solid transparent' }}>
+              <input type="radio" name="payment_method" value={opt.value} checked={paymentMethod === opt.value}
+                onChange={() => setPaymentMethod(opt.value)} className="accent-blue-600" />
+              <span className="text-sm" style={{ color: 'var(--text)' }}>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+
+        <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>إرفاق إيصال الدفع (اختياري)</label>
+          <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)}
+            className="w-full text-sm" style={{ color: 'var(--text)' }} />
         </div>
 
         <button type="submit" disabled={loading || !courseId}
@@ -67,11 +83,17 @@ export default function CheckoutPage() {
           style={{ backgroundColor: primaryColor }}>
           {loading ? 'جاري التقديم...' : 'تأكيد الطلب'}
         </button>
-
-        <p className="text-xs text-gray-400 text-center">
-          الدفع متاح عبر: إي-والت، إنستاباي، أو كاش
-        </p>
       </form>
     </div>
+  );
+}
+
+import { Suspense } from 'react';
+
+export default function CheckoutPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-center">جاري التحميل...</div>}>
+      <CheckoutContent />
+    </Suspense>
   );
 }

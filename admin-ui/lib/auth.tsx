@@ -9,6 +9,8 @@ interface User {
   email: string;
   role: string;
   role_id: number;
+  phone?: string;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -19,7 +21,9 @@ interface AuthContextType {
   loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+const AuthContext = createContext<AuthContextType>({
+  user: null, token: null, login: async () => {}, logout: () => {}, loading: true,
+});
 
 export function AdminAuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);

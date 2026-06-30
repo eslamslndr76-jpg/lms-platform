@@ -9,6 +9,7 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
   try {
     const status = req.query.status as string | undefined;
     const search = req.query.search as string | undefined;
+    const courseId = req.query.courseId as string | undefined;
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 20));
     const offset = (page - 1) * limit;
@@ -21,6 +22,9 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
     if (search) {
       where += ` AND (u.name LIKE '%'||?||'%' OR c.title_ar LIKE '%'||?||'%')`;
       params.push(search, search);
+    }
+    if (courseId) {
+      where += ' AND o.course_id=?'; params.push(courseId);
     }
 
     const countResult = await sql(
@@ -82,22 +86,28 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
 
     if (status === 'paid') {
       const order = await sql('SELECT * FROM orders WHERE id=?', req.params.id);
-      if (order.rows.length > 0) {
-        const o = order.rows[0];
-        await sql(
-          'INSERT INTO receipts (order_id, file_url, payment_method, verified_by, verified_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)',
-          req.params.id, o.receipt_url || '', 'manual', req.user!.userId,
-        );
+      if (order.rows.length === 0) {
+        return res.json({ message: `Order ${status}` });
       }
+      const o = order.rows[0] as any;
+      await sql(
+        'INSERT INTO receipts (order_id, file_url, payment_method, verified_by, verified_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)',
+        req.params.id, o.receipt_url || '', 'manual', req.user!.userId,
+      );
 
       // Auto-assign student to an available group
-      const orderRow = order.rows[0] as any;
-      const studentId = Number(orderRow.user_id);
-      const courseId = Number(orderRow.course_id);
+      const studentId = Number(o.user_id);
+      const courseId = Number(o.course_id);
 
+      const thresholdResult = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
+      let maxStudents = 30;
+      if (thresholdResult.rows.length > 0) {
+        const parsed = JSON.parse(thresholdResult.rows[0].value as string);
+        maxStudents = parsed.threshold || 30;
+      }
       const course = await sql('SELECT max_students FROM courses WHERE id=?', courseId);
       if (course.rows.length > 0) {
-        const maxStudents = Number(course.rows[0].max_students);
+        maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
 
         const avail = await sql(
           `SELECT g.id FROM groups g
@@ -129,6 +139,33 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
     res.json({ message: `Order ${status}` });
   } catch {
     res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
+router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { amount, notes, payment_method } = req.body;
+    const sets: string[] = [];
+    const params: any[] = [];
+    if (amount !== undefined) { sets.push('amount=?'); params.push(amount); }
+    if (notes !== undefined) { sets.push('notes=?'); params.push(notes); }
+    if (payment_method !== undefined) { sets.push('payment_method=?'); params.push(payment_method); }
+    if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    params.push(req.params.id);
+    await sql(`UPDATE orders SET ${sets.join(', ')} WHERE id=?`, ...params);
+    res.json({ message: 'Order updated' });
+  } catch {
+    res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
+router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    await sql('DELETE FROM receipts WHERE order_id=?', req.params.id);
+    await sql('DELETE FROM orders WHERE id=?', req.params.id);
+    res.json({ message: 'Order deleted permanently' });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete order' });
   }
 });
 

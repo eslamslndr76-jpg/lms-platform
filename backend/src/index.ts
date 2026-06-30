@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
 import { initializeDatabase } from './db/connection';
 import { sql } from './db/helpers';
 import authRouter from './routes/auth';
@@ -19,7 +20,10 @@ import adminCertificatesRouter from './routes/admin/certificates';
 
 const app = express();
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  credentials: true,
+}));
 app.use(express.json({ limit: '10mb' }));
 
 app.get('/api/health', (_req, res) => {
@@ -46,6 +50,7 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/exports', exportsRouter);
 app.use('/api/chat', chatRouter);
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/uploads', uploadRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/certificates', certificatesRouter);

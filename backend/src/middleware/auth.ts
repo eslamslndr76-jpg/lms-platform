@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'lms-dev-secret-key';
+const getJwtSecret = (): string => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) throw new Error('JWT_SECRET environment variable is required');
+  return secret;
+};
+
+const JWT_SECRET = getJwtSecret();
 
 export interface AuthPayload {
   userId: number;
@@ -32,7 +38,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   }
   try {
     const token = header.split(' ')[1];
-    req.user = jwt.verify(token, JWT_SECRET) as AuthPayload;
+    req.user = jwt.verify(token, JWT_SECRET) as unknown as AuthPayload;
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
@@ -44,7 +50,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   if (header && header.startsWith('Bearer ')) {
     try {
       const token = header.split(' ')[1];
-      req.user = jwt.verify(token, JWT_SECRET) as AuthPayload;
+      req.user = jwt.verify(token, JWT_SECRET) as unknown as AuthPayload;
     } catch {
       // ignore invalid token
     }

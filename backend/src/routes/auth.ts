@@ -64,13 +64,17 @@ router.post('/login', async (req: Request, res: Response) => {
 });
 
 router.get('/me', authMiddleware, async (req: Request, res: Response) => {
-  const result = await sql(
-    `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.role_id, r.name as role_name
-     FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id=?`,
-    req.user!.userId,
-  );
-  if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-  res.json(result.rows[0]);
+  try {
+    const result = await sql(
+      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.avatar, u.role_id, r.name as role_name
+       FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id=?`,
+      req.user!.userId,
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch profile' });
+  }
 });
 
 router.put('/change-password', authMiddleware, async (req: Request, res: Response) => {

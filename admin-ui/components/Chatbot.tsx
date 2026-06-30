@@ -43,13 +43,13 @@ export default function Chatbot() {
   return (
     <>
       <button onClick={() => setOpen(!open)}
-        className="fixed bottom-5 left-5 z-50 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 transition">
+        className="fixed bottom-5 left-5 z-50 w-14 h-14 bg-[var(--primary)] text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 transition">
         {open ? '✕' : '💬'}
       </button>
 
       {open && (
         <div className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col" style={{ maxHeight: '70vh', backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <div className="bg-blue-600 text-white px-4 py-3 font-bold text-sm flex items-center gap-2">
+          <div className="bg-[var(--primary)] text-white px-4 py-3 font-bold text-sm flex items-center gap-2">
             <span>🤖</span> المساعد الذكي
           </div>
 
@@ -59,7 +59,7 @@ export default function Chatbot() {
                   <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${
                    msg.role === 'user'
                      ? ''
-                     : 'bg-blue-600 text-white'
+                     : 'bg-[var(--primary)] text-white'
                  }`}
                    style={msg.role === 'user' ? { backgroundColor: 'var(--bg)', color: 'var(--text)' } : {}}>
                   {msg.content}
@@ -68,7 +68,7 @@ export default function Chatbot() {
             ))}
             {loading && (
               <div className="flex justify-end">
-                <div className="bg-blue-600 text-white px-3 py-2 rounded-2xl text-sm">جاري التفكير...</div>
+                <div className="bg-[var(--primary)] text-white px-3 py-2 rounded-2xl text-sm">جاري التفكير...</div>
               </div>
             )}
             <div ref={endRef} />
@@ -81,7 +81,7 @@ export default function Chatbot() {
               placeholder="اكتب رسالتك..."
               className="flex-1 px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
             <button onClick={send} disabled={loading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-50">إرسال</button>
+              className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm disabled:opacity-50">إرسال</button>
           </div>
         </div>
       )}

@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { api } from '../lib/api';
 
 interface Branding {
   systemName: string;
@@ -15,15 +16,15 @@ interface Branding {
 }
 
 const defaultBranding: Branding = {
-  systemName: 'نظام إدارة التعلم',
+  systemName: 'نظام إدارة التعلم - تدريب X2',
   logoHeader: '',
   logoFooter: '',
   favicon: '',
   primaryColor: '#2563eb',
   secondaryColor: '#7c3aed',
-  sloganAr: 'نحو تعليم أفضل',
-  sloganEn: 'Towards Better Learning',
-  messageFooter: '',
+  sloganAr: 'جودة . ثقة . امان',
+  sloganEn: 'Make Your Power',
+  messageFooter: 'الكورس مقدم من فريق تدريب X2 بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
 };
 
 const BrandingContext = createContext<Branding>(defaultBranding);
@@ -36,9 +37,7 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
   const [branding, setBranding] = useState<Branding>(defaultBranding);
 
   useEffect(() => {
-    const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
-    fetch(`${API_URL}/api/branding`)
-      .then(res => res.json())
+    api('/api/branding')
       .then(data => {
         if (data && data.systemName) {
           setBranding(data);

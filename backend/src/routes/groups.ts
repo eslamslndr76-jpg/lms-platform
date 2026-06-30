@@ -38,7 +38,7 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
 
     const groupsWithCount = await Promise.all(result.rows.map(async (g: any) => {
       const count = await sql('SELECT COUNT(*) as count FROM group_students WHERE group_id=?', g.id);
-      return { ...g, student_count: Number(count.rows[0].count) };
+      return { ...g, student_count: Number(count.rows[0].count), is_active: Number(g.is_active) };
     }));
     res.json(groupsWithCount);
   } catch {
@@ -63,11 +63,13 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { name, schedule, zoom_link, start_date, end_date } = req.body;
-    await sql(
-      'UPDATE groups SET name=?, schedule=?, zoom_link=?, start_date=?, end_date=? WHERE id=?',
-      name, JSON.stringify(schedule || {}), zoom_link, start_date, end_date, req.params.id,
-    );
+    const { course_id, name, schedule, zoom_link, start_date, end_date, is_active } = req.body;
+    let fields = 'name=?, schedule=?, zoom_link=?, start_date=?, end_date=?';
+    const params: any[] = [name, JSON.stringify(schedule || {}), zoom_link, start_date, end_date];
+    if (course_id) { fields += ', course_id=?'; params.push(course_id); }
+    if (is_active !== undefined) { fields += ', is_active=?'; params.push(is_active); }
+    params.push(req.params.id);
+    await sql(`UPDATE groups SET ${fields} WHERE id=?`, ...params);
     res.json({ message: 'Group updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update group' });
@@ -94,6 +96,15 @@ router.post('/:id/students', authMiddleware, requireRole(ADMIN, EMPLOYEE), async
     res.json({ message: `${user_ids.length} students added` });
   } catch {
     res.status(500).json({ error: 'Failed to add students' });
+  }
+});
+
+router.delete('/:id/students/:userId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    await sql('DELETE FROM group_students WHERE group_id=? AND user_id=?', req.params.id, req.params.userId);
+    res.json({ message: 'Student removed from group' });
+  } catch {
+    res.status(500).json({ error: 'Failed to remove student' });
   }
 });
 

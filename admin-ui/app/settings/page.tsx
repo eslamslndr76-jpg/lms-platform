@@ -7,7 +7,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'aikeys'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'aikeys' | 'autogroup'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -16,7 +16,12 @@ export default function SettingsPage() {
   const [aiKeys, setAiKeys] = useState<string[]>([]);
   const [catModal, setCatModal] = useState(false);
   const [catForm, setCatForm] = useState({ name_ar: '', name_en: '' });
+  const [editCatModal, setEditCatModal] = useState(false);
+  const [editCatId, setEditCatId] = useState<number | null>(null);
+  const [editCatForm, setEditCatForm] = useState({ name_ar: '', name_en: '' });
   const [keyInput, setKeyInput] = useState('');
+  const [threshold, setThreshold] = useState(30);
+  const [thresholdSaving, setThresholdSaving] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -41,6 +46,12 @@ export default function SettingsPage() {
         if (k && typeof k === 'object' && Array.isArray(k.keys)) setAiKeys(k.keys);
       } catch {
         // ai-keys may be 403 for employees — ignore silently
+      }
+      try {
+        const ag = await api('/api/settings/auto-group');
+        if (ag && ag.threshold) setThreshold(ag.threshold);
+      } catch {
+        // ignore
       }
       setLoading(false);
     })();
@@ -79,6 +90,27 @@ export default function SettingsPage() {
     setTimeout(() => setMsg(''), 3000);
   };
 
+  const startEditCategory = (c: any) => {
+    setEditCatId(c.id);
+    setEditCatForm({ name_ar: c.name_ar, name_en: c.name_en });
+    setEditCatModal(true);
+  };
+
+  const saveEditCategory = async () => {
+    try {
+      await api(`/api/categories/${editCatId}`, {
+        method: 'PUT', body: JSON.stringify(editCatForm),
+      });
+      setEditCatModal(false);
+      setEditCatId(null);
+      api('/api/categories').then(setCategories);
+      setMsg('تم تحديث التصنيف');
+    } catch {
+      setMsg('فشل تحديث التصنيف');
+    }
+    setTimeout(() => setMsg(''), 3000);
+  };
+
   const deleteCategory = async (id: number) => {
     if (!confirm('تأكيد الحذف؟')) return;
     try {
@@ -88,6 +120,18 @@ export default function SettingsPage() {
     } catch {
       setMsg('فشل الحذف');
     }
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const saveThreshold = async () => {
+    setThresholdSaving(true);
+    try {
+      await api('/api/settings/auto-group', { method: 'PUT', body: JSON.stringify({ threshold }) });
+      setMsg('تم حفظ الحد الأدنى');
+    } catch {
+      setMsg('فشل حفظ الحد الأدنى');
+    }
+    setThresholdSaving(false);
     setTimeout(() => setMsg(''), 3000);
   };
 
@@ -116,7 +160,7 @@ export default function SettingsPage() {
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
-  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={retry} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
+  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={retry} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
 
   return <ErrorBoundary>
     <div className="space-y-6">
@@ -125,11 +169,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'aikeys'] as const).map(t => (
+        {(['branding', 'categories', 'aikeys', 'autogroup'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-blue-600 text-white' : 'border'}`}
+            className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : 'مفاتيح AI'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'aikeys' ? 'مفاتيح AI' : 'التجميع التلقائي'}
           </button>
         ))}
       </div>
@@ -182,7 +226,7 @@ export default function SettingsPage() {
               className="w-full px-4 py-2.5 rounded-xl border text-sm h-20" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
           <button onClick={saveBranding} disabled={saving}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
             {saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
           </button>
 
@@ -205,7 +249,7 @@ export default function SettingsPage() {
           <div className="flex items-center justify-between">
             <h2 className="font-bold" style={{ color: 'var(--text)' }}>التصنيفات</h2>
             <button onClick={() => setCatModal(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">+ إضافة</button>
+              className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة</button>
           </div>
           <div className="space-y-2">
             {categories.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد تصنيفات</p>}
@@ -215,8 +259,12 @@ export default function SettingsPage() {
                   <span className="font-medium" style={{ color: 'var(--text)' }}>{c.name_ar}</span>
                   <span className="text-sm mr-2" style={{ color: 'var(--text-muted)' }}>{c.name_en}</span>
                 </div>
-                <button onClick={() => deleteCategory(c.id)}
-                  className="text-red-500 text-xs">حذف</button>
+                <div className="flex gap-2">
+                  <button onClick={() => startEditCategory(c)}
+                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600">تعديل</button>
+                  <button onClick={() => deleteCategory(c.id)}
+                    className="text-red-500 text-xs">حذف</button>
+                </div>
               </div>
             ))}
           </div>
@@ -230,9 +278,40 @@ export default function SettingsPage() {
                 onChange={e => setCatForm({ ...catForm, name_en: e.target.value })}
                 className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
               <button onClick={saveCategory}
-                className="w-full py-3 bg-blue-600 text-white rounded-xl font-medium">حفظ</button>
+                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ</button>
             </div>
           </Modal>
+
+          <Modal open={editCatModal} onClose={() => setEditCatModal(false)} title="تعديل تصنيف">
+            <div className="space-y-3">
+              <input placeholder="الاسم (عربي)" value={editCatForm.name_ar}
+                onChange={e => setEditCatForm({ ...editCatForm, name_ar: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="English name" value={editCatForm.name_en}
+                onChange={e => setEditCatForm({ ...editCatForm, name_en: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <button onClick={saveEditCategory}
+                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+            </div>
+          </Modal>
+        </div>
+      )}
+
+      {/* Auto-Group Threshold */}
+      {tab === 'autogroup' && (
+        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <h2 className="font-bold" style={{ color: 'var(--text)' }}>التجميع التلقائي</h2>
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>عند تأكيد دفع الطالب، يتم وضعه تلقائياً في مجموعة. هنا يمكنك تحديد الحد الأدنى لعدد الطلاب لكل مجموعة قبل إنشاء مجموعة جديدة.</p>
+          <div>
+            <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للطلاب في كل مجموعة</label>
+            <input type="number" min="1" value={threshold}
+              onChange={e => setThreshold(Number(e.target.value))}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <button onClick={saveThreshold} disabled={thresholdSaving}
+            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            {thresholdSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
+          </button>
         </div>
       )}
 
@@ -248,7 +327,7 @@ export default function SettingsPage() {
               placeholder="أدخل مفتاح Gemini API"
               className="flex-1 px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
             <button onClick={addKey}
-              className="px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm">إضافة</button>
+              className="px-4 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm">إضافة</button>
           </div>
 
           <div className="space-y-2">
@@ -263,7 +342,7 @@ export default function SettingsPage() {
           </div>
 
           <button onClick={saveKeys} disabled={saving}
-            className="px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
             {saving ? 'جاري الحفظ...' : 'حفظ المفاتيح'}
           </button>
         </div>

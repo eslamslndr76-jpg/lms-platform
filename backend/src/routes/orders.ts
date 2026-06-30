@@ -7,23 +7,39 @@ const router = Router();
 
 router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
-    const { course_id, amount, receipt_url } = req.body;
+    const { course_id, amount, receipt_url, payment_method } = req.body;
     if (!course_id || !amount) return res.status(400).json({ error: 'Course ID and amount required' });
 
     if (receipt_url) {
       const result = await sql(
-        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url) VALUES (?,?,?,\'pending\',?)',
-        req.user!.userId, course_id, amount, receipt_url,
+        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method) VALUES (?,?,?,\'pending\',?,?)',
+        req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash',
       );
       return res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
     }
     const result = await sql(
-      'INSERT INTO orders (user_id, course_id, amount, status) VALUES (?,?,?,\'pending\')',
-      req.user!.userId, course_id, amount,
+      'INSERT INTO orders (user_id, course_id, amount, status, payment_method) VALUES (?,?,?,\'pending\',?)',
+      req.user!.userId, course_id, amount, payment_method || 'cash',
     );
     res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
   } catch {
     res.status(500).json({ error: 'Failed to create order' });
+  }
+});
+
+router.patch('/:id/receipt', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const { receipt_url } = req.body;
+    if (!receipt_url) return res.status(400).json({ error: 'receipt_url required' });
+    const order = await sql('SELECT user_id FROM orders WHERE id=?', req.params.id);
+    if (order.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    if (Number(order.rows[0].user_id) !== req.user!.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    await sql('UPDATE orders SET receipt_url=?, status=\'review\' WHERE id=?', receipt_url, req.params.id);
+    res.json({ message: 'Receipt uploaded' });
+  } catch {
+    res.status(500).json({ error: 'Failed to upload receipt' });
   }
 });
 
