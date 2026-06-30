@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
 import { Skeleton } from '../../../components/Skeleton';
@@ -67,15 +66,15 @@ export default function CourseDetailPage() {
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>نوع الكورس</p>
             </div>
           )}
-          {course.lecture_count > 0 && (
+          {(course.lecture_count ?? 0) > 0 && (
             <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
-              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_count}</p>
+              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_count ?? 0}</p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>محاضرة</p>
             </div>
           )}
-          {course.lecture_duration > 0 && (
+          {(course.lecture_duration ?? 0) > 0 && (
             <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
-              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_duration}</p>
+              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_duration ?? 0}</p>
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>مدة المحاضرة (ساعة)</p>
             </div>
           )}
