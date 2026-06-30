@@ -12,9 +12,16 @@ export default function AdminDashboard() {
   const { user } = useAdminAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [incompleteGroups, setIncompleteGroups] = useState<any[]>([]);
 
   useEffect(() => {
-    api('/api/admin/orders/financials').then(setStats).catch(() => {}).finally(() => setLoading(false));
+    Promise.all([
+      api('/api/admin/orders/financials'),
+      api('/api/groups/incomplete').catch(() => []),
+    ]).then(([s, g]) => {
+      setStats(s);
+      setIncompleteGroups(g);
+    }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
   if (loading) {
@@ -37,6 +44,29 @@ export default function AdminDashboard() {
         <StatsCard title="آخر 6 أشهر" value={stats?.monthly?.[0]?.sum || 0}
           subtitle="الشهر الحالي" icon="📈" color="#7c3aed" />
       </div>
+
+      {incompleteGroups.length > 0 && (
+        <div className="rounded-2xl p-4 border-2 animate-pulse" style={{ backgroundColor: '#fef3c7', borderColor: '#f59e0b' }}>
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">⚠️</span>
+            <div>
+              <h3 className="font-bold text-sm" style={{ color: '#92400e' }}>مجموعات غير مكتملة</h3>
+              <p className="text-xs mt-1" style={{ color: '#b45309' }}>
+                يوجد {incompleteGroups.length} مجموعة غير مكتملة البيانات
+              </p>
+              <div className="flex flex-wrap gap-2 mt-2">
+                {incompleteGroups.map((g: any) => (
+                  <Link key={g.id} href="/groups"
+                    className="text-xs px-2 py-1 rounded-lg font-medium"
+                    style={{ backgroundColor: '#fffbeb', color: '#92400e' }}>
+                    {g.name} ({g.course_name})
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
         <div className="flex items-center justify-between mb-4">

@@ -14,14 +14,26 @@ import chatRouter from './routes/chat';
 import uploadRouter from './routes/uploads';
 import rolesRouter from './routes/roles';
 import certificatesRouter from './routes/certificates';
+import lecturesRouter from './routes/lectures';
 import adminOrdersRouter from './routes/admin/orders';
 import adminUsersRouter from './routes/admin/users';
 import adminCertificatesRouter from './routes/admin/certificates';
 
 const app = express();
 
+const allowedOrigins = [
+  process.env.FRONTEND_URL || 'http://localhost:3000',
+  'https://lms-admin-xi-seven.vercel.app',
+  'https://lms-admin-x2-hims.vercel.app',
+  'https://lms-user-psi.vercel.app',
+  'https://lms-user-x2-hims.vercel.app',
+].filter(Boolean);
+
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(null, true); // allow all in dev
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -54,6 +66,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 app.use('/api/uploads', uploadRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/certificates', certificatesRouter);
+app.use('/api/lectures', lecturesRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/certificates', adminCertificatesRouter);

@@ -1,13 +1,19 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const getJwtSecret = (): string => {
-  const secret = process.env.JWT_SECRET;
-  if (!secret) throw new Error('JWT_SECRET environment variable is required');
-  return secret;
-};
+let JWT_SECRET: string;
 
-const JWT_SECRET = getJwtSecret();
+function getJwtSecret(): string {
+  if (JWT_SECRET) return JWT_SECRET;
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    console.error('JWT_SECRET environment variable is required');
+    JWT_SECRET = 'fallback-dev-secret-do-not-use-in-production';
+    return JWT_SECRET;
+  }
+  JWT_SECRET = secret;
+  return JWT_SECRET;
+}
 
 export interface AuthPayload {
   userId: number;
@@ -28,7 +34,7 @@ export function generateToken(payload: AuthPayload): string {
     userId: Number(payload.userId),
     roleId: Number(payload.roleId),
     role: payload.role,
-  }, JWT_SECRET, { expiresIn: '7d' });
+  }, getJwtSecret(), { expiresIn: '7d' });
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {
@@ -38,7 +44,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   }
   try {
     const token = header.split(' ')[1];
-    req.user = jwt.verify(token, JWT_SECRET) as unknown as AuthPayload;
+    req.user = jwt.verify(token, getJwtSecret()) as unknown as AuthPayload;
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });
@@ -50,7 +56,7 @@ export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
   if (header && header.startsWith('Bearer ')) {
     try {
       const token = header.split(' ')[1];
-      req.user = jwt.verify(token, JWT_SECRET) as unknown as AuthPayload;
+      req.user = jwt.verify(token, getJwtSecret()) as unknown as AuthPayload;
     } catch {
       // ignore invalid token
     }

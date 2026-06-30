@@ -99,6 +99,17 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
       const studentId = Number(o.user_id);
       const courseId = Number(o.course_id);
 
+      // Check if student already assigned to any group for this course
+      const alreadyAssigned = await sql(
+        `SELECT 1 FROM group_students gs
+         JOIN groups g ON gs.group_id=g.id
+         WHERE g.course_id=? AND gs.user_id=? LIMIT 1`,
+        courseId, studentId,
+      );
+      if (alreadyAssigned.rows.length > 0) {
+        return res.json({ message: 'Order paid (already in group)' });
+      }
+
       const thresholdResult = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
       let maxStudents = 30;
       if (thresholdResult.rows.length > 0) {
@@ -110,9 +121,9 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
         maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
 
         const avail = await sql(
-          `SELECT g.id FROM groups g
+          `SELECT g.id, g.max_students as group_max FROM groups g
            WHERE g.course_id=? AND g.is_active=1
-           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < ?
+           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < COALESCE(g.max_students, ?)
            ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
            LIMIT 1`,
           courseId, maxStudents,
@@ -120,7 +131,7 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
 
         if (avail.rows.length > 0) {
           const groupId = Number(avail.rows[0].id);
-          await sql('INSERT OR IGNORE INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
+          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
         } else {
           const groupCount = await sql(
             "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
@@ -128,11 +139,11 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
           );
           const nextNum = Number(groupCount.rows[0].cnt) + 1;
           const insertResult = await sql(
-            `INSERT INTO groups (course_id, name) VALUES (?,?)`,
+            `INSERT INTO groups (course_id, name, is_complete) VALUES (?,?,0)`,
             courseId, `مجموعة ${nextNum}`,
           );
           const newGroupId = Number(insertResult.lastInsertRowid);
-          await sql('INSERT OR IGNORE INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
+          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
         }
       }
     }
@@ -144,11 +155,13 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
 
 router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { amount, notes, payment_method } = req.body;
+    const { amount, notes, notes_team, notes_student, payment_method } = req.body;
     const sets: string[] = [];
     const params: any[] = [];
     if (amount !== undefined) { sets.push('amount=?'); params.push(amount); }
     if (notes !== undefined) { sets.push('notes=?'); params.push(notes); }
+    if (notes_team !== undefined) { sets.push('notes_team=?'); params.push(notes_team); }
+    if (notes_student !== undefined) { sets.push('notes_student=?'); params.push(notes_student); }
     if (payment_method !== undefined) { sets.push('payment_method=?'); params.push(payment_method); }
     if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
     params.push(req.params.id);
@@ -156,6 +169,71 @@ router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res:
     res.json({ message: 'Order updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update order' });
+  }
+});
+
+router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { user_id, course_id, amount, payment_method, notes_team, notes_student } = req.body;
+    if (!user_id || !course_id || !amount) {
+      return res.status(400).json({ error: 'user_id, course_id, and amount are required' });
+    }
+    const result = await sql(
+      `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_team, notes_student)
+       VALUES (?,?,?,'paid',?,?,?)`,
+      user_id, course_id, amount, payment_method || 'cash', notes_team || null, notes_student || null,
+    );
+    const orderId = Number(result.lastInsertRowid);
+
+    // Auto-assign if paid
+    const studentId = Number(user_id);
+
+    // Check if already assigned
+    const alreadyAssigned = await sql(
+      `SELECT 1 FROM group_students gs
+       JOIN groups g ON gs.group_id=g.id
+       WHERE g.course_id=? AND gs.user_id=? LIMIT 1`,
+      course_id, studentId,
+    );
+    if (alreadyAssigned.rows.length === 0) {
+      const thresholdResult = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
+      let maxStudents = 30;
+      if (thresholdResult.rows.length > 0) {
+        const parsed = JSON.parse(thresholdResult.rows[0].value as string);
+        maxStudents = parsed.threshold || 30;
+      }
+      const course = await sql('SELECT max_students FROM courses WHERE id=?', course_id);
+      if (course.rows.length > 0) {
+        maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
+        const avail = await sql(
+          `SELECT g.id, g.max_students as group_max FROM groups g
+           WHERE g.course_id=? AND g.is_active=1
+           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < COALESCE(g.max_students, ?)
+           ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
+           LIMIT 1`,
+          course_id, maxStudents,
+        );
+        if (avail.rows.length > 0) {
+          const groupId = Number(avail.rows[0].id);
+          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
+        } else {
+          const groupCount = await sql(
+            "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
+            course_id,
+          );
+          const nextNum = Number(groupCount.rows[0].cnt) + 1;
+          const insertResult = await sql(
+            `INSERT INTO groups (course_id, name, is_complete) VALUES (?,?,0)`,
+            course_id, `مجموعة ${nextNum}`,
+          );
+          const newGroupId = Number(insertResult.lastInsertRowid);
+          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
+        }
+      }
+    }
+    res.status(201).json({ id: orderId, message: 'Order created and student auto-assigned' });
+  } catch {
+    res.status(500).json({ error: 'Failed to create order' });
   }
 });
 

@@ -23,10 +23,16 @@ export default function OrdersPage() {
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ amount: 0, notes: '', payment_method: '' });
+  const [editForm, setEditForm] = useState({ amount: 0, notes_team: '', notes_student: '', payment_method: '' });
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
+
+  const [addModal, setAddModal] = useState(false);
+  const [addForm, setAddForm] = useState({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '' });
+  const [students, setStudents] = useState<any[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [adding, setAdding] = useState(false);
   const limit = 15;
 
   const load = async () => {
@@ -47,7 +53,7 @@ export default function OrdersPage() {
 
   const openDetail = (order: any) => {
     setSelectedOrder(order);
-    setEditForm({ amount: order.amount, notes: order.notes || '', payment_method: order.payment_method || '' });
+    setEditForm({ amount: order.amount, notes_team: order.notes_team || order.notes || '', notes_student: order.notes_student || '', payment_method: order.payment_method || '' });
     setEditing(false);
   };
 
@@ -57,7 +63,8 @@ export default function OrdersPage() {
         method: 'PUT',
         body: JSON.stringify({
           amount: Number(editForm.amount),
-          notes: editForm.notes,
+          notes_team: editForm.notes_team,
+          notes_student: editForm.notes_student,
           payment_method: editForm.payment_method,
         }),
       });
@@ -97,6 +104,48 @@ export default function OrdersPage() {
     setDeleting(false);
   };
 
+  const openAddOrder = async () => {
+    setAddForm({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '' });
+    setAddModal(true);
+    try {
+      const [studs, crs] = await Promise.all([
+        api('/api/admin/users?role=student&limit=500'),
+        api('/api/courses'),
+      ]);
+      setStudents(studs.users || []);
+      setCourses(crs);
+    } catch {
+      toast('فشل تحميل البيانات', 'error');
+    }
+  };
+
+  const addOrder = async () => {
+    if (!addForm.user_id || !addForm.course_id || !addForm.amount) {
+      toast('يرجى إكمال البيانات المطلوبة', 'error');
+      return;
+    }
+    setAdding(true);
+    try {
+      await api('/api/admin/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          user_id: Number(addForm.user_id),
+          course_id: Number(addForm.course_id),
+          amount: Number(addForm.amount),
+          payment_method: addForm.payment_method,
+          notes_team: addForm.notes_team,
+          notes_student: addForm.notes_student,
+        }),
+      });
+      toast('تم إنشاء الحجز بنجاح', 'success');
+      setAddModal(false);
+      load();
+    } catch {
+      toast('فشل إنشاء الحجز', 'error');
+    }
+    setAdding(false);
+  };
+
   const statusFilters = [
     { value: 'all', label: 'الكل' },
     { value: 'pending', label: 'معلق' },
@@ -112,9 +161,14 @@ export default function OrdersPage() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الطلبات</h1>
-        <button onClick={() => setExportOpen(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
-          📥 تصدير
-        </button>
+        <div className="flex gap-2">
+          <button onClick={openAddOrder} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
+            + إضافة حجز
+          </button>
+          <button onClick={() => setExportOpen(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
+            📥 تصدير
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2">
@@ -136,8 +190,26 @@ export default function OrdersPage() {
             { key: 'title_ar', label: 'الكورس', render: (v: string, r: any) =>
               <span className="cursor-pointer" style={{ color: 'var(--primary)' }} onClick={() => router.push(`/courses/${r.course_id}`)}>{v}</span> },
             { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
-            { key: 'status', label: 'الحالة', render: (v: string) => <StatusBadge status={v} /> },
+            { key: 'status', label: 'الحالة', render: (v: string, row: any) => (
+              <select value={v} onChange={e => { e.stopPropagation(); updateStatus(row.id, e.target.value); }}
+                onClick={e => e.stopPropagation()}
+                className="px-2 py-1 rounded-lg text-xs border font-medium cursor-pointer"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                <option value="pending">معلق</option>
+                <option value="review">قيد المراجعة</option>
+                <option value="paid">مدفوع</option>
+                <option value="cancelled">ملغي</option>
+              </select>
+            )},
             { key: 'created_at', label: 'التاريخ', render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
+            { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
+              <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                <button onClick={() => { setSelectedOrder(row); setEditForm({ amount: row.amount, notes_team: row.notes_team || row.notes || '', notes_student: row.notes_student || '', payment_method: row.payment_method || '' }); setEditing(true); }}
+                  className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
+                <button onClick={() => setConfirmDelete(row)}
+                  className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">حذف</button>
+              </div>
+            )},
           ]}
           data={orders}
           onRowClick={openDetail}
@@ -179,8 +251,14 @@ export default function OrdersPage() {
                     </select>
                   </div>
                   <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات</span>
-                    <textarea value={editForm.notes} onChange={e => setEditForm({ ...editForm, notes: e.target.value })}
+                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل</span>
+                    <textarea value={editForm.notes_team} onChange={e => setEditForm({ ...editForm, notes_team: e.target.value })}
+                      className="w-full px-3 py-1.5 rounded-lg border text-sm h-16"
+                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  </div>
+                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
+                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب (تظهر له)</span>
+                    <textarea value={editForm.notes_student} onChange={e => setEditForm({ ...editForm, notes_student: e.target.value })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm h-16"
                       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
                   </div>
@@ -195,10 +273,16 @@ export default function OrdersPage() {
                     <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</span>
                     <span style={{ color: 'var(--text)' }}>{selectedOrder.payment_method === 'wallet' ? 'محفظة إلكترونية' : selectedOrder.payment_method === 'instapay' ? 'إنستاباي' : selectedOrder.payment_method === 'cash' ? 'كاش' : '-'}</span>
                   </div>
-                  {selectedOrder.notes && (
+                  {(selectedOrder.notes || selectedOrder.notes_team) && (
                     <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedOrder.notes}</span>
+                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل</span>
+                      <span style={{ color: 'var(--text)' }}>{selectedOrder.notes_team || selectedOrder.notes}</span>
+                    </div>
+                  )}
+                  {selectedOrder.notes_student && (
+                    <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
+                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب</span>
+                      <span style={{ color: 'var(--text)' }}>{selectedOrder.notes_student}</span>
                     </div>
                   )}
                 </>
@@ -241,6 +325,62 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+      </Modal>
+
+      <Modal open={addModal} onClose={() => setAddModal(false)} title="إضافة حجز جديد" size="lg">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الطالب *</label>
+            <select value={addForm.user_id} onChange={e => setAddForm({ ...addForm, user_id: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">اختر الطالب</option>
+              {students.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.email})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورس *</label>
+            <select value={addForm.course_id} onChange={e => setAddForm({ ...addForm, course_id: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">اختر الكورس</option>
+              {courses.map((c: any) => <option key={c.id} value={c.id}>{c.title_ar} - {c.price} ج.م</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المبلغ *</label>
+            <input type="number" value={addForm.amount} onChange={e => setAddForm({ ...addForm, amount: Number(e.target.value) })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</label>
+            <select value={addForm.payment_method} onChange={e => setAddForm({ ...addForm, payment_method: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="cash">كاش</option>
+              <option value="wallet">محفظة إلكترونية</option>
+              <option value="instapay">إنستاباي</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل (داخلي)</label>
+            <textarea value={addForm.notes_team} onChange={e => setAddForm({ ...addForm, notes_team: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm h-16"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب (تظهر له)</label>
+            <textarea value={addForm.notes_student} onChange={e => setAddForm({ ...addForm, notes_student: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm h-16"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <button onClick={addOrder} disabled={adding}
+            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            {adding ? 'جاري الحفظ...' : 'حفظ الحجز'}
+          </button>
+        </div>
       </Modal>
 
       <ConfirmDialog

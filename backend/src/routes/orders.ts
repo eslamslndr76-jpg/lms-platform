@@ -7,19 +7,19 @@ const router = Router();
 
 router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
-    const { course_id, amount, receipt_url, payment_method } = req.body;
+    const { course_id, amount, receipt_url, payment_method, note_student } = req.body;
     if (!course_id || !amount) return res.status(400).json({ error: 'Course ID and amount required' });
 
     if (receipt_url) {
       const result = await sql(
-        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method) VALUES (?,?,?,\'pending\',?,?)',
-        req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash',
+        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method, notes_student) VALUES (?,?,?,\'pending\',?,?,?)',
+        req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash', note_student || null,
       );
       return res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
     }
     const result = await sql(
-      'INSERT INTO orders (user_id, course_id, amount, status, payment_method) VALUES (?,?,?,\'pending\',?)',
-      req.user!.userId, course_id, amount, payment_method || 'cash',
+      'INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student) VALUES (?,?,?,\'pending\',?,?)',
+      req.user!.userId, course_id, amount, payment_method || 'cash', note_student || null,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
   } catch {

@@ -9,8 +9,12 @@ const router = Router();
 const MAX_SIZE = 5 * 1024 * 1024; // 5MB
 const UPLOAD_DIR = path.join(process.cwd(), 'uploads');
 
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+try {
+  if (!fs.existsSync(UPLOAD_DIR)) {
+    fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  }
+} catch {
+  // read-only filesystem (Vercel serverless) — uploads saved elsewhere
 }
 
 router.post('/', authMiddleware, async (req: Request, res: Response) => {

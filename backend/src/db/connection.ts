@@ -13,6 +13,10 @@ export async function initializeDatabase() {
     "ALTER TABLE courses ADD COLUMN instructor TEXT DEFAULT ''",
     "ALTER TABLE courses ADD COLUMN course_mode TEXT DEFAULT 'online'",
     "ALTER TABLE orders ADD COLUMN payment_method TEXT DEFAULT 'cash'",
+    "ALTER TABLE groups ADD COLUMN is_complete INTEGER DEFAULT 0",
+    "ALTER TABLE groups ADD COLUMN max_students INTEGER",
+    "ALTER TABLE groups ADD COLUMN instructor_name TEXT DEFAULT ''",
+    "ALTER TABLE groups ADD COLUMN location TEXT DEFAULT ''",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

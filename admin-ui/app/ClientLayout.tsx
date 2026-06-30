@@ -6,7 +6,6 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '../lib/auth';
 import Sidebar from '../components/Sidebar';
 import Chatbot from '../components/Chatbot';
-import { AdminProviders } from './providers';
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAdminAuth();
@@ -38,14 +37,12 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
   if (isLogin) return <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>{children}</div>;
 
   return (
-    <AdminProviders>
-      <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
-        <Sidebar />
-        <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
-          {children}
-        </main>
-        <Chatbot />
-      </div>
-    </AdminProviders>
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
+      <Sidebar />
+      <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+        {children}
+      </main>
+      <Chatbot />
+    </div>
   );
 }

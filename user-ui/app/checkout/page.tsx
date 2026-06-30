@@ -15,6 +15,7 @@ function CheckoutContent() {
   const { primaryColor } = useBranding();
   const [file, setFile] = useState<File | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
+  const [noteStudent, setNoteStudent] = useState('');
   const [loading, setLoading] = useState(false);
 
   const courseId = searchParams.get('course_id');
@@ -29,6 +30,7 @@ function CheckoutContent() {
     setLoading(true);
     try {
       const data: any = { course_id: Number(courseId), amount: Number(amount), payment_method: paymentMethod };
+      if (noteStudent.trim()) data.note_student = noteStudent.trim();
       if (file) {
         data.receipt_url = await compressAndEncode(file);
       }
@@ -76,6 +78,14 @@ function CheckoutContent() {
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>إرفاق إيصال الدفع (اختياري)</label>
           <input type="file" accept="image/*" onChange={e => setFile(e.target.files?.[0] || null)}
             className="w-full text-sm" style={{ color: 'var(--text)' }} />
+        </div>
+
+        <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+          <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>ملاحظاتك (اختياري)</label>
+          <textarea value={noteStudent} onChange={e => setNoteStudent(e.target.value)}
+            placeholder="أي ملاحظات تريد إضافتها لطلبك..."
+            className="w-full px-4 py-2.5 rounded-xl border text-sm h-20"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
         </div>
 
         <button type="submit" disabled={loading || !courseId}

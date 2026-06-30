@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS orders (
   receipt_url TEXT,
   payment_method TEXT DEFAULT 'cash',
   notes TEXT,
+  notes_team TEXT,
+  notes_student TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
@@ -109,6 +111,21 @@ CREATE TABLE IF NOT EXISTS system_settings (
   key TEXT UNIQUE NOT NULL,
   value TEXT NOT NULL,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS lectures (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL,
+  day_of_week TEXT NOT NULL DEFAULT '',
+  time_from TEXT DEFAULT '',
+  time_to TEXT DEFAULT '',
+  topic TEXT DEFAULT '',
+  date TEXT,
+  is_completed INTEGER NOT NULL DEFAULT 0,
+  completed_at DATETIME,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
 `;
 

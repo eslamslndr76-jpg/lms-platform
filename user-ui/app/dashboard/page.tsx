@@ -16,6 +16,7 @@ interface Order {
   title_ar: string;
   title_en: string;
   created_at: string;
+  notes_student?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -107,6 +108,11 @@ export default function DashboardPage() {
                     <span style={{ color: 'var(--text-muted)' }}>{new Date(order.created_at).toLocaleDateString('ar-EG')}</span>
                     <span className="font-bold" style={{ color: primaryColor }}>{order.amount} ج.م</span>
                   </div>
+                  {order.notes_student && (
+                    <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                      📝 {order.notes_student}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -124,22 +130,51 @@ export default function DashboardPage() {
         {myGroup && (
           <section className="mt-8">
             <h3 className="font-bold mb-4" style={{ color: 'var(--text)' }}>مجموعتي</h3>
-            <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
-              <p className="font-bold text-lg mb-2" style={{ color: 'var(--text)' }}>{myGroup.name}</p>
+            <div className="rounded-2xl p-4 shadow-sm space-y-3" style={{ backgroundColor: 'var(--card)' }}>
+              <div className="flex items-center justify-between">
+                <p className="font-bold text-lg" style={{ color: 'var(--text)' }}>{myGroup.name}</p>
+                {myGroup.lecture_progress && (
+                  <span className="text-xs px-2 py-1 rounded-full font-medium"
+                    style={{ backgroundColor: primaryColor + '20', color: primaryColor }}>
+                    {myGroup.lecture_progress.done}/{myGroup.lecture_progress.total} محاضرة
+                  </span>
+                )}
+              </div>
+              {myGroup.instructor_name && (
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>المدرب: {myGroup.instructor_name}</p>
+              )}
+              {myGroup.location && (
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>المكان: {myGroup.location}</p>
+              )}
               {myGroup.schedule && (
-                <p className="text-sm mb-1" style={{ color: 'var(--text-muted)' }}>
-                  🗓 {myGroup.schedule.day || ''} {myGroup.schedule.time || ''}
+                <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                  🗓 {typeof myGroup.schedule === 'object' ? (myGroup.schedule.day || '') + ' ' + (myGroup.schedule.time || '') : myGroup.schedule}
                 </p>
+              )}
+              {myGroup.next_lecture && (
+                <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
+                  <p className="text-xs font-bold mb-1" style={{ color: 'var(--text-muted)' }}>المحاضرة القادمة</p>
+                  <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                    {['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'][Number(myGroup.next_lecture.day_of_week)] || myGroup.next_lecture.day_of_week}
+                    {' '}{myGroup.next_lecture.time_from} - {myGroup.next_lecture.time_to}
+                  </p>
+                  {myGroup.next_lecture.topic && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{myGroup.next_lecture.topic}</p>
+                  )}
+                  {myGroup.next_lecture.date && (
+                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{myGroup.next_lecture.date}</p>
+                  )}
+                </div>
               )}
               {myGroup.zoom_link && (
                 <a href={myGroup.zoom_link} target="_blank" rel="noopener noreferrer"
-                  className="inline-block px-4 py-2 rounded-xl text-white text-sm font-medium mt-2"
+                  className="block w-full py-2.5 text-center rounded-xl text-white text-sm font-medium"
                   style={{ backgroundColor: primaryColor }}>
-                  🔗 رابط Zoom
+                  رابط Zoom
                 </a>
               )}
               {myGroup.start_date && (
-                <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
                   📅 من {new Date(myGroup.start_date).toLocaleDateString('ar-EG')} إلى {myGroup.end_date ? new Date(myGroup.end_date).toLocaleDateString('ar-EG') : 'بدون'}
                 </p>
               )}

@@ -1,5 +1,6 @@
 import { ReactNode } from 'react';
 import ClientLayout from './ClientLayout';
+import { AdminProviders } from './providers';
 import './globals.css';
 
 export const metadata = {
@@ -11,7 +12,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="ar" dir="rtl">
       <body>
-        <ClientLayout>{children}</ClientLayout>
+        <AdminProviders>
+          <ClientLayout>{children}</ClientLayout>
+        </AdminProviders>
       </body>
     </html>
   );
