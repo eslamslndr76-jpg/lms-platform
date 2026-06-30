@@ -10,8 +10,12 @@ import categoriesRouter from './routes/categories';
 import groupsRouter from './routes/groups';
 import exportsRouter from './routes/exports';
 import chatRouter from './routes/chat';
+import uploadRouter from './routes/uploads';
+import rolesRouter from './routes/roles';
+import certificatesRouter from './routes/certificates';
 import adminOrdersRouter from './routes/admin/orders';
 import adminUsersRouter from './routes/admin/users';
+import adminCertificatesRouter from './routes/admin/certificates';
 
 const app = express();
 
@@ -42,8 +46,12 @@ app.use('/api/categories', categoriesRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/exports', exportsRouter);
 app.use('/api/chat', chatRouter);
+app.use('/api/uploads', uploadRouter);
+app.use('/api/roles', rolesRouter);
+app.use('/api/certificates', certificatesRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/users', adminUsersRouter);
+app.use('/api/admin/certificates', adminCertificatesRouter);
 
 const PORT = process.env.PORT || 3001;
 

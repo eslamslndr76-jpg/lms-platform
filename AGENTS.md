@@ -93,3 +93,43 @@ Start by setting up the folder structure, initializing `package.json` in all dir
 ابنى السيرفر 
 و شغل اختبار playwright بعد كل تعديل و اختبر تطبيق التعديل بنفسك على المتصفح
 
+---
+
+## Project Status (تم التحديث)
+
+### التوثيق الحالي
+- **Backend**: Node.js + Express + Turso DB → `https://lms-backend-flame-seven.vercel.app`
+- **Admin-UI**: Next.js + TailwindCSS → `https://lms-admin-xi-seven.vercel.app`
+- **User-UI**: Next.js + TailwindCSS → `https://lms-user-psi.vercel.app`
+- **GitHub**: `https://github.com/x2-hims/lms`
+
+### الإنجازات
+- ✅ 15 مرحلة تطوير كاملة (إعدادات، صور، تسجيل دخول، صلاحيات، شهادات، وضع مظلم، رسوم متحركة، نشر)
+- ✅ 21/21 اختبار Playwright ناجح
+- ✅ كل المشاريع منشورة على Vercel
+
+### آخر التعديلات — Fix Loading Bugs (30 يونيو 2026)
+- **المشكلة**: كل صفحات الأدمن تظهر "loading" indefinitely عند فشل API، وصفحة الإعدادات تظهر "فشل تحميل الإعدادات"
+- **السبب الجذري**: 
+  1. `api.ts` بدون timeout — الف request يعلق للأبد على Vercel cold start
+  2. `res.json()` يتهكر على non-JSON response (مثل 502/503 من Vercel)
+  3. `load()` في كل صفحة بدون try/catch/finally — `setLoading(false)` أبدًا ما ينفذ عند الخطأ
+  4. `Promise.all` في settings/groups/employees pages — فشل API واحد يوقف كل الـ requests
+- **الإصلاح**:
+  - `admin-ui/lib/api.ts` و `user-ui/lib/api.ts`: إضافة AbortController timeout 15s + safe JSON parsing بروح `res.text() + JSON.parse`
+  - كل صفحات الأدمن (orders, receipts, students, groups, financials, employees, settings): إضافة try/catch/finally في `load()` + error state + زر إعادة المحاولة
+  - `settings/page.tsx`: استخدام `if (loading) return ...; if (error) return ...` pattern بدل ternary
+  - `user-ui/app/dashboard/page.tsx`: refactor من `.then().catch().finally()` إلى try/catch/finally + error state
+
+### أمور حرجة
+- Admin login: `admin@lms.com` / `admin123`
+- Backend dev: `cd backend && npx tsx src/index.ts` (port 3001)
+- Admin-UI dev: `cd admin-ui && npx next dev -p 3002`
+- User-UI dev: `cd user-ui && npx next dev -p 3000`
+- Playwright tests: `npx playwright test`
+- روابط Vercel الأصلية بعد النشر:
+  - Backend: `https://lms-backend-97x0545fs-x2-hims.vercel.app`
+  - Admin-UI: `https://lms-admin-c2rzfbf51-x2-hims.vercel.app`
+  - User-UI: `https://lms-user-or9e6obt4-x2-hims.vercel.app`
+- Google Gemini API keys تدار من Admin-UI → Settings → AI Keys
+

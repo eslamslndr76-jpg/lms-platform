@@ -16,8 +16,8 @@ function AdminLayoutInner({ children }: { children: ReactNode }) {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: 'var(--bg)' }}>
+        <div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
       </div>
     );
   }
@@ -32,10 +32,10 @@ function AdminLayoutInner({ children }: { children: ReactNode }) {
     return null;
   }
 
-  if (isLogin) return <>{children}</>;
+  if (isLogin) return <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>{children}</div>;
 
   return (
-    <div className="min-h-screen flex">
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
       <Sidebar />
       <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
         {children}

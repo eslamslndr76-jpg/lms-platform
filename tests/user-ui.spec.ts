@@ -23,9 +23,11 @@ test.describe('User-UI Mobile-First', () => {
     });
     expect(reg.ok()).toBeTruthy();
     await page.goto('http://localhost:3000/login');
-    await page.waitForSelector('input[placeholder="example@email.com"]');
-    await page.fill('input[placeholder="example@email.com"]', email);
-    await page.fill('input[placeholder="••••••••"]', 'test123');
+    await page.waitForSelector('input[placeholder*="example@email.com"]');
+    const emailInput = page.locator('input[placeholder*="example@email.com"]');
+    await emailInput.fill(email);
+    const pwInput = page.locator('input[type="password"]');
+    await pwInput.fill('test123');
     await page.click('button:has-text("دخول")');
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10000 });
   });

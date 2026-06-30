@@ -15,6 +15,9 @@ interface Course {
   price: number;
   category_name_ar: string;
   category_name_en: string;
+  lecture_count: number;
+  total_hours: number;
+  instructor: string;
 }
 
 export default function CourseDetailPage() {
@@ -41,18 +44,39 @@ export default function CourseDetailPage() {
         <Link href="/" className="absolute top-4 right-4 text-white text-sm bg-black/20 px-3 py-1 rounded-full">← رجوع</Link>
       </div>
 
-      <div className="px-4 py-6 -mt-6 bg-white rounded-t-3xl relative">
-        <h1 className="text-2xl font-bold text-gray-900 mb-1">{course.title_ar}</h1>
+      <div className="px-4 py-6 -mt-6 rounded-t-3xl relative" style={{ backgroundColor: 'var(--card)' }}>
+        <h1 className="text-2xl font-bold mb-1" style={{ color: 'var(--text)' }}>{course.title_ar}</h1>
         {course.category_name_ar && (
-          <span className="text-xs px-3 py-1 rounded-full bg-gray-100 text-gray-600">{course.category_name_ar}</span>
+          <span className="text-xs px-3 py-1 rounded-full" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>{course.category_name_ar}</span>
         )}
 
-        <div className="mt-6">
-          <h2 className="font-bold text-gray-900 mb-2">عن الكورس</h2>
-          <p className="text-gray-600 text-sm leading-relaxed">{course.description || 'لا يوجد وصف'}</p>
+        <div className="flex gap-3 mt-4">
+          {course.lecture_count > 0 && (
+            <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.lecture_count}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>محاضرة</p>
+            </div>
+          )}
+          {course.total_hours > 0 && (
+            <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-lg font-bold" style={{ color: 'var(--text)' }}>{course.total_hours}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ساعة</p>
+            </div>
+          )}
+          {course.instructor && (
+            <div className="flex-1 p-3 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>{course.instructor}</p>
+              <p className="text-xs" style={{ color: 'var(--text-muted)' }}>المدرب</p>
+            </div>
+          )}
         </div>
 
-        <div className="mt-8">
+        <div className="mt-6">
+          <h2 className="font-bold mb-2" style={{ color: 'var(--text)' }}>عن الكورس</h2>
+          <p className="text-sm leading-relaxed" style={{ color: 'var(--text-muted)' }}>{course.description || 'لا يوجد وصف'}</p>
+        </div>
+
+        <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
             <span className="text-2xl font-bold" style={{ color: primaryColor }}>
               {course.price > 0 ? `${course.price} ج.م` : 'مجاني'}

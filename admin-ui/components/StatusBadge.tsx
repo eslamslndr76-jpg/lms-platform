@@ -1,16 +1,18 @@
-const colors: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  review: 'bg-blue-100 text-blue-800',
-  paid: 'bg-green-100 text-green-800',
-  cancelled: 'bg-red-100 text-red-800',
+const styles: Record<string, { bg: string; text: string }> = {
+  pending: { bg: 'rgba(251,191,36,0.15)', text: '#f59e0b' },
+  review: { bg: 'rgba(59,130,246,0.15)', text: '#3b82f6' },
+  paid: { bg: 'rgba(16,185,129,0.15)', text: '#10b981' },
+  cancelled: { bg: 'rgba(239,68,68,0.15)', text: '#ef4444' },
 };
 const labels: Record<string, string> = {
   pending: 'معلق', review: 'قيد المراجعة', paid: 'تم الدفع', cancelled: 'ملغي',
 };
 
 export default function StatusBadge({ status }: { status: string }) {
+  const s = styles[status] || { bg: 'rgba(156,163,175,0.15)', text: '#9ca3af' };
   return (
-    <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${colors[status] || 'bg-gray-100 text-gray-800'}`}>
+    <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium animate-scale-in"
+      style={{ backgroundColor: s.bg, color: s.text }}>
       {labels[status] || status}
     </span>
   );

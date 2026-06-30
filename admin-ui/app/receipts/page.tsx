@@ -8,12 +8,19 @@ import StatusBadge from '../../components/StatusBadge';
 export default function ReceiptsPage() {
   const [orders, setOrders] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   const load = async () => {
     setLoading(true);
-    const data = await api('/api/admin/orders?status=pending&limit=100');
-    setOrders(data.orders);
-    setLoading(false);
+    setError('');
+    try {
+      const data = await api('/api/admin/orders?status=pending&limit=100');
+      setOrders(data.orders);
+    } catch {
+      setError('فشل تحميل الإيصالات');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { load(); }, []);
@@ -25,13 +32,14 @@ export default function ReceiptsPage() {
     load();
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
+  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={load} className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900">الإيصالات المعلقة</h1>
+      <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الإيصالات المعلقة</h1>
 
-      <div className="bg-white rounded-2xl p-4 shadow-sm">
+      <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
         <DataTable
           columns={[
             { key: 'student_name', label: 'الطالب' },

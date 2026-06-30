@@ -18,7 +18,11 @@ declare global {
 }
 
 export function generateToken(payload: AuthPayload): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn: '7d' });
+  return jwt.sign({
+    userId: Number(payload.userId),
+    roleId: Number(payload.roleId),
+    role: payload.role,
+  }, JWT_SECRET, { expiresIn: '7d' });
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction) {

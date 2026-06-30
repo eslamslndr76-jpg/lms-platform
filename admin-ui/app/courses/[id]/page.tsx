@@ -13,36 +13,50 @@ export default function CourseDetailPage() {
   const [course, setCourse] = useState<any>(null);
   const [students, setStudents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    Promise.all([
-      api(`/api/courses/${id}`),
-      api(`/api/admin/orders?courseId=${id}`),
-    ]).then(([c, o]) => {
-      setCourse(c);
-      setStudents(o.orders || []);
-    }).catch(() => router.push('/courses')).finally(() => setLoading(false));
+    (async () => {
+      setLoading(true);
+      setError('');
+      try {
+        const c = await api(`/api/courses/${id}`);
+        setCourse(c);
+      } catch {
+        setError('فشل تحميل بيانات الكورس');
+        setLoading(false);
+        return;
+      }
+      try {
+        const o = await api(`/api/admin/orders?courseId=${id}`);
+        setStudents(o.orders || []);
+      } catch {
+        // orders for this course optional
+      }
+      setLoading(false);
+    })();
   }, [id, router]);
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full" /></div>;
+  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
+  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><Link href="/courses" className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm">رجوع للكورسات</Link></div>;
   if (!course) return null;
 
   return (
     <div className="space-y-6">
       <Link href="/courses" className="text-sm text-blue-600">← رجوع للكورسات</Link>
 
-      <div className="bg-white rounded-2xl p-6 shadow-sm">
+      <div className="rounded-2xl p-6" style={{ backgroundColor: 'var(--card)' }}>
         <h1 className="text-2xl font-bold mb-1">{course.title_ar}</h1>
-        <p className="text-gray-500 text-sm mb-4">{course.title_en}</p>
+        <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>{course.title_en}</p>
         <div className="flex gap-4 text-sm">
-          <span className="text-gray-500">{course.price > 0 ? `${course.price} ج.م` : 'مجاني'}</span>
-          <span className="text-gray-500">{course.max_students} طالب كحد أقصى</span>
-          {course.category_name_ar && <span className="text-gray-500">{course.category_name_ar}</span>}
+          <span style={{ color: 'var(--text-muted)' }}>{course.price > 0 ? `${course.price} ج.م` : 'مجاني'}</span>
+          <span style={{ color: 'var(--text-muted)' }}>{course.max_students} طالب كحد أقصى</span>
+          {course.category_name_ar && <span style={{ color: 'var(--text-muted)' }}>{course.category_name_ar}</span>}
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl p-4 shadow-sm">
-        <h2 className="font-bold text-gray-900 mb-4">الطلاب المسجلين</h2>
+      <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
+        <h2 className="font-bold mb-4" style={{ color: 'var(--text)' }}>الطلاب المسجلين</h2>
         <DataTable
           columns={[
             { key: 'student_name', label: 'الاسم' },

@@ -5,6 +5,27 @@ import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
 
 const router = Router();
 
+router.get('/my', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const result = await sql(
+      `SELECT g.id, g.name, g.schedule, g.zoom_link, g.start_date, g.end_date,
+              c.id as course_id, c.title_ar, c.title_en
+       FROM group_students gs
+       JOIN groups g ON gs.group_id=g.id
+       JOIN courses c ON g.course_id=c.id
+       WHERE gs.user_id=? AND g.is_active=1
+       ORDER BY g.created_at DESC LIMIT 1`,
+      req.user!.userId,
+    );
+    if (result.rows.length === 0) return res.json(null);
+    const group = result.rows[0] as any;
+    if (group.schedule) group.schedule = JSON.parse(group.schedule);
+    res.json(group);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch my group' });
+  }
+});
+
 router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
     const courseId = req.query.courseId as string | undefined;

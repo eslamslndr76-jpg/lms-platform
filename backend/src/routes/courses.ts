@@ -35,12 +35,12 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
 
 router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { title_ar, title_en, description, price, category_id, max_students, materials_url } = req.body;
+    const { title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, total_hours, instructor, materials_url } = req.body;
     if (!title_ar || !title_en) return res.status(400).json({ error: 'Arabic and English titles required' });
     const result = await sql(
-      `INSERT INTO courses (title_ar, title_en, description, price, category_id, max_students, materials_url)
-       VALUES (?,?,?,?,?,?,?)`,
-      title_ar, title_en, description || '', price || 0, category_id || null, max_students || 30, materials_url || null,
+      `INSERT INTO courses (title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, total_hours, instructor, materials_url)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, total_hours || 0, instructor || '', materials_url || null,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid) });
   } catch {
@@ -50,11 +50,11 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { title_ar, title_en, description, price, category_id, max_students, materials_url } = req.body;
+    const { title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, total_hours, instructor, materials_url } = req.body;
     await sql(
-      `UPDATE courses SET title_ar=?, title_en=?, description=?, price=?, category_id=?, max_students=?, materials_url=?
+      `UPDATE courses SET title_ar=?, title_en=?, description=?, price=?, category_id=?, image_url=?, max_students=?, lecture_count=?, total_hours=?, instructor=?, materials_url=?
        WHERE id=?`,
-      title_ar, title_en, description, price, category_id, max_students, materials_url, req.params.id,
+      title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count || 0, total_hours || 0, instructor || '', materials_url, req.params.id,
     );
     res.json({ message: 'Course updated' });
   } catch {

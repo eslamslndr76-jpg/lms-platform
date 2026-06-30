@@ -48,7 +48,7 @@ export default function Chatbot() {
       </button>
 
       {open && (
-        <div className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border overflow-hidden flex flex-col" style={{ maxHeight: '70vh' }}>
+        <div className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col" style={{ maxHeight: '70vh', backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="bg-blue-600 text-white px-4 py-3 font-bold text-sm flex items-center gap-2">
             <span>🤖</span> المساعد الذكي
           </div>
@@ -56,11 +56,12 @@ export default function Chatbot() {
           <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ minHeight: 300 }}>
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${
-                  msg.role === 'user'
-                    ? 'bg-gray-100 text-gray-800'
-                    : 'bg-blue-600 text-white'
-                }`}>
+                  <div className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm ${
+                   msg.role === 'user'
+                     ? ''
+                     : 'bg-blue-600 text-white'
+                 }`}
+                   style={msg.role === 'user' ? { backgroundColor: 'var(--bg)', color: 'var(--text)' } : {}}>
                   {msg.content}
                 </div>
               </div>
@@ -78,7 +79,7 @@ export default function Chatbot() {
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
               placeholder="اكتب رسالتك..."
-              className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+              className="flex-1 px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
             <button onClick={send} disabled={loading}
               className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm disabled:opacity-50">إرسال</button>
           </div>

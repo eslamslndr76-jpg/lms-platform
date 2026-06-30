@@ -89,6 +89,42 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
           req.params.id, o.receipt_url || '', 'manual', req.user!.userId,
         );
       }
+
+      // Auto-assign student to an available group
+      const orderRow = order.rows[0] as any;
+      const studentId = Number(orderRow.user_id);
+      const courseId = Number(orderRow.course_id);
+
+      const course = await sql('SELECT max_students FROM courses WHERE id=?', courseId);
+      if (course.rows.length > 0) {
+        const maxStudents = Number(course.rows[0].max_students);
+
+        const avail = await sql(
+          `SELECT g.id FROM groups g
+           WHERE g.course_id=? AND g.is_active=1
+           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < ?
+           ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
+           LIMIT 1`,
+          courseId, maxStudents,
+        );
+
+        if (avail.rows.length > 0) {
+          const groupId = Number(avail.rows[0].id);
+          await sql('INSERT OR IGNORE INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
+        } else {
+          const groupCount = await sql(
+            "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
+            courseId,
+          );
+          const nextNum = Number(groupCount.rows[0].cnt) + 1;
+          const insertResult = await sql(
+            `INSERT INTO groups (course_id, name) VALUES (?,?)`,
+            courseId, `مجموعة ${nextNum}`,
+          );
+          const newGroupId = Number(insertResult.lastInsertRowid);
+          await sql('INSERT OR IGNORE INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
+        }
+      }
     }
     res.json({ message: `Order ${status}` });
   } catch {
