@@ -13,7 +13,6 @@ const allSections = [
   { href: '/orders', label: 'الطلبات', section: 'orders', icon: '📋' },
   { href: '/receipts', label: 'الإيصالات', section: 'receipts', icon: '🧾' },
   { href: '/students', label: 'الطلاب', section: 'students', icon: '👥' },
-  { href: '/groups', label: 'المجموعات', section: 'groups', icon: '👥' },
   { href: '/certificates', label: 'الشهادات', section: 'certificates', icon: '🎓' },
   { href: '/financials', label: 'المالية', section: 'financials', icon: '💰' },
   { href: '/employees', label: 'الموظفين', section: 'employees', icon: '🔐' },
@@ -38,18 +37,21 @@ export default function Sidebar() {
 
   return (
     <>
-      <button onClick={() => setOpen(!open)} className="lg:hidden fixed top-4 right-4 z-50 p-2 rounded-xl shadow-lg" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-        <span className="text-2xl">{open ? '✕' : '☰'}</span>
-      </button>
-
       <aside className={`fixed top-0 right-0 h-full w-64 z-40 shadow-xl transform transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen overflow-y-auto`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
-        <div className="p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-          {logoHeader ? (
-            <img src={logoHeader} alt={systemName} className="h-8 mb-1" />
-          ) : (
-            <h1 className="font-bold text-lg" style={{ color: 'var(--primary)' }}>{systemName}</h1>
-          )}
-          <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{user?.name} · {user?.role}</p>
+        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
+          <div className="flex items-center gap-2 min-w-0">
+            {logoHeader ? (
+              <img src={logoHeader} alt={systemName} className="h-8 shrink-0" />
+            ) : (
+              <h1 className="font-bold text-lg truncate" style={{ color: 'var(--primary)' }}>{systemName}</h1>
+            )}
+          </div>
+          <button onClick={() => setOpen(false)} className="lg:hidden p-1.5 rounded-xl text-lg hover:bg-[var(--bg)]" style={{ color: 'var(--text)' }}>
+            ✕
+          </button>
+        </div>
+        <div className="px-4 pb-2 -mt-1">
+          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user?.name} · {user?.role}</p>
         </div>
 
         <nav className="p-2 space-y-1">
@@ -79,6 +81,11 @@ export default function Sidebar() {
         </div>
       </aside>
 
+      {!open && (
+        <button onClick={() => setOpen(true)} className="lg:hidden fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white text-xl" style={{ backgroundColor: 'var(--primary)' }}>
+          ☰
+        </button>
+      )}
       {open && <div className="fixed inset-0 bg-black/20 z-30 lg:hidden" onClick={() => setOpen(false)} />}
     </>
   );

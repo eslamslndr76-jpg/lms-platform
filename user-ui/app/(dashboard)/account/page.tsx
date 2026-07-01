@@ -3,14 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '../../lib/api';
-import { compressAndEncode } from '../../lib/imageUtils';
-import { useAuth } from '../../lib/auth';
-import { useToast } from '../../components/Toast';
-import { useBranding } from '../../components/BrandingProvider';
-import { useDarkMode } from '../../components/DarkModeProvider';
-import { Skeleton } from '../../components/Skeleton';
-import PasswordInput from '../../components/PasswordInput';
+import { api } from '../../../lib/api';
+import { compressAndEncode } from '../../../lib/imageUtils';
+import { useAuth } from '../../../lib/auth';
+import { useToast } from '../../../components/Toast';
+import { useBranding } from '../../../components/BrandingProvider';
+import { useDarkMode } from '../../../components/DarkModeProvider';
+import { Skeleton } from '../../../components/Skeleton';
+import PasswordInput from '../../../components/PasswordInput';
 
 export default function AccountPage() {
   const { user, loading: authLoading } = useAuth();

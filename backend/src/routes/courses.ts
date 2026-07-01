@@ -5,17 +5,23 @@ import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
 
 const router = Router();
 
-router.get('/', optionalAuth, async (_req: Request, res: Response) => {
+router.get('/', optionalAuth, async (req: Request, res: Response) => {
   try {
-    const user = (_req as any).user;
+    const user = (req as any).user;
     const isAdmin = user && (user.roleId === 1 || user.roleId === '1');
-    let where = '';
-    if (!isAdmin) where = ' WHERE c.is_active=1';
+    const conditions: string[] = [];
+    const params: any[] = [];
+    if (!isAdmin) conditions.push('c.is_active=1');
+    if (req.query.category) { conditions.push('c.category_id=?'); params.push(req.query.category); }
+    if (req.query.search) { conditions.push('(c.title_ar LIKE ? OR c.title_en LIKE ?)'); params.push(`%${req.query.search}%`, `%${req.query.search}%`); }
+    const where = conditions.length > 0 ? ' WHERE ' + conditions.join(' AND ') : '';
     const result = await sql(
       `SELECT c.*, cat.name_ar as category_name_ar, cat.name_en as category_name_en
        FROM courses c LEFT JOIN categories cat ON c.category_id = cat.id${where} ORDER BY c.created_at DESC`,
+      ...params,
     );
-    const rows = result.rows.map((r: any) => ({ ...r, is_active: Number(r.is_active) }));
+    let rows: any[] = result.rows.map((r: any) => ({ ...r, is_active: Number(r.is_active), featured: Number(r.featured || 0), enable_direct_purchase: Number(r.enable_direct_purchase ?? 1) }));
+    if (req.query.featured === '1') rows = rows.filter((r: any) => r.featured === 1);
     res.json(rows);
   } catch {
     res.status(500).json({ error: 'Failed to fetch courses' });
@@ -40,12 +46,12 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
 
 router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode } = req.body;
+    const { title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode, featured, enable_direct_purchase } = req.body;
     if (!title_ar || !title_en) return res.status(400).json({ error: 'Arabic and English titles required' });
     const result = await sql(
-      `INSERT INTO courses (title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, lecture_duration || 0, instructor || '', materials_url || null, course_mode || 'online',
+      `INSERT INTO courses (title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode, featured, enable_direct_purchase)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, lecture_duration || 0, instructor || '', materials_url || null, course_mode || 'online', featured ? 1 : 0, enable_direct_purchase !== undefined ? (enable_direct_purchase ? 1 : 0) : 1,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid) });
   } catch {
@@ -55,7 +61,7 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const allowed = ['title_ar', 'title_en', 'description', 'price', 'category_id', 'image_url', 'max_students', 'lecture_count', 'lecture_duration', 'instructor', 'materials_url', 'course_mode', 'is_active'];
+    const allowed = ['title_ar', 'title_en', 'description', 'price', 'category_id', 'image_url', 'max_students', 'lecture_count', 'lecture_duration', 'instructor', 'materials_url', 'course_mode', 'is_active', 'featured', 'enable_direct_purchase'];
     const sets: string[] = [];
     const params: any[] = [];
     for (const key of allowed) {

@@ -1,28 +1,24 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { api } from '../../lib/api';
 import DataTable from '../../components/DataTable';
 import Modal from '../../components/Modal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
-import StatusBadge from '../../components/StatusBadge';
 import { compressAndEncode } from '../../lib/imageUtils';
 import { useToast } from '../../components/Toast';
 
 export default function CoursesPage() {
+  const router = useRouter();
   const { toast } = useToast();
   const [courses, setCourses] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online' });
-
-  const [detailModal, setDetailModal] = useState(false);
-  const [selectedCourse, setSelectedCourse] = useState<any>(null);
-  const [courseStudents, setCourseStudents] = useState<any[]>([]);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true });
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -59,7 +55,7 @@ export default function CoursesPage() {
         body: JSON.stringify({ ...addForm, category_id: addForm.category_id ? Number(addForm.category_id) : null }),
       });
       setAddModal(false);
-      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online' });
+      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true });
       toast('تم إضافة الكورس', 'success');
       load();
     } catch {
@@ -67,20 +63,8 @@ export default function CoursesPage() {
     }
   };
 
-  const openDetail = async (course: any) => {
-    setSelectedCourse(course);
-    setDetailModal(true);
-    setDetailLoading(true);
-    try {
-      const c = await api(`/api/courses/${course.id}`);
-      setSelectedCourse(c);
-      const o = await api(`/api/admin/orders?courseId=${course.id}`);
-      setCourseStudents(o.orders || []);
-    } catch {
-      toast('فشل تحميل التفاصيل', 'error');
-      setCourseStudents([]);
-    }
-    setDetailLoading(false);
+  const openDetail = (course: any) => {
+    router.push(`/courses/${course.id}`);
   };
 
   const startEdit = async (course: any) => {
@@ -95,6 +79,7 @@ export default function CoursesPage() {
         lecture_count: c.lecture_count || 0, lecture_duration: c.lecture_duration || 0,
         instructor: c.instructor || '', materials_url: c.materials_url || '',
         course_mode: c.course_mode || 'online',
+        featured: Boolean(Number(c.featured)), enable_direct_purchase: c.enable_direct_purchase !== 0,
       });
       setEditModal(true);
     } catch {
@@ -114,10 +99,6 @@ export default function CoursesPage() {
       setEditModal(false);
       setEditingId(null);
       toast('تم حفظ التعديلات', 'success');
-      if (detailModal) {
-        const c = await api(`/api/courses/${editingId}`);
-        setSelectedCourse(c);
-      }
       load();
     } catch {
       toast('فشل حفظ التعديلات', 'error');
@@ -146,7 +127,6 @@ export default function CoursesPage() {
       await api(`/api/courses/${confirmDelete.id}`, { method: 'DELETE' });
       toast('تم حذف الكورس نهائياً', 'success');
       setConfirmDelete(null);
-      setDetailModal(false);
       load();
     } catch {
       toast('فشل حذف الكورس', 'error');
@@ -178,6 +158,8 @@ export default function CoursesPage() {
             { key: 'actions', label: 'الإجراءات',
               render: (_: any, row: any) => (
                 <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                  <button onClick={() => router.push(`/courses/${row.id}`)}
+                    className="px-2 py-1 rounded-lg text-xs font-medium bg-green-50 text-green-600 hover:bg-green-100">عرض</button>
                   <button onClick={() => startEdit(row)}
                     className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
                   <button onClick={() => setConfirmToggle(row)}
@@ -248,16 +230,28 @@ export default function CoursesPage() {
               onChange={e => setAddForm({ ...addForm, instructor: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الكورس</label>
-            <select value={addForm.course_mode} onChange={e => setAddForm({ ...addForm, course_mode: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
-              <option value="online">أونلاين</option>
-              <option value="offline">أوفلاين (حضوري)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
+           <div>
+             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الكورس</label>
+             <select value={addForm.course_mode} onChange={e => setAddForm({ ...addForm, course_mode: e.target.value })}
+               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+               <option value="online">أونلاين</option>
+               <option value="offline">أوفلاين (حضوري)</option>
+             </select>
+           </div>
+           <div className="flex items-center gap-3 py-2">
+             <label className="flex items-center gap-2 cursor-pointer">
+               <input type="checkbox" checked={addForm.featured} onChange={e => setAddForm({ ...addForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+               <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
+             </label>
+           </div>
+           <div className="flex items-center gap-3 py-2">
+             <label className="flex items-center gap-2 cursor-pointer">
+               <input type="checkbox" checked={addForm.enable_direct_purchase} onChange={e => setAddForm({ ...addForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+               <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
+             </label>
+           </div>
+           <div>
+             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"
               onChange={async e => {
                 const file = e.target.files?.[0];
@@ -278,99 +272,7 @@ export default function CoursesPage() {
         </div>
       </Modal>
 
-      <Modal open={detailModal} onClose={() => { setDetailModal(false); setSelectedCourse(null); }} title={selectedCourse?.title_ar || 'تفاصيل الكورس'} size="lg">
-        {detailLoading ? (
-          <div className="space-y-4"><Skeleton rows={4} cols={3} /><Skeleton rows={3} cols={1} /></div>
-        ) : selectedCourse && (
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الاسم بالعربية</span>
-                <span style={{ color: 'var(--text)' }}>{selectedCourse.title_ar}</span>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>English</span>
-                <span style={{ color: 'var(--text)' }}>{selectedCourse.title_en}</span>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>السعر</span>
-                <span style={{ color: 'var(--text)' }}>{selectedCourse.price > 0 ? `${selectedCourse.price} ج.م` : 'مجاني'}</span>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>التصنيف</span>
-                <span style={{ color: 'var(--text)' }}>{selectedCourse.category_name_ar || '-'}</span>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>النوع</span>
-                <span style={{ color: 'var(--text)' }}>{selectedCourse.course_mode === 'offline' ? '🏫 حضوري' : '💻 أونلاين'}</span>
-              </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</span>
-                <span>{Number(selectedCourse.is_active) ? '🟢 نشط' : '🔴 غير نشط'}</span>
-              </div>
-              {selectedCourse.lecture_count > 0 && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>عدد المحاضرات</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedCourse.lecture_count}</span>
-                </div>
-              )}
-              {selectedCourse.lecture_duration > 0 && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>مدة المحاضرة</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedCourse.lecture_duration} ساعة</span>
-                </div>
-              )}
-              {selectedCourse.max_students && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedCourse.max_students} طالب</span>
-                </div>
-              )}
-              {selectedCourse.instructor && (
-                <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المدرب</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedCourse.instructor}</span>
-                </div>
-              )}
-              {selectedCourse.image_url && (
-                <div className="p-3 rounded-xl col-span-2">
-                  <img src={selectedCourse.image_url} alt={selectedCourse.title_ar} className="h-32 rounded-xl object-cover" />
-                </div>
-              )}
-            </div>
-            {selectedCourse.description && (
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الوصف</span>
-                <p className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}>{selectedCourse.description}</p>
-              </div>
-            )}
 
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
-              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>الطلاب المسجلين ({courseStudents.length})</h4>
-              {courseStudents.length === 0 ? (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>لا يوجد طلاب مسجلين</p>
-              ) : (
-                <div className="max-h-40 overflow-y-auto space-y-1">
-                  {courseStudents.map((o: any) => (
-                    <div key={o.id} className="flex items-center justify-between p-2 rounded-lg text-xs" style={{ backgroundColor: 'var(--card)' }}>
-                      <span style={{ color: 'var(--text)' }}>{o.student_name}</span>
-                      <div className="flex items-center gap-2">
-                        <span style={{ color: 'var(--text-muted)' }}>{o.amount} ج.م</span>
-                        <StatusBadge status={o.status} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => { setDetailModal(false); setTimeout(() => startEdit(selectedCourse), 100); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>✏️ تعديل</button>
-              <button onClick={() => { setDetailModal(false); setConfirmDelete(selectedCourse); }} className="px-3 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#dc2626' }}>🗑️ حذف</button>
-            </div>
-          </div>
-        )}
-      </Modal>
 
       <Modal open={editModal} onClose={() => setEditModal(false)} title={`تعديل: ${editForm.title_ar || ''}`} size="lg">
         <div className="space-y-3 max-h-[70vh] overflow-y-auto">
@@ -422,16 +324,28 @@ export default function CoursesPage() {
             <input type="number" value={editForm.max_students} onChange={e => setEditForm({ ...editForm, max_students: Number(e.target.value) })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الكورس</label>
-            <select value={editForm.course_mode} onChange={e => setEditForm({ ...editForm, course_mode: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
-              <option value="online">أونلاين</option>
-              <option value="offline">أوفلاين (حضوري)</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
+           <div>
+             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الكورس</label>
+             <select value={editForm.course_mode} onChange={e => setEditForm({ ...editForm, course_mode: e.target.value })}
+               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+               <option value="online">أونلاين</option>
+               <option value="offline">أوفلاين (حضوري)</option>
+             </select>
+           </div>
+           <div className="flex items-center gap-3 py-2">
+             <label className="flex items-center gap-2 cursor-pointer">
+               <input type="checkbox" checked={editForm.featured} onChange={e => setEditForm({ ...editForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+               <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
+             </label>
+           </div>
+           <div className="flex items-center gap-3 py-2">
+             <label className="flex items-center gap-2 cursor-pointer">
+               <input type="checkbox" checked={editForm.enable_direct_purchase} onChange={e => setEditForm({ ...editForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+               <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
+             </label>
+           </div>
+           <div>
+             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"
               onChange={async e => {
                 const file = e.target.files?.[0];

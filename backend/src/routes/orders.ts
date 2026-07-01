@@ -46,7 +46,7 @@ router.patch('/:id/receipt', authMiddleware, async (req: Request, res: Response)
 router.get('/my', authMiddleware, async (req: Request, res: Response) => {
   try {
     const result = await sql(
-      `SELECT o.*, c.title_ar, c.title_en
+      `SELECT o.*, c.title_ar, c.title_en, c.instructor, c.course_mode
        FROM orders o JOIN courses c ON o.course_id = c.id
        WHERE o.user_id=? ORDER BY o.created_at DESC`,
       req.user!.userId,
@@ -54,6 +54,33 @@ router.get('/my', authMiddleware, async (req: Request, res: Response) => {
     res.json(result.rows);
   } catch {
     res.status(500).json({ error: 'Failed to fetch orders' });
+  }
+});
+
+router.get('/my/:id', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const order = await sql(
+      `SELECT o.*, c.title_ar, c.title_en, c.instructor, c.course_mode, c.image_url
+       FROM orders o JOIN courses c ON o.course_id = c.id
+       WHERE o.id=? AND o.user_id=?`,
+      req.params.id, req.user!.userId,
+    );
+    if (order.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
+    const ord = order.rows[0] as any;
+
+    const groups = await sql(
+      `SELECT g.id, g.name, g.instructor_name, g.location, g.start_date, g.end_date,
+              g.is_complete, g.zoom_link
+       FROM group_students gs
+       JOIN groups g ON gs.group_id = g.id
+       WHERE gs.user_id=? AND g.course_id=? AND g.is_active=1`,
+      req.user!.userId, ord.course_id,
+    );
+    ord.groups = groups.rows;
+
+    res.json(ord);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch order details' });
   }
 });
 

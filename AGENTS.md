@@ -6,6 +6,8 @@ The project architecture strictly consists of four separate pillars:
 3. Backend Server / API
 4. Database
 
+- **Language Policy:** ALWAYS communicate, explain, and respond to the user in Arabic. Keep the conversation fully in Arabic, while reserving English strictly for source code, variables, error logs, and technical file contents.
+
 # Core Directives & Rules
 
 ## 1. NO LAZY CODING (CRITICAL RULE)
@@ -34,6 +36,6 @@ The project architecture strictly consists of four separate pillars:
 - All frontend components must include UI states for `Loading`, `Success`, and `Error`.
 - All backend routes must include proper try/catch blocks and return clear, descriptive HTTP status codes.
 
-- **Deployment:** After any system modifications, automatically deploy changes to Vercel (or start the Vercel server) to verify a production-ready build.
+- **Deployment:** After any system modifications, automatically deploy changes to Vercel using the production flag (`--prod`) to target the main live production URL directly. NEVER deploy to or test preview/staging URLs.
 - **Testing:** Utilize the Playwright MCP tool to run automated E2E tests on the Vercel URL, ensuring flawless integration between the User and Admin frontends.
 - **Testing:** Utilize the Playwright MCP tool to run automated E2E tests via the browser (headed or headless) on the Vercel URL, ensuring flawless UI/UX rendering and seamless integration between the User and Admin frontends.

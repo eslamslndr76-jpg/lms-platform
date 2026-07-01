@@ -37,6 +37,26 @@ router.get('/incomplete', authMiddleware, requireRole(ADMIN), async (_req: Reque
   }
 });
 
+async function enrichGroup(group: any): Promise<any> {
+  if (group.schedule && typeof group.schedule === 'string') group.schedule = JSON.parse(group.schedule);
+  const lectures = await sql(
+    `SELECT * FROM lectures WHERE group_id=? AND is_completed=0
+     ORDER BY sort_order ASC, id ASC LIMIT 1`,
+    group.id,
+  );
+  group.next_lecture = lectures.rows.length > 0 ? lectures.rows[0] : null;
+  const lecCount = await sql(
+    `SELECT COUNT(*) as total, SUM(is_completed) as done
+     FROM lectures WHERE group_id=?`,
+    group.id,
+  );
+  group.lecture_progress = {
+    total: Number(lecCount.rows[0].total),
+    done: Number(lecCount.rows[0].done || 0),
+  };
+  return group;
+}
+
 router.get('/my', authMiddleware, async (req: Request, res: Response) => {
   try {
     const result = await sql(
@@ -51,31 +71,30 @@ router.get('/my', authMiddleware, async (req: Request, res: Response) => {
       req.user!.userId,
     );
     if (result.rows.length === 0) return res.json(null);
-    const group = result.rows[0] as any;
-    if (group.schedule) group.schedule = JSON.parse(group.schedule);
-
-    // Get next lecture
-    const lectures = await sql(
-      `SELECT * FROM lectures WHERE group_id=? AND is_completed=0
-       ORDER BY sort_order ASC, id ASC LIMIT 1`,
-      group.id,
-    );
-    group.next_lecture = lectures.rows.length > 0 ? lectures.rows[0] : null;
-
-    // Get lecture count
-    const lecCount = await sql(
-      `SELECT COUNT(*) as total, SUM(is_completed) as done
-       FROM lectures WHERE group_id=?`,
-      group.id,
-    );
-    group.lecture_progress = {
-      total: Number(lecCount.rows[0].total),
-      done: Number(lecCount.rows[0].done || 0),
-    };
-
+    const group = await enrichGroup(result.rows[0] as any);
     res.json(group);
   } catch {
     res.status(500).json({ error: 'Failed to fetch my group' });
+  }
+});
+
+router.get('/my/all', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const result = await sql(
+      `SELECT g.id, g.name, g.schedule, g.zoom_link, g.start_date, g.end_date,
+              g.instructor_name, g.location, g.is_complete,
+              c.id as course_id, c.title_ar, c.title_en
+       FROM group_students gs
+       JOIN groups g ON gs.group_id=g.id
+       JOIN courses c ON g.course_id=c.id
+       WHERE gs.user_id=? AND g.is_active=1
+       ORDER BY g.created_at DESC`,
+      req.user!.userId,
+    );
+    const enriched = await Promise.all(result.rows.map(enrichGroup));
+    res.json(enriched);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch all groups' });
   }
 });
 

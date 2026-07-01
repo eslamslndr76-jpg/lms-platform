@@ -16,9 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         <Providers>
           <Header />
-          <main className="max-w-6xl mx-auto px-4 py-6">
-            {children}
-          </main>
+          {children}
           <Chatbot />
         </Providers>
       </body>
