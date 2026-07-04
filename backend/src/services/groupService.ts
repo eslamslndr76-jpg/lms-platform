@@ -160,6 +160,10 @@ export async function updateGroup(id: number, data: {
 }
 
 export async function deleteGroup(id: number): Promise<void> {
+  await sql('DELETE FROM group_student_history WHERE group_id=?', id);
+  await sql('DELETE FROM lecture_attendance WHERE lecture_id IN (SELECT id FROM lectures WHERE group_id=?)', id);
+  await sql('DELETE FROM lectures WHERE group_id=?', id);
+  await sql('DELETE FROM group_students WHERE group_id=?', id);
   await sql('DELETE FROM groups WHERE id=?', id);
 }
 

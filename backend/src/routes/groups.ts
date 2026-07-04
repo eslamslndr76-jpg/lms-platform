@@ -82,12 +82,13 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
 });
 
 // DELETE /api/groups/:id
-router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+router.delete('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
     await groupService.deleteGroup(Number(req.params.id));
     res.json({ message: 'Group deleted' });
-  } catch {
-    res.status(500).json({ error: 'Failed to delete group' });
+  } catch (err: any) {
+    console.error('Delete group error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to delete group' });
   }
 });
 
