@@ -36,6 +36,44 @@ export default function StudentDetailPage() {
       </div>
 
       <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
+        <h2 className="font-bold mb-3" style={{ color: 'var(--text)' }}>📋 المعلومات الشخصية الإضافية</h2>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🆔 الرقم القومى</span>
+            <span dir="ltr" style={{ color: 'var(--text)' }}>{student.national_id || '-'}</span>
+          </div>
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🎂 تاريخ الميلاد</span>
+            <span style={{ color: 'var(--text)' }}>{student.birth_date || '-'}</span>
+          </div>
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>👤 النوع</span>
+            <span style={{ color: 'var(--text)' }}>{student.gender || '-'}</span>
+          </div>
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🗺️ المحافظة</span>
+            <span style={{ color: 'var(--text)' }}>{student.governorate || '-'}</span>
+          </div>
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>📚 مسجل بجامعة</span>
+            <span style={{ color: 'var(--text)' }}>{Number(student.is_enrolled) ? 'نعم' : 'لا'}</span>
+          </div>
+          {Number(student.is_enrolled) && (
+            <>
+              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🏛️ اسم الجامعة</span>
+                <span style={{ color: 'var(--text)' }}>{student.university_name || '-'}</span>
+              </div>
+              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🔢 الكود الجامعى</span>
+                <span style={{ color: 'var(--text)' }}>{student.university_code || '-'}</span>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
         <h2 className="font-bold mb-4" style={{ color: 'var(--text)' }}>الطلبات ({student.orders?.length || 0})</h2>
         <div className="space-y-2">
           {student.orders?.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد طلبات</p>}

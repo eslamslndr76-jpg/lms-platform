@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../lib/api';
@@ -14,7 +14,6 @@ interface CartItem {
   course_id: number;
   title_ar: string;
   price: number;
-  quantity: number;
   image_url?: string;
 }
 
@@ -27,6 +26,7 @@ function CheckoutContent() {
   const [file, setFile] = useState<File | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('cash');
   const [noteStudent, setNoteStudent] = useState('');
+  const [senderPhone, setSenderPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartTotal, setCartTotal] = useState(0);
@@ -55,6 +55,7 @@ function CheckoutContent() {
     try {
       if (isDirect) {
         const data: any = { course_id: Number(courseId), amount: Number(amount), payment_method: paymentMethod };
+        if (senderPhone.trim()) data.sender_phone = senderPhone.trim();
         if (noteStudent.trim()) data.note_student = noteStudent.trim();
         if (file) data.receipt_url = await compressAndEncode(file);
         await api('/api/orders', { method: 'POST', body: JSON.stringify(data) });
@@ -62,7 +63,8 @@ function CheckoutContent() {
       } else {
         if (cartItems.length === 0) { show('السلة فارغة', 'error'); setLoading(false); return; }
         for (const item of cartItems) {
-          const data: any = { course_id: item.course_id, amount: Number(item.price) * item.quantity, payment_method: paymentMethod };
+          const data: any = { course_id: item.course_id, amount: Number(item.price), payment_method: paymentMethod };
+          if (senderPhone.trim()) data.sender_phone = senderPhone.trim();
           if (noteStudent.trim()) data.note_student = noteStudent.trim();
           await api('/api/orders', { method: 'POST', body: JSON.stringify(data) });
         }
@@ -83,7 +85,7 @@ function CheckoutContent() {
 
   const displayItems = isDirect
     ? [{ title_ar: 'الكورس', amount: Number(amount) }]
-    : cartItems.map(i => ({ title_ar: i.title_ar, amount: Number(i.price) * i.quantity }));
+    : cartItems.map(i => ({ title_ar: i.title_ar, amount: Number(i.price) }));
   const totalAmount = isDirect ? Number(amount) : cartTotal;
 
   return (
@@ -126,6 +128,23 @@ function CheckoutContent() {
           ))}
         </div>
 
+        {/* Sender Phone (digital payment) or Cash note */}
+        {paymentMethod === 'cash' ? (
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>(الدفع عند أحد منافذنا)</p>
+          </div>
+        ) : (
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+              {paymentMethod === 'wallet' ? 'رقم المحفظة / رقم الهاتف المحوِّل' : 'رقم إنستاباي / رقم الهاتف المحوِّل'}
+            </label>
+            <input type="text" value={senderPhone} onChange={e => setSenderPhone(e.target.value)}
+              placeholder="أدخل الرقم الذي ستحول منه"
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+        )}
+
         {/* Receipt Upload */}
         <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
           <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>إرفاق إيصال الدفع (اختياري)</label>
@@ -151,8 +170,6 @@ function CheckoutContent() {
     </div>
   );
 }
-
-import { Suspense } from 'react';
 
 export default function CheckoutPage() {
   return (

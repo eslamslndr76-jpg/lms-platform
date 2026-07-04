@@ -30,7 +30,7 @@ interface Category {
 
 export default function HomePage() {
   const { systemName, sloganAr, sloganEn, primaryColor, secondaryColor, logoHeader } = useBranding();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [featured, setFeatured] = useState<Course[]>([]);
   const [courses, setCourses] = useState<Course[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -62,7 +62,7 @@ export default function HomePage() {
     <div style={{ backgroundColor: 'var(--bg)' }}>
       {/* Hero Section */}
       <section className="relative overflow-hidden">
-        <div className="absolute inset-0 opacity-5" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }} />
+        <div className="absolute inset-0 opacity-5 pointer-events-none" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }} />
         <div className="max-w-6xl mx-auto px-4 py-16 md:py-24">
           <div className="grid md:grid-cols-2 gap-8 items-center">
             <div className="animate-fade-in">
@@ -81,10 +81,10 @@ export default function HomePage() {
                   style={{ backgroundColor: primaryColor }}>
                   تصفح الكورسات
                 </Link>
-                {!user && (
+                {!authLoading && !user && (
                   <Link href="/register" className="px-6 py-3 rounded-xl font-bold border-2 transition-all hover:-translate-y-0.5"
                     style={{ borderColor: primaryColor, color: primaryColor }}>
-                    ابدأ التعلم مجاناً
+                    سجل الان مجاناً
                   </Link>
                 )}
               </div>
@@ -234,7 +234,7 @@ export default function HomePage() {
       {/* CTA Section */}
       <section className="max-w-6xl mx-auto px-4 mb-12">
         <div className="rounded-3xl p-8 md:p-12 text-center text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})` }}>
-          <div className="absolute inset-0 opacity-10">
+          <div className="absolute inset-0 opacity-10 pointer-events-none">
             <div className="absolute top-10 left-10 text-6xl">📚</div>
             <div className="absolute bottom-10 right-10 text-6xl">🎓</div>
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-8xl opacity-20">★</div>
@@ -250,7 +250,7 @@ export default function HomePage() {
                 style={{ color: primaryColor }}>
                 سجل الآن
               </Link>
-              {!user && (
+              {!authLoading && !user && (
                 <Link href="/register"
                   className="px-6 py-3 rounded-xl font-bold border-2 border-white/50 text-white hover:bg-white/10 transition-all">
                   أنشئ حساب مجاني

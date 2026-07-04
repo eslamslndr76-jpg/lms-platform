@@ -41,6 +41,7 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
 
 router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
+    await sql('UPDATE courses SET category_id=NULL WHERE category_id=?', req.params.id);
     await sql('DELETE FROM categories WHERE id=?', req.params.id);
     res.json({ message: 'Category deleted' });
   } catch {

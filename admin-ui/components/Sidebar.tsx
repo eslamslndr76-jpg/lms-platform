@@ -11,7 +11,6 @@ const allSections = [
   { href: '/', label: 'لوحة التحكم', section: 'dashboard', icon: '📊' },
   { href: '/courses', label: 'الكورسات', section: 'courses', icon: '📚' },
   { href: '/orders', label: 'الطلبات', section: 'orders', icon: '📋' },
-  { href: '/receipts', label: 'الإيصالات', section: 'receipts', icon: '🧾' },
   { href: '/students', label: 'الطلاب', section: 'students', icon: '👥' },
   { href: '/certificates', label: 'الشهادات', section: 'certificates', icon: '🎓' },
   { href: '/financials', label: 'المالية', section: 'financials', icon: '💰' },

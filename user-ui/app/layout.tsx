@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Providers } from './providers';
 import Header from '../components/Header';
-import Chatbot from '../components/Chatbot';
+import AIAssistant from '../components/AIAssistant';
 
 export const metadata: Metadata = {
   title: 'نظام إدارة التعلم | Training Center',
@@ -17,7 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <Header />
           {children}
-          <Chatbot />
+          <AIAssistant />
         </Providers>
       </body>
     </html>

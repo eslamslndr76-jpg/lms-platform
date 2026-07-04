@@ -18,7 +18,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true });
+  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: false });
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -55,7 +55,7 @@ export default function CoursesPage() {
         body: JSON.stringify({ ...addForm, category_id: addForm.category_id ? Number(addForm.category_id) : null }),
       });
       setAddModal(false);
-      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true });
+      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: false });
       toast('تم إضافة الكورس', 'success');
       load();
     } catch {
@@ -80,6 +80,7 @@ export default function CoursesPage() {
         instructor: c.instructor || '', materials_url: c.materials_url || '',
         course_mode: c.course_mode || 'online',
         featured: Boolean(Number(c.featured)), enable_direct_purchase: c.enable_direct_purchase !== 0,
+        auto_assign: Boolean(Number(c.auto_assign)),
       });
       setEditModal(true);
     } catch {
@@ -238,18 +239,52 @@ export default function CoursesPage() {
                <option value="offline">أوفلاين (حضوري)</option>
              </select>
            </div>
-           <div className="flex items-center gap-3 py-2">
-             <label className="flex items-center gap-2 cursor-pointer">
-               <input type="checkbox" checked={addForm.featured} onChange={e => setAddForm({ ...addForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-               <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
-             </label>
-           </div>
-           <div className="flex items-center gap-3 py-2">
-             <label className="flex items-center gap-2 cursor-pointer">
-               <input type="checkbox" checked={addForm.enable_direct_purchase} onChange={e => setAddForm({ ...addForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-               <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
-             </label>
-           </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={addForm.featured} onChange={e => setAddForm({ ...addForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
+              </label>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={addForm.enable_direct_purchase} onChange={e => setAddForm({ ...addForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
+              </label>
+            </div>
+            <div>
+              <label className="block text-xs mb-2" style={{ color: 'var(--text-muted)' }}>نوع التسكين</label>
+              <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                <button type="button" onClick={() => setAddForm({ ...addForm, auto_assign: false })}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                    !addForm.auto_assign
+                      ? 'text-white shadow-sm'
+                      : 'hover:bg-black/5'
+                  }`}
+                  style={{
+                    backgroundColor: !addForm.auto_assign ? 'var(--primary)' : 'transparent',
+                    color: !addForm.auto_assign ? '#fff' : 'var(--text)',
+                  }}>
+                  👤 تسكين يدوي
+                </button>
+                <button type="button" onClick={() => setAddForm({ ...addForm, auto_assign: true })}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                    addForm.auto_assign
+                      ? 'text-white shadow-sm'
+                      : 'hover:bg-black/5'
+                  }`}
+                  style={{
+                    backgroundColor: addForm.auto_assign ? 'var(--primary)' : 'transparent',
+                    color: addForm.auto_assign ? '#fff' : 'var(--text)',
+                  }}>
+                  🤖 تسكين تلقائي
+                </button>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                {addForm.auto_assign
+                  ? 'عند تأكيد دفع الطالب، يُسكن تلقائياً في أول مجموعة متاحة'
+                  : 'الطلاب يظهرون في &quot;غير مسكنين&quot; ويحتاجون تسكين يدوي من المشرف'}
+              </p>
+            </div>
            <div>
              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"
@@ -332,18 +367,52 @@ export default function CoursesPage() {
                <option value="offline">أوفلاين (حضوري)</option>
              </select>
            </div>
-           <div className="flex items-center gap-3 py-2">
-             <label className="flex items-center gap-2 cursor-pointer">
-               <input type="checkbox" checked={editForm.featured} onChange={e => setEditForm({ ...editForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-               <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
-             </label>
-           </div>
-           <div className="flex items-center gap-3 py-2">
-             <label className="flex items-center gap-2 cursor-pointer">
-               <input type="checkbox" checked={editForm.enable_direct_purchase} onChange={e => setEditForm({ ...editForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
-               <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
-             </label>
-           </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editForm.featured} onChange={e => setEditForm({ ...editForm, featured: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>⭐ كورس مميز (يظهر في الصفحة الرئيسية)</span>
+              </label>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editForm.enable_direct_purchase} onChange={e => setEditForm({ ...editForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
+              </label>
+            </div>
+            <div>
+              <label className="block text-xs mb-2" style={{ color: 'var(--text-muted)' }}>نوع التسكين</label>
+              <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                <button type="button" onClick={() => setEditForm({ ...editForm, auto_assign: false })}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                    !editForm.auto_assign
+                      ? 'text-white shadow-sm'
+                      : 'hover:bg-black/5'
+                  }`}
+                  style={{
+                    backgroundColor: !editForm.auto_assign ? 'var(--primary)' : 'transparent',
+                    color: !editForm.auto_assign ? '#fff' : 'var(--text)',
+                  }}>
+                  👤 تسكين يدوي
+                </button>
+                <button type="button" onClick={() => setEditForm({ ...editForm, auto_assign: true })}
+                  className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                    editForm.auto_assign
+                      ? 'text-white shadow-sm'
+                      : 'hover:bg-black/5'
+                  }`}
+                  style={{
+                    backgroundColor: editForm.auto_assign ? 'var(--primary)' : 'transparent',
+                    color: editForm.auto_assign ? '#fff' : 'var(--text)',
+                  }}>
+                  🤖 تسكين تلقائي
+                </button>
+              </div>
+              <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+                {editForm.auto_assign
+                  ? 'عند تأكيد دفع الطالب، يُسكن تلقائياً في أول مجموعة متاحة'
+                  : 'الطلاب يظهرون في &quot;غير مسكنين&quot; ويحتاجون تسكين يدوي من المشرف'}
+              </p>
+            </div>
            <div>
              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"

@@ -48,6 +48,7 @@ export async function callGemini(
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
       });
       if (res.status === 429) { lastError = new Error('Rate limited'); continue; }
       if (!res.ok) { lastError = new Error(`API error: ${res.status}`); continue; }
@@ -63,7 +64,11 @@ export async function callGemini(
 export async function getAiKeys(): Promise<string[]> {
   try {
     const result = await sql("SELECT value FROM system_settings WHERE key='aiKeys'");
-    if (result.rows.length > 0) return JSON.parse(result.rows[0].value as string);
+    if (result.rows.length > 0) {
+      const parsed = JSON.parse(result.rows[0].value as string);
+      if (Array.isArray(parsed)) return parsed;
+      if (parsed && Array.isArray(parsed.keys)) return parsed.keys;
+    }
   } catch { /* ignore */ }
   return [];
 }

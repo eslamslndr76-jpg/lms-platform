@@ -25,10 +25,10 @@ export default function StudentsPage() {
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
   const [editStudent, setEditStudent] = useState<any>(null);
   const [editModal, setEditModal] = useState(false);
-  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', password: '' });
+  const [editForm, setEditForm] = useState({ name: '', email: '', phone: '', password: '', nationalId: '', birthDate: '', gender: '', governorate: '', isEnrolled: false, universityName: '', universityCode: '' });
 
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [addForm, setAddForm] = useState({ name: '', email: '', password: '', phone: '', nationalId: '', birthDate: '', gender: '', governorate: '', isEnrolled: false, universityName: '', universityCode: '' });
 
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const [confirmToggle, setConfirmToggle] = useState<any>(null);
@@ -60,14 +60,19 @@ export default function StudentsPage() {
   };
 
   const startEdit = (student: any) => {
-    setEditForm({ name: student.name, email: student.email, phone: student.phone || '', password: '' });
+    setEditForm({
+      name: student.name, email: student.email, phone: student.phone || '', password: '',
+      nationalId: student.national_id || '', birthDate: student.birth_date || '', gender: student.gender || '',
+      governorate: student.governorate || '', isEnrolled: Boolean(Number(student.is_enrolled)),
+      universityName: student.university_name || '', universityCode: student.university_code || '',
+    });
     setEditStudent(student);
     setEditModal(true);
   };
 
   const saveEdit = async () => {
     try {
-      const body: any = { name: editForm.name, email: editForm.email, phone: editForm.phone };
+      const body: any = { name: editForm.name, email: editForm.email, phone: editForm.phone, nationalId: editForm.nationalId, birthDate: editForm.birthDate, gender: editForm.gender, governorate: editForm.governorate, isEnrolled: editForm.isEnrolled, universityName: editForm.universityName, universityCode: editForm.universityCode };
       if (editForm.password) body.password = editForm.password;
       await api(`/api/admin/users/${editStudent.id}`, { method: 'PUT', body: JSON.stringify(body) });
       toast('تم تحديث بيانات الطالب', 'success');
@@ -90,7 +95,7 @@ export default function StudentsPage() {
       });
       toast('تم إضافة الطالب بنجاح', 'success');
       setAddModal(false);
-      setAddForm({ name: '', email: '', password: '', phone: '' });
+      setAddForm({ name: '', email: '', password: '', phone: '', nationalId: '', birthDate: '', gender: '', governorate: '', isEnrolled: false, universityName: '', universityCode: '' });
       load();
     } catch {
       toast('فشل إضافة الطالب', 'error');
@@ -197,6 +202,44 @@ export default function StudentsPage() {
             </div>
 
             <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
+              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>📋 المعلومات الشخصية الإضافية</h4>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🆔 الرقم القومى</span>
+                  <span dir="ltr" style={{ color: 'var(--text)' }}>{selectedStudent.national_id || '-'}</span>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🎂 تاريخ الميلاد</span>
+                  <span style={{ color: 'var(--text)' }}>{selectedStudent.birth_date || '-'}</span>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>👤 النوع</span>
+                  <span style={{ color: 'var(--text)' }}>{selectedStudent.gender || '-'}</span>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🗺️ المحافظة</span>
+                  <span style={{ color: 'var(--text)' }}>{selectedStudent.governorate || '-'}</span>
+                </div>
+                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>📚 مسجل بجامعة</span>
+                  <span style={{ color: 'var(--text)' }}>{Number(selectedStudent.is_enrolled) ? 'نعم' : 'لا'}</span>
+                </div>
+                {Number(selectedStudent.is_enrolled) && (
+                  <>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                      <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🏛️ اسم الجامعة</span>
+                      <span style={{ color: 'var(--text)' }}>{selectedStudent.university_name || '-'}</span>
+                    </div>
+                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
+                      <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🔢 الكود الجامعى</span>
+                      <span style={{ color: 'var(--text)' }}>{selectedStudent.university_code || '-'}</span>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
               <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>الطلبات ({selectedStudent.orders?.length || 0})</h4>
               {selectedStudent.orders?.length === 0 ? (
                 <p className="text-xs" style={{ color: 'var(--text-muted)' }}>لا توجد طلبات</p>
@@ -252,6 +295,38 @@ export default function StudentsPage() {
           <input placeholder="كلمة المرور (اترك فارغاً إن لم ترد التغيير)" type="password" value={editForm.password}
             onChange={e => setEditForm({ ...editForm, password: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>📋 بيانات إضافية</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input placeholder="الرقم القومى" value={editForm.nationalId} maxLength={14}
+                onChange={e => setEditForm({ ...editForm, nationalId: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm font-mono" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="تاريخ الميلاد" value={editForm.birthDate}
+                onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="النوع" value={editForm.gender}
+                onChange={e => setEditForm({ ...editForm, gender: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="المحافظة" value={editForm.governorate}
+                onChange={e => setEditForm({ ...editForm, governorate: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={editForm.isEnrolled} onChange={e => setEditForm({ ...editForm, isEnrolled: e.target.checked })}
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--primary)' }} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>مسجل بجامعة أو معهد</span>
+            </label>
+            {editForm.isEnrolled && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input placeholder="اسم الجامعة" value={editForm.universityName}
+                  onChange={e => setEditForm({ ...editForm, universityName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                <input placeholder="الكود الجامعى" value={editForm.universityCode}
+                  onChange={e => setEditForm({ ...editForm, universityCode: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+            )}
+          </div>
           <button onClick={saveEdit} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
         </div>
       </Modal>
@@ -270,6 +345,38 @@ export default function StudentsPage() {
           <input placeholder="رقم الهاتف" value={addForm.phone}
             onChange={e => setAddForm({ ...addForm, phone: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--border)' }}>
+            <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>📋 بيانات إضافية (اختياري)</p>
+            <div className="grid grid-cols-2 gap-2">
+              <input placeholder="الرقم القومى" value={addForm.nationalId} maxLength={14}
+                onChange={e => setAddForm({ ...addForm, nationalId: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm font-mono" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="تاريخ الميلاد" value={addForm.birthDate}
+                onChange={e => setAddForm({ ...addForm, birthDate: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="النوع" value={addForm.gender}
+                onChange={e => setAddForm({ ...addForm, gender: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              <input placeholder="المحافظة" value={addForm.governorate}
+                onChange={e => setAddForm({ ...addForm, governorate: e.target.value })}
+                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input type="checkbox" checked={addForm.isEnrolled} onChange={e => setAddForm({ ...addForm, isEnrolled: e.target.checked })}
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--primary)' }} />
+              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>مسجل بجامعة أو معهد</span>
+            </label>
+            {addForm.isEnrolled && (
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <input placeholder="اسم الجامعة" value={addForm.universityName}
+                  onChange={e => setAddForm({ ...addForm, universityName: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                <input placeholder="الكود الجامعى" value={addForm.universityCode}
+                  onChange={e => setAddForm({ ...addForm, universityCode: e.target.value })}
+                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+            )}
+          </div>
           <button onClick={addStudent} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">إضافة</button>
         </div>
       </Modal>

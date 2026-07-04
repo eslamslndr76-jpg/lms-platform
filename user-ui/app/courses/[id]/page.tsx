@@ -37,7 +37,7 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addingToCart, setAddingToCart] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const [rePurchaseWarn, setRePurchaseWarn] = useState<{ show: boolean; hasCertificate: boolean }>({ show: false, hasCertificate: false });
 
   useEffect(() => {
     api(`/api/courses/${id}`).then(setCourse).catch(() => setError('فشل تحميل بيانات الكورس')).finally(() => setLoading(false));
@@ -58,6 +58,20 @@ export default function CourseDetailPage() {
 
   const handleBuyNow = async () => {
     if (!user) { router.push('/login'); return; }
+    try {
+      const check = await api(`/api/orders/my/check/${course!.id}`);
+      if (check.hasPaidOrder || check.hasCertificate) {
+        setRePurchaseWarn({ show: true, hasCertificate: check.hasCertificate });
+        return;
+      }
+    } catch {
+      // proceed anyway if check fails
+    }
+    router.push(`/checkout?course_id=${course!.id}&amount=${course!.price}`);
+  };
+
+  const confirmRePurchase = () => {
+    setRePurchaseWarn({ show: false, hasCertificate: false });
     router.push(`/checkout?course_id=${course!.id}&amount=${course!.price}`);
   };
 
@@ -157,16 +171,7 @@ export default function CourseDetailPage() {
                   {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : 'مجاني'}
                 </p>
               </div>
-              {course.price > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs" style={{ color: 'var(--text-muted)' }}>الكمية</span>
-                  <div className="flex items-center rounded-xl border" style={{ borderColor: 'var(--border)' }}>
-                    <button onClick={() => setQuantity(q => Math.max(1, q - 1))} className="px-3 py-1.5 text-sm hover:bg-black/5" style={{ color: 'var(--text)' }}>−</button>
-                    <span className="px-3 py-1.5 text-sm font-medium min-w-[30px] text-center" style={{ color: 'var(--text)' }}>{quantity}</span>
-                    <button onClick={() => setQuantity(q => q + 1)} className="px-3 py-1.5 text-sm hover:bg-black/5" style={{ color: 'var(--text)' }}>+</button>
-                  </div>
-                </div>
-              )}
+
             </div>
 
             <div className="flex gap-3">
@@ -194,6 +199,32 @@ export default function CourseDetailPage() {
           </div>
         </div>
       </div>
+      {/* Re-purchase Warning Modal */}
+      {rePurchaseWarn.show && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+          <div className="rounded-2xl p-6 max-w-sm w-full shadow-2xl text-center" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="text-4xl mb-4">🛒</div>
+            <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text)' }}>هل أنت متأكد؟</h3>
+            <p className="text-sm leading-relaxed mb-6" style={{ color: 'var(--text-muted)' }}>
+              {rePurchaseWarn.hasCertificate
+                ? 'لقد سبق لك شراء هذا الكورس وتم إصدار شهادة لك به. يمكنك شراؤه مرة أخرى إذا كنت ترغب.'
+                : 'يبدو أن لديك طلب سابق لهذا الكورس. يمكنك شراؤه مرة أخرى إذا كنت ترغب.'}
+            </p>
+            <div className="flex gap-3">
+              <button onClick={() => setRePurchaseWarn({ show: false, hasCertificate: false })}
+                className="flex-1 py-3 rounded-xl font-bold text-sm border-2"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                إلغاء
+              </button>
+              <button onClick={confirmRePurchase}
+                className="flex-1 py-3 rounded-xl text-white font-bold text-sm"
+                style={{ backgroundColor: primaryColor }}>
+                تأكيد الشراء
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

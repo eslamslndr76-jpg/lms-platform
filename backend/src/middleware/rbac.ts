@@ -46,7 +46,6 @@ export const SECTIONS = {
   groups: 'المجموعات',
   financials: 'المالية',
   settings: 'الإعدادات',
-  receipts: 'الإيصالات',
   categories: 'التصنيفات',
   employees: 'الموظفين',
 } as const;

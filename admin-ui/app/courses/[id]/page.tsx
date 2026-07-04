@@ -34,11 +34,13 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [addGroupModal, setAddGroupModal] = useState(false);
-  const [groupForm, setGroupForm] = useState({ name: '', schedule: '', instructor_name: '', location: '', max_students: '', start_date: '', end_date: '' });
+  const [groupForm, setGroupForm] = useState({ name: '', location: '', max_students: '', end_date: '', status: 'pending' });
+  const [groupSaving, setGroupSaving] = useState(false);
 
   const [editGroupModal, setEditGroupModal] = useState(false);
   const [editGroupForm, setEditGroupForm] = useState<any>({});
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
+  const [editGroupSaving, setEditGroupSaving] = useState(false);
 
   const [detailGroup, setDetailGroup] = useState<any>(null);
   const [detailGroupTab, setDetailGroupTab] = useState<'info' | 'lectures' | 'students'>('info');
@@ -47,19 +49,32 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [lecturesLoading, setLecturesLoading] = useState(false);
   const [lectureForm, setLectureForm] = useState({ day_of_week: '', time_from: '', time_to: '', topic: '', date: '' });
   const [addLectureModal, setAddLectureModal] = useState(false);
+  const [lectureSaving, setLectureSaving] = useState(false);
   const [editLectureModal, setEditLectureModal] = useState(false);
   const [editLectureForm, setEditLectureForm] = useState<any>({});
   const [editingLectureId, setEditingLectureId] = useState<number | null>(null);
+  const [editLectureSaving, setEditLectureSaving] = useState(false);
 
   const [groupStudents, setGroupStudents] = useState<any[]>([]);
   const [groupStudentsLoading, setGroupStudentsLoading] = useState(false);
   const [addStudentModal, setAddStudentModal] = useState(false);
+  const [addStudentSaving, setAddStudentSaving] = useState(false);
   const [allStudents, setAllStudents] = useState<any[]>([]);
   const [selectedStudentIds, setSelectedStudentIds] = useState<number[]>([]);
   const [studentSearch, setStudentSearch] = useState('');
 
   const [courseStudents, setCourseStudents] = useState<any[]>([]);
   const [courseStudentsLoading, setCourseStudentsLoading] = useState(false);
+
+  // Unassigned students
+  const [unassignedStudents, setUnassignedStudents] = useState<any[]>([]);
+  const [unassignedLoading, setUnassignedLoading] = useState(false);
+
+  // Move student between groups
+  const [otherGroups, setOtherGroups] = useState<any[]>([]);
+  const [moveStudentTarget, setMoveStudentTarget] = useState<any>(null);
+  const [moveTargetGroupId, setMoveTargetGroupId] = useState<number | null>(null);
+  const [movingStudent, setMovingStudent] = useState(false);
 
   const [confirmToggleCourse, setConfirmToggleCourse] = useState<any>(null);
   const [confirmDeleteCourse, setConfirmDeleteCourse] = useState<any>(null);
@@ -93,6 +108,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast('فشل تحميل المجموعات', 'error');
     }
     setGroupsLoading(false);
+    loadUnassigned();
   };
 
   const loadCourseStudents = async () => {
@@ -121,6 +137,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       instructor: course.instructor || '', materials_url: course.materials_url || '',
       course_mode: course.course_mode || 'online',
       featured: Boolean(Number(course.featured)), enable_direct_purchase: course.enable_direct_purchase !== 0,
+      auto_assign: Boolean(Number(course.auto_assign)),
     });
     setEditModal(true);
   };
@@ -168,36 +185,48 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   };
 
   const saveGroup = async () => {
+    if (groupSaving) return;
+    setGroupSaving(true);
     try {
       await api('/api/groups', {
         method: 'POST',
         body: JSON.stringify({ ...groupForm, course_id: courseId, max_students: groupForm.max_students ? Number(groupForm.max_students) : null }),
       });
       setAddGroupModal(false);
-      setGroupForm({ name: '', schedule: '', instructor_name: '', location: '', max_students: '', start_date: '', end_date: '' });
+      setGroupForm({ name: '', location: '', max_students: '', end_date: '', status: 'pending' });
       toast('تم إضافة المجموعة', 'success');
       loadGroups();
     } catch {
       toast('فشل إضافة المجموعة', 'error');
+    } finally {
+      setGroupSaving(false);
     }
   };
 
   const startEditGroup = (row: any) => {
     setEditingGroupId(row.id);
     setEditGroupForm({
-      name: row.name, course_id: row.course_id?.toString() || '', schedule: row.schedule || '',
-      is_active: Number(row.is_active), instructor_name: row.instructor_name || '',
+      name: row.name, course_id: row.course_id?.toString() || '',
+      is_active: Number(row.is_active),
+      status: row.status || 'pending',
       location: row.location || '', max_students: row.max_students?.toString() || '',
-      start_date: row.start_date || '', end_date: row.end_date || '',
+      end_date: row.end_date || '',
     });
     setEditGroupModal(true);
   };
 
   const saveEditGroup = async () => {
+    if (editGroupSaving) return;
+    setEditGroupSaving(true);
     try {
       await api(`/api/groups/${editingGroupId}`, {
         method: 'PUT',
-        body: JSON.stringify({ ...editGroupForm, course_id: courseId, max_students: editGroupForm.max_students ? Number(editGroupForm.max_students) : null }),
+        body: JSON.stringify({
+          name: editGroupForm.name,
+          location: editGroupForm.location,
+          max_students: editGroupForm.max_students ? Number(editGroupForm.max_students) : null,
+          status: editGroupForm.status,
+        }),
       });
       setEditGroupModal(false);
       setEditingGroupId(null);
@@ -205,6 +234,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل تحديث المجموعة', 'error');
+    } finally {
+      setEditGroupSaving(false);
     }
   };
 
@@ -225,12 +256,16 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   const toggleGroupActive = async () => {
     if (!confirmToggleGroup) return;
+    const currentlyActive = Number(confirmToggleGroup.is_active);
     try {
       await api(`/api/groups/${confirmToggleGroup.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ is_active: Number(confirmToggleGroup.is_active) ? 0 : 1 }),
+        body: JSON.stringify({
+          is_active: currentlyActive ? 0 : 1,
+          status: currentlyActive ? 'cancelled' : 'active',
+        }),
       });
-      toast(Number(confirmToggleGroup.is_active) ? 'تم تعطيل المجموعة' : 'تم تفعيل المجموعة', 'success');
+      toast(currentlyActive ? 'تم تعطيل المجموعة' : 'تم تفعيل المجموعة', 'success');
       setConfirmToggleGroup(null);
       loadGroups();
     } catch {
@@ -261,6 +296,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   };
 
   const saveLecture = async () => {
+    if (lectureSaving) return;
+    setLectureSaving(true);
     try {
       await api(`/api/lectures/${detailGroup.id}`, {
         method: 'POST',
@@ -273,6 +310,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل إضافة المحاضرة', 'error');
+    } finally {
+      setLectureSaving(false);
     }
   };
 
@@ -286,6 +325,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   };
 
   const saveEditLecture = async () => {
+    if (editLectureSaving) return;
+    setEditLectureSaving(true);
     try {
       await api(`/api/lectures/${detailGroup.id}/${editingLectureId}`, {
         method: 'PUT',
@@ -298,6 +339,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل تحديث المحاضرة', 'error');
+    } finally {
+      setEditLectureSaving(false);
     }
   };
 
@@ -336,7 +379,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   };
 
   const addStudentsToGroup = async () => {
-    if (selectedStudentIds.length === 0) return;
+    if (selectedStudentIds.length === 0 || addStudentSaving) return;
+    setAddStudentSaving(true);
     try {
       await api(`/api/groups/${detailGroup.id}/students`, {
         method: 'POST',
@@ -349,6 +393,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل إضافة الطلاب', 'error');
+    } finally {
+      setAddStudentSaving(false);
     }
   };
 
@@ -372,6 +418,66 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     );
   };
 
+  const loadUnassigned = async () => {
+    setUnassignedLoading(true);
+    try {
+      const data = await api(`/api/admin/unassigned/course/${courseId}`);
+      setUnassignedStudents(data);
+    } catch {
+      setUnassignedStudents([]);
+    }
+    setUnassignedLoading(false);
+  };
+
+  const assignStudent = async (userId: number, groupId: number) => {
+    try {
+      await api('/api/admin/unassigned/assign', {
+        method: 'POST',
+        body: JSON.stringify({ user_id: userId, group_id: groupId }),
+      });
+      toast('تم تسكين الطالب', 'success');
+      loadUnassigned();
+      if (detailGroup) {
+        const students = await api(`/api/groups/${detailGroup.id}/students`);
+        setGroupStudents(students);
+      }
+      loadGroups();
+    } catch {
+      toast('فشل تسكين الطالب', 'error');
+    }
+  };
+
+  const openMoveStudent = async (student: any) => {
+    setMoveStudentTarget(student);
+    setMoveTargetGroupId(null);
+    try {
+      const groups = await api(`/api/groups?courseId=${courseId}`);
+      setOtherGroups(groups.filter((g: any) => g.id !== detailGroup?.id));
+    } catch {
+      setOtherGroups([]);
+    }
+  };
+
+  const moveStudent = async () => {
+    if (!moveStudentTarget || !moveTargetGroupId || !detailGroup) return;
+    setMovingStudent(true);
+    try {
+      await api(`/api/groups/${detailGroup.id}/students/${moveStudentTarget.id}/move`, {
+        method: 'PUT',
+        body: JSON.stringify({ target_group_id: moveTargetGroupId }),
+      });
+      toast('تم نقل الطالب', 'success');
+      setMoveStudentTarget(null);
+      setMoveTargetGroupId(null);
+      const students = await api(`/api/groups/${detailGroup.id}/students`);
+      setGroupStudents(students);
+      loadGroups();
+    } catch {
+      toast('فشل نقل الطالب', 'error');
+    }
+    setMovingStudent(false);
+  };
+
   const filteredStudents = allStudents.filter((s: any) =>
     !studentSearch || s.name.includes(studentSearch) || s.email.includes(studentSearch) || s.phone?.includes(studentSearch)
   );
@@ -380,6 +486,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     { key: 'info', label: 'معلومات الكورس' },
     { key: 'groups', label: 'المجموعات' },
     { key: 'students', label: 'الطلاب المسجلين' },
+    { key: 'unassigned', label: `غير مسكنين (${unassignedStudents.length})` },
   ];
 
   if (loading) return (
@@ -475,7 +582,19 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <span style={{ color: 'var(--text)' }}>{course.lecture_duration} ساعة</span>
               </div>
             )}
-            {course.max_students && (
+            {course.auto_assign !== undefined && (
+              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع التسكين</span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: Number(course.auto_assign) ? 'rgba(34,197,94,0.15)' : 'rgba(251,191,36,0.15)',
+                    color: Number(course.auto_assign) ? '#16a34a' : '#d97706',
+                  }}>
+                  {Number(course.auto_assign) ? '🤖 تسكين تلقائي' : '👤 تسكين يدوي'}
+                </span>
+              </div>
+            )}
+          {course.max_students && (
               <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
                 <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى</span>
                 <span style={{ color: 'var(--text)' }}>{course.max_students} طالب</span>
@@ -520,8 +639,13 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 { key: 'name', label: 'اسم المجموعة' },
                 { key: 'instructor_name', label: 'المدرب' },
                 { key: 'student_count', label: 'عدد الطلاب', render: (v: number) => `${v || 0} طالب` },
-                { key: 'schedule', label: 'الموعد', render: (v: any) => v || '-' },
-                { key: 'is_active', label: 'نشط؟', render: (v: any) => Number(v) ? '🟢' : '🔴' },
+                { key: 'schedule_display', label: 'الموعد', render: (v: string) => v || 'لم يتم تحديد الميعاد بعد' },
+                { key: 'status', label: 'الحالة', render: (v: any, row: any) => (
+                  <div className="flex items-center gap-2">
+                    <StatusBadge status={row.status || (Number(row.is_active) ? 'active' : 'cancelled')} />
+                    {!row.status && !Number(row.is_active) && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(قديم)</span>}
+                  </div>
+                )},
                 { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
                   <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                     <button onClick={() => startEditGroup(row)}
@@ -562,6 +686,51 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   <div className="flex items-center gap-2">
                     <span style={{ color: 'var(--text-muted)' }}>{o.amount} ج.م</span>
                     <StatusBadge status={o.status} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ============================== TAB: Unassigned Students ============================== */}
+      {tab === 'unassigned' && (
+        <div className="rounded-2xl p-6 shadow-sm border space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold" style={{ color: 'var(--text)' }}>الطلاب الغير مسكنين</h2>
+          </div>
+          {unassignedLoading ? (
+            <Skeleton rows={3} cols={3} />
+          ) : unassignedStudents.length === 0 ? (
+            <div className="flex items-center gap-3 p-4 rounded-xl" style={{ backgroundColor: '#f0fdf4' }}>
+              <span className="text-2xl">✅</span>
+              <p className="text-sm font-medium" style={{ color: '#16a34a' }}>جميع الطلاب مسكنين في مجموعات</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {unassignedStudents.map((u: any) => (
+                <div key={u.order_id} className="flex items-center justify-between p-3 rounded-xl text-sm border-2" style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca' }}>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg">🔴</span>
+                    <div>
+                      <span className="font-medium" style={{ color: 'var(--text)' }}>{u.name}</span>
+                      <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</span>
+                      {u.phone && <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.phone}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      onChange={e => {
+                        const gid = Number(e.target.value);
+                        if (gid) assignStudent(u.user_id, gid);
+                      }}
+                      className="px-3 py-1.5 rounded-lg text-xs border" style={{ backgroundColor: 'white', borderColor: 'var(--border)' }}>
+                      <option value="">تسكين في...</option>
+                      {groups.filter((g: any) => Number(g.is_active)).map((g: any) => (
+                        <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'})</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
               ))}
@@ -642,6 +811,40 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             </label>
           </div>
           <div>
+            <label className="block text-xs mb-2" style={{ color: 'var(--text-muted)' }}>نوع التسكين</label>
+            <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+              <button type="button" onClick={() => setEditForm({ ...editForm, auto_assign: false })}
+                className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                  !editForm.auto_assign
+                    ? 'text-white shadow-sm'
+                    : 'hover:bg-black/5'
+                }`}
+                style={{
+                  backgroundColor: !editForm.auto_assign ? 'var(--primary)' : 'transparent',
+                  color: !editForm.auto_assign ? '#fff' : 'var(--text)',
+                }}>
+                👤 تسكين يدوي
+              </button>
+              <button type="button" onClick={() => setEditForm({ ...editForm, auto_assign: true })}
+                className={`flex-1 py-2.5 text-sm font-medium transition-all ${
+                  editForm.auto_assign
+                    ? 'text-white shadow-sm'
+                    : 'hover:bg-black/5'
+                }`}
+                style={{
+                  backgroundColor: editForm.auto_assign ? 'var(--primary)' : 'transparent',
+                  color: editForm.auto_assign ? '#fff' : 'var(--text)',
+                }}>
+                🤖 تسكين تلقائي
+              </button>
+            </div>
+            <p className="text-xs mt-1.5" style={{ color: 'var(--text-muted)' }}>
+              {editForm.auto_assign
+                ? 'عند تأكيد دفع الطالب، يُسكن تلقائياً في أول مجموعة متاحة'
+                : 'الطلاب يظهرون في "غير مسكنين" ويحتاجون تسكين يدوي من المشرف'}
+            </p>
+          </div>
+          <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"
               onChange={async e => {
@@ -673,25 +876,37 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورس</span>
             <span style={{ color: 'var(--primary)' }}>{course?.title_ar}</span>
           </div>
-          <input placeholder="اسم المدرب" value={groupForm.instructor_name}
-            onChange={e => setGroupForm({ ...groupForm, instructor_name: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المدرب</span>
+            <span style={{ color: 'var(--text)' }}>{course?.instructor || 'غير محدد'}</span>
+          </div>
           <input placeholder="المكان" value={groupForm.location}
             onChange={e => setGroupForm({ ...groupForm, location: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <input placeholder="الحد الأقصى للطلاب" type="number" value={groupForm.max_students}
             onChange={e => setGroupForm({ ...groupForm, max_students: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="الموعد (مثال: السبت 7-9 م)" value={groupForm.schedule}
-            onChange={e => setGroupForm({ ...groupForm, schedule: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="تاريخ البداية" type="date" value={groupForm.start_date}
-            onChange={e => setGroupForm({ ...groupForm, start_date: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
+            <span style={{ color: 'var(--text-muted)' }}>يُحدد من أول محاضرة</span>
+          </div>
           <input placeholder="تاريخ النهاية" type="date" value={groupForm.end_date}
             onChange={e => setGroupForm({ ...groupForm, end_date: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <button onClick={saveGroup} className="col-span-2 w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ</button>
+          <select value={groupForm.status || 'pending'}
+            onChange={e => setGroupForm({ ...groupForm, status: e.target.value })}
+            className="col-span-2 w-full px-4 py-2.5 rounded-xl border text-sm"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+            <option value="pending">قيد الانتظار</option>
+            <option value="active">نشطة</option>
+            <option value="completed">مكتملة</option>
+            <option value="cancelled">ملغية</option>
+          </select>
+          <button onClick={saveGroup} disabled={groupSaving}
+            className="col-span-2 w-full py-3 rounded-xl font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+            {groupSaving ? 'جاري الحفظ...' : 'حفظ'}
+          </button>
         </div>
       </Modal>
 
@@ -705,25 +920,37 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورس</span>
             <span style={{ color: 'var(--primary)' }}>{course?.title_ar}</span>
           </div>
-          <input placeholder="اسم المدرب" value={editGroupForm.instructor_name}
-            onChange={e => setEditGroupForm({ ...editGroupForm, instructor_name: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المدرب</span>
+            <span style={{ color: 'var(--text)' }}>{course?.instructor || 'غير محدد'}</span>
+          </div>
           <input placeholder="المكان" value={editGroupForm.location}
             onChange={e => setEditGroupForm({ ...editGroupForm, location: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <input placeholder="الحد الأقصى للطلاب" type="number" value={editGroupForm.max_students}
             onChange={e => setEditGroupForm({ ...editGroupForm, max_students: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="الموعد" value={editGroupForm.schedule}
-            onChange={e => setEditGroupForm({ ...editGroupForm, schedule: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="تاريخ البداية" type="date" value={editGroupForm.start_date}
-            onChange={e => setEditGroupForm({ ...editGroupForm, start_date: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
+            <span style={{ color: 'var(--text-muted)' }}>يُحدد من أول محاضرة</span>
+          </div>
           <input placeholder="تاريخ النهاية" type="date" value={editGroupForm.end_date}
             onChange={e => setEditGroupForm({ ...editGroupForm, end_date: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <button onClick={saveEditGroup} className="col-span-2 w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+          <select value={editGroupForm.status || 'pending'}
+            onChange={e => setEditGroupForm({ ...editGroupForm, status: e.target.value })}
+            className="col-span-2 w-full px-4 py-2.5 rounded-xl border text-sm"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+            <option value="pending">قيد الانتظار</option>
+            <option value="active">نشطة</option>
+            <option value="completed">مكتملة</option>
+            <option value="cancelled">ملغية</option>
+          </select>
+          <button onClick={saveEditGroup} disabled={editGroupSaving}
+            className="col-span-2 w-full py-3 rounded-xl font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+            {editGroupSaving ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+          </button>
         </div>
       </Modal>
 
@@ -766,16 +993,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     <span style={{ color: 'var(--text)' }}>{detailGroup.location}</span>
                   </div>
                 )}
-                {detailGroup.schedule && (
-                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
+                {detailGroup.schedule_display && (
+                  <div className="p-3 rounded-xl col-span-2" style={{
+                    backgroundColor: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '#fef3c7' : 'var(--bg)',
+                    border: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '1px solid #f59e0b' : 'none',
+                  }}>
                     <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
-                    <span style={{ color: 'var(--text)' }}>{typeof detailGroup.schedule === 'object' ? JSON.stringify(detailGroup.schedule) : detailGroup.schedule}</span>
-                  </div>
-                )}
-                {detailGroup.start_date && (
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تاريخ البداية</span>
-                    <span style={{ color: 'var(--text)' }}>{detailGroup.start_date}</span>
+                    <span style={{
+                      color: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '#92400e' : 'var(--text)',
+                      fontWeight: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '600' : '400',
+                    }}>
+                      {detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '⚠️ ' : ''}{detailGroup.schedule_display}
+                    </span>
                   </div>
                 )}
                 {detailGroup.end_date && (
@@ -787,8 +1016,9 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
                   <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</span>
                   <span style={{ color: 'var(--text)' }}>
-                    {Number(detailGroup.is_complete) ? '✅ مكتملة' : '⏳ غير مكتملة'}
-                    {Number(detailGroup.is_active) ? '' : ' (غير نشطة)'}
+                    {detailGroup.status === 'completed' ? '✅ مكتملة' :
+                     detailGroup.status === 'cancelled' ? '❌ ملغية' :
+                     detailGroup.status === 'active' ? '🟢 نشطة' : '⏳ قيد الانتظار'}
                   </span>
                 </div>
                 <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
@@ -862,12 +1092,40 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                           <span style={{ color: 'var(--text)' }}>{s.name}</span>
                           <span className="mr-2" style={{ color: 'var(--text-muted)' }}>{s.email}</span>
                         </div>
-                        <button onClick={() => setConfirmRemoveStudent(s)}
-                          className="px-2 py-1 rounded text-red-600 hover:bg-red-50">✕</button>
+                        <div className="flex gap-1">
+                          <button onClick={() => openMoveStudent(s)}
+                            className="px-2 py-1 rounded text-blue-600 hover:bg-blue-50">🔄 نقل</button>
+                          <button onClick={() => setConfirmRemoveStudent(s)}
+                            className="px-2 py-1 rounded text-red-600 hover:bg-red-50">✕</button>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ===== Move Student Dialog ===== */}
+            {moveStudentTarget && (
+              <div className="rounded-xl p-3 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>
+                  نقل <strong style={{ color: 'var(--text)' }}>{moveStudentTarget.name}</strong> إلى:
+                </p>
+                <div className="flex gap-2">
+                  <select value={moveTargetGroupId || ''} onChange={e => setMoveTargetGroupId(Number(e.target.value))}
+                    className="flex-1 px-3 py-1.5 rounded-lg text-xs border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+                    <option value="">اختر مجموعة...</option>
+                    {otherGroups.map((g: any) => (
+                      <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'})</option>
+                    ))}
+                  </select>
+                  <button onClick={moveStudent} disabled={!moveTargetGroupId || movingStudent}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--primary)' }}>
+                    {movingStudent ? 'جاري...' : 'نقل'}
+                  </button>
+                  <button onClick={() => { setMoveStudentTarget(null); setMoveTargetGroupId(null); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: '#f3f4f6', color: 'var(--text)' }}>إلغاء</button>
+                </div>
               </div>
             )}
 
@@ -903,7 +1161,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <input placeholder="التاريخ" type="date" value={lectureForm.date}
             onChange={e => setLectureForm({ ...lectureForm, date: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <button onClick={saveLecture} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ</button>
+          <button onClick={saveLecture} disabled={lectureSaving}
+            className="w-full py-3 rounded-xl font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+            {lectureSaving ? 'جاري الحفظ...' : 'حفظ'}
+          </button>
         </div>
       </Modal>
 
@@ -928,7 +1190,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <input placeholder="التاريخ" type="date" value={editLectureForm.date}
             onChange={e => setEditLectureForm({ ...editLectureForm, date: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <button onClick={saveEditLecture} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+          <button onClick={saveEditLecture} disabled={editLectureSaving}
+            className="w-full py-3 rounded-xl font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+            {editLectureSaving ? 'جاري الحفظ...' : 'حفظ التعديلات'}
+          </button>
         </div>
       </Modal>
 
@@ -952,10 +1218,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               </label>
             ))}
           </div>
-          <button onClick={addStudentsToGroup} disabled={selectedStudentIds.length === 0}
+          <button onClick={addStudentsToGroup} disabled={selectedStudentIds.length === 0 || addStudentSaving}
             className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
             style={{ backgroundColor: 'var(--primary)' }}>
-            إضافة {selectedStudentIds.length > 0 ? `(${selectedStudentIds.length})` : ''}
+            {addStudentSaving ? 'جاري الإضافة...' : `إضافة ${selectedStudentIds.length > 0 ? `(${selectedStudentIds.length})` : ''}`}
           </button>
         </div>
       </Modal>

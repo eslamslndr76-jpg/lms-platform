@@ -8,7 +8,7 @@ const router = Router();
 router.get('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
     const result = await sql(
-      `SELECT ci.id, ci.course_id, ci.quantity, ci.created_at,
+      `SELECT ci.id, ci.course_id, ci.created_at,
               c.title_ar, c.title_en, c.price, c.image_url, c.instructor,
               cat.name_ar as category_name_ar
        FROM cart_items ci
@@ -18,8 +18,8 @@ router.get('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: 
        ORDER BY ci.created_at DESC`,
       req.user!.userId,
     );
-    const items = result.rows.map((r: any) => ({ ...r, quantity: Number(r.quantity) }));
-    const total = items.reduce((sum: number, i: any) => sum + Number(i.price) * i.quantity, 0);
+    const items = result.rows.map((r: any) => r);
+    const total = items.reduce((sum: number, i: any) => sum + Number(i.price), 0);
     res.json({ items, total, count: items.length });
   } catch {
     res.status(500).json({ error: 'Failed to fetch cart' });
@@ -32,15 +32,11 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     if (!course_id) return res.status(400).json({ error: 'course_id required' });
 
     const existing = await sql(
-      'SELECT id, quantity FROM cart_items WHERE user_id=? AND course_id=?',
+      'SELECT id FROM cart_items WHERE user_id=? AND course_id=?',
       req.user!.userId, course_id,
     );
     if (existing.rows.length > 0) {
-      await sql(
-        'UPDATE cart_items SET quantity = quantity + 1 WHERE id=?',
-        existing.rows[0].id,
-      );
-      return res.json({ message: 'Quantity increased', id: existing.rows[0].id });
+      return res.status(400).json({ error: 'هذا الكورس موجود بالفعل في السلة' });
     }
 
     const result = await sql(
@@ -50,20 +46,6 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     res.status(201).json({ id: Number(result.lastInsertRowid), message: 'Added to cart' });
   } catch {
     res.status(500).json({ error: 'Failed to add to cart' });
-  }
-});
-
-router.put('/:id', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
-  try {
-    const { quantity } = req.body;
-    if (!quantity || quantity < 1) return res.status(400).json({ error: 'quantity must be >= 1' });
-    const item = await sql('SELECT user_id FROM cart_items WHERE id=?', req.params.id);
-    if (item.rows.length === 0) return res.status(404).json({ error: 'Item not found' });
-    if (Number(item.rows[0].user_id) !== req.user!.userId) return res.status(403).json({ error: 'Unauthorized' });
-    await sql('UPDATE cart_items SET quantity=? WHERE id=?', quantity, req.params.id);
-    res.json({ message: 'Cart updated' });
-  } catch {
-    res.status(500).json({ error: 'Failed to update cart' });
   }
 });
 

@@ -60,9 +60,9 @@ router.get('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
 // POST /api/groups — create
 router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { course_id, name, zoom_link, end_date, instructor_name, location, max_students } = req.body;
+    const { course_id, name, zoom_link, end_date, instructor_name, location, max_students, status } = req.body;
     if (!course_id || !name) return res.status(400).json({ error: 'Course ID and name required' });
-    const id = await groupService.createGroup({ course_id, name, zoom_link, end_date, instructor_name, location, max_students });
+    const id = await groupService.createGroup({ course_id, name, zoom_link, end_date, instructor_name, location, max_students, status });
     res.status(201).json({ id });
   } catch (err: any) {
     console.error('Create group error:', err?.message || err);

@@ -12,7 +12,6 @@ import { PageSkeleton } from '../../../components/Skeleton';
 interface CartItem {
   id: number;
   course_id: number;
-  quantity: number;
   title_ar: string;
   price: number;
   image_url?: string;
@@ -75,16 +74,6 @@ export default function CartPage() {
       fetchSuggestions();
     } catch {
       show('فشل الحذف', 'error');
-    }
-  };
-
-  const updateQuantity = async (itemId: number, quantity: number) => {
-    if (quantity < 1) return;
-    try {
-      await api(`/api/cart/${itemId}`, { method: 'PUT', body: JSON.stringify({ quantity }) });
-      fetchCart();
-    } catch {
-      show('فشل التحديث', 'error');
     }
   };
 
@@ -151,13 +140,8 @@ export default function CartPage() {
                   </Link>
                   {item.instructor && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>🧑‍🏫 {item.instructor}</p>}
                   <div className="flex items-center justify-between mt-3">
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-8 h-8 rounded-lg text-sm font-bold border" style={{ color: 'var(--text)', borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}>−</button>
-                      <span className="text-sm font-medium min-w-[24px] text-center" style={{ color: 'var(--text)' }}>{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-8 h-8 rounded-lg text-sm font-bold border" style={{ color: 'var(--text)', borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}>+</button>
-                    </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-lg font-bold" style={{ color: primaryColor }}>{(Number(item.price) * item.quantity).toLocaleString()} ج.م</span>
+                      <span className="text-lg font-bold" style={{ color: primaryColor }}>{Number(item.price).toLocaleString()} ج.م</span>
                       <button onClick={() => removeItem(item.id)} className="text-xs px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100">🗑️</button>
                     </div>
                   </div>

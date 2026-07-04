@@ -8,7 +8,6 @@ import { compressAndEncode } from '../../../lib/imageUtils';
 import { useAuth } from '../../../lib/auth';
 import { useToast } from '../../../components/Toast';
 import { useBranding } from '../../../components/BrandingProvider';
-import { useDarkMode } from '../../../components/DarkModeProvider';
 import { Skeleton } from '../../../components/Skeleton';
 import PasswordInput from '../../../components/PasswordInput';
 
@@ -16,7 +15,6 @@ export default function AccountPage() {
   const { user, loading: authLoading } = useAuth();
   const { show } = useToast();
   const { primaryColor } = useBranding();
-  const { dark, toggle: toggleDark } = useDarkMode();
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -93,16 +91,6 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--bg)' }}>
-      <header className="sticky top-0 z-40 border-b" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-        <div className="px-4 py-3 flex items-center justify-between">
-          <Link href="/dashboard" className="text-sm" style={{ color: primaryColor }}>← الرجوع</Link>
-          <h1 className="font-bold" style={{ color: 'var(--text)' }}>حسابي</h1>
-          <button onClick={toggleDark} className="p-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
-            {dark ? '☀️' : '🌙'}
-          </button>
-        </div>
-      </header>
-
       <main className="px-4 py-6 max-w-lg mx-auto space-y-6 animate-fade-in">
         <div className="flex items-center gap-4 animate-slide-up">
           <div className="relative">

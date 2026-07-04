@@ -11,7 +11,6 @@ import { useToast } from './Toast';
 interface CartItem {
   id: number;
   course_id: number;
-  quantity: number;
   title_ar: string;
   price: number;
   image_url?: string;
@@ -82,16 +81,6 @@ export default function CartDrawer({ open, onClose }: { open: boolean; onClose: 
     }
   };
 
-  const updateQuantity = async (itemId: number, quantity: number) => {
-    if (quantity < 1) return;
-    try {
-      await api(`/api/cart/${itemId}`, { method: 'PUT', body: JSON.stringify({ quantity }) });
-      fetchCart();
-    } catch {
-      show('فشل التحديث', 'error');
-    }
-  };
-
   const checkout = () => {
     onClose();
     router.push('/checkout');
@@ -153,15 +142,8 @@ export default function CartDrawer({ open, onClose }: { open: boolean; onClose: 
                         </Link>
                         {item.instructor && <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{item.instructor}</p>}
                         <div className="flex items-center justify-between mt-2">
-                          <div className="flex items-center gap-2">
-                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-lg text-sm font-bold hover:bg-black/10" style={{ color: 'var(--text)', backgroundColor: 'var(--card)' }}>−</button>
-                            <span className="text-sm font-medium min-w-[20px] text-center" style={{ color: 'var(--text)' }}>{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-lg text-sm font-bold hover:bg-black/10" style={{ color: 'var(--text)', backgroundColor: 'var(--card)' }}>+</button>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-bold" style={{ color: primaryColor }}>{(Number(item.price) * item.quantity).toLocaleString()} ج.م</span>
-                            <button onClick={() => removeItem(item.id)} className="p-1 text-xs hover:bg-red-50 rounded-lg" style={{ color: '#dc2626' }}>🗑️</button>
-                          </div>
+                          <span className="text-sm font-bold" style={{ color: primaryColor }}>{Number(item.price).toLocaleString()} ج.م</span>
+                          <button onClick={() => removeItem(item.id)} className="p-1 text-xs hover:bg-red-50 rounded-lg" style={{ color: '#dc2626' }}>🗑️</button>
                         </div>
                       </div>
                     </div>

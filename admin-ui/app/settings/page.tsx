@@ -7,25 +7,34 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'aikeys' | 'autogroup'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'ai' | 'autogroup'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
   });
   const [categories, setCategories] = useState<any[]>([]);
-  const [aiKeys, setAiKeys] = useState<string[]>([]);
+  const [providers, setProviders] = useState<any[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
   const [catModal, setCatModal] = useState(false);
   const [catForm, setCatForm] = useState({ name_ar: '', name_en: '' });
   const [editCatModal, setEditCatModal] = useState(false);
   const [editCatId, setEditCatId] = useState<number | null>(null);
   const [editCatForm, setEditCatForm] = useState({ name_ar: '', name_en: '' });
-  const [keyInput, setKeyInput] = useState('');
   const [threshold, setThreshold] = useState(30);
   const [thresholdSaving, setThresholdSaving] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingAi, setSavingAi] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [msg, setMsg] = useState('');
+  const [addModal, setAddModal] = useState(false);
+  const [addFetching, setAddFetching] = useState(false);
+  const [addForm, setAddForm] = useState({
+    type: 'gemini', name: 'Google Gemini',
+    apiKey: '', apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
+    models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], selectedModel: 'gemini-2.5-flash',
+    curlInput: '',
+  });
 
   useEffect(() => {
     (async () => {
@@ -42,10 +51,10 @@ export default function SettingsPage() {
         setError('فشل تحميل الإعدادات الأساسية');
       }
       try {
-        const k = await api('/api/settings/ai-keys');
-        if (k && typeof k === 'object' && Array.isArray(k.keys)) setAiKeys(k.keys);
+        const aiCfg = await api('/api/ai-settings');
+        if (aiCfg && Array.isArray(aiCfg.providers)) setProviders(aiCfg.providers);
       } catch {
-        // ai-keys may be 403 for employees — ignore silently
+        // ai-settings may be 403 for employees — ignore silently
       }
       try {
         const ag = await api('/api/settings/auto-group');
@@ -135,28 +144,176 @@ export default function SettingsPage() {
     setTimeout(() => setMsg(''), 3000);
   };
 
-  const addKey = () => {
-    if (!keyInput.trim()) return;
-    setAiKeys(prev => [...prev, keyInput.trim()]);
-    setKeyInput('');
+  const PROVIDER_DEFAULTS: Record<string, { name: string; apiUrl: string; models: string[]; placeholder: string }> = {
+    gemini: { name: 'Google Gemini', apiUrl: 'https://generativelanguage.googleapis.com/v1beta', models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], placeholder: 'AIzaSy...' },
+    openai: { name: 'OpenAI', apiUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], placeholder: 'sk-...' },
+    anthropic: { name: 'Anthropic Claude', apiUrl: 'https://api.anthropic.com/v1', models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'], placeholder: 'sk-ant-...' },
+    'openai-compat': { name: 'OpenAI-Compatible', apiUrl: 'http://localhost:11434/v1', models: ['llama3', 'mistral', 'phi3'], placeholder: '...' },
   };
 
-  const removeKey = (idx: number) => {
-    setAiKeys(prev => prev.filter((_, i) => i !== idx));
-  };
+  function detectTypeFrom(url: string, key: string): string {
+    const u = (url || '').toLowerCase(); const k = (key || '').toLowerCase();
+    if (u.includes('generativelanguage') || k.startsWith('aizasy') || k.startsWith('aq.')) return 'gemini';
+    if (u.includes('api.openai') || k.startsWith('sk-') || k.startsWith('sk-proj-')) return 'openai';
+    if (u.includes('api.anthropic') || k.startsWith('sk-ant-')) return 'anthropic';
+    return 'openai-compat';
+  }
 
-  const saveKeys = async () => {
-    setSaving(true);
-    try {
-      await api('/api/settings/ai-keys', {
-        method: 'PUT', body: JSON.stringify({ keys: aiKeys }),
-      });
-      setMsg('تم حفظ المفاتيح');
-    } catch {
-      setMsg('فشل حفظ المفاتيح');
+  function parseCurl(text: string): { apiKey: string; apiUrl: string; model: string } {
+    let apiKey = '', apiUrl = '', model = '';
+    const h = text.match(/X-goog-api-key:\s*(\S+)/i);
+    if (h) apiKey = h[1];
+    const a = text.match(/Authorization:\s*Bearer\s+(\S+)/i);
+    if (a && !apiKey) apiKey = a[1];
+    const q = text.match(/[?&]key=([^&\s"'$`\\]+)/);
+    if (q && !apiKey) apiKey = q[1];
+    const url = text.match(/curl\s+["']([^"']+)["']/i);
+    if (url) {
+      const u = url[1];
+      apiUrl = u.replace(/\/models\/[^/]+:\w+.*$/, '');
+      const m = u.match(/\/models\/([^/:?]+(?::\w+)?)/i);
+      if (m) model = m[1];
     }
-    setSaving(false);
+    return { apiKey, apiUrl, model };
+  }
+
+  const saveAll = async () => {
+    setSavingAi(true);
+    try {
+      await api('/api/ai-settings', { method: 'PUT', body: JSON.stringify({ providers }) });
+      setIsDirty(false);
+      setMsg('✅ تم حفظ إعدادات الذكاء الاصطناعي');
+    } catch { setMsg('❌ فشل حفظ الإعدادات'); }
+    setSavingAi(false);
     setTimeout(() => setMsg(''), 3000);
+  };
+
+  const updateDraft = (id: string, field: string, value: any) => {
+    setProviders(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
+    setIsDirty(true);
+  };
+
+  const toggleDraft = (id: string) => {
+    setProviders(prev => prev.map(p => p.id === id ? { ...p, enabled: !p.enabled } : p));
+    setIsDirty(true);
+  };
+
+  const moveDraft = (idx: number, dir: -1 | 1) => {
+    const newIdx = idx + dir;
+    if (newIdx < 0 || newIdx >= providers.length) return;
+    const arr = [...providers];
+    [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+    arr.forEach((p, i) => (p.priority = i + 1));
+    setProviders(arr);
+    setIsDirty(true);
+  };
+
+  const removeDraft = (id: string) => {
+    if (!confirm('هل أنت متأكد من إزالة هذا المزوّد؟')) return;
+    setProviders(prev => prev.filter(p => p.id !== id));
+    setIsDirty(true);
+  };
+
+  const testProvider = async (p: any) => {
+    try {
+      const res = await api('/api/ai-settings/test', {
+        method: 'POST', body: JSON.stringify({ type: p.type, apiKey: p.apiKey, apiUrl: p.apiUrl, model: p.selectedModel }),
+      });
+      setMsg(res.success ? `✅ ${res.response}` : `❌ ${res.error}`);
+    } catch { setMsg('❌ فشل اختبار الاتصال'); }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const fetchModelsFor = async (p: any) => {
+    try {
+      const res = await api('/api/ai-settings/fetch-models', {
+        method: 'POST', body: JSON.stringify({ type: p.type, apiKey: p.apiKey, apiUrl: p.apiUrl }),
+      });
+      if (Array.isArray(res.models) && res.models.length > 0) {
+        updateDraft(p.id, 'models', res.models);
+        if (!res.models.includes(p.selectedModel)) updateDraft(p.id, 'selectedModel', res.models[0]);
+        setMsg(`✅ تم جلب ${res.models.length} موديل`);
+      } else {
+        setMsg('⚠ لم يتم العثور على موديلات');
+      }
+    } catch { setMsg('❌ فشل جلب الموديلات'); }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const openAddModal = () => {
+    setAddForm({
+      type: 'gemini', name: 'Google Gemini',
+      apiKey: '', apiUrl: 'https://generativelanguage.googleapis.com/v1beta',
+      models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], selectedModel: 'gemini-2.5-flash',
+      curlInput: '',
+    });
+    setAddModal(true);
+  };
+
+  const updateAddForm = (field: string, value: any) => {
+    setAddForm(prev => ({ ...prev, [field]: value }));
+    if (field === 'type') {
+      const def = PROVIDER_DEFAULTS[value as keyof typeof PROVIDER_DEFAULTS] || PROVIDER_DEFAULTS['openai-compat'];
+      setAddForm(prev => ({ ...prev, type: value, name: def.name, apiUrl: def.apiUrl, models: def.models, selectedModel: def.models[0] }));
+    }
+  };
+
+  const applyCurlToForm = () => {
+    const parsed = parseCurl(addForm.curlInput);
+    if (!parsed.apiKey) { setMsg('⚠ لم يتم العثور على مفتاح API في الأمر'); setTimeout(() => setMsg(''), 3000); return; }
+    const detectedType = detectTypeFrom(parsed.apiUrl, parsed.apiKey);
+    const def = PROVIDER_DEFAULTS[detectedType as keyof typeof PROVIDER_DEFAULTS] || PROVIDER_DEFAULTS['openai-compat'];
+    setAddForm({
+      type: detectedType, name: def.name,
+      apiKey: parsed.apiKey,
+      apiUrl: parsed.apiUrl || def.apiUrl,
+      models: def.models, selectedModel: parsed.model || def.models[0],
+      curlInput: addForm.curlInput,
+    });
+    autoFetchAddForm(detectedType, parsed.apiKey, parsed.apiUrl || def.apiUrl);
+  };
+
+  const autoFetchAddForm = async (type: string, apiKey: string, apiUrl: string) => {
+    if (!apiKey) return;
+    setAddFetching(true);
+    try {
+      const res = await api('/api/ai-settings/fetch-models', {
+        method: 'POST', body: JSON.stringify({ type, apiKey, apiUrl }),
+      });
+      if (Array.isArray(res.models) && res.models.length > 0) {
+        setAddForm(prev => ({ ...prev, models: res.models, selectedModel: res.models[0] }));
+      }
+    } catch { /* ignore */ }
+    setAddFetching(false);
+  };
+
+  const confirmAddProvider = () => {
+    if (!addForm.apiKey) { setMsg('⚠ API Key مطلوب'); setTimeout(() => setMsg(''), 3000); return; }
+    const newProvider = {
+      id: `p_${Date.now()}`,
+      name: addForm.name,
+      type: addForm.type,
+      enabled: false,
+      priority: providers.length + 1,
+      apiKey: addForm.apiKey,
+      apiUrl: addForm.apiUrl,
+      models: addForm.models,
+      selectedModel: addForm.selectedModel,
+    };
+    setProviders(prev => [...prev, newProvider]);
+    setIsDirty(true);
+    setAddModal(false);
+  };
+
+  const resetAll = () => {
+    if (!isDirty) return;
+    (async () => {
+      try {
+        const aiCfg = await api('/api/ai-settings');
+        if (aiCfg && Array.isArray(aiCfg.providers)) setProviders(aiCfg.providers);
+        setIsDirty(false);
+      } catch { /* ignore */ }
+    })();
   };
 
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
@@ -169,11 +326,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'aikeys', 'autogroup'] as const).map(t => (
+        {(['branding', 'categories', 'ai', 'autogroup'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'aikeys' ? 'مفاتيح AI' : 'التجميع التلقائي'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'ai' ? 'الذكاء الاصطناعي' : 'التجميع التلقائي'}
           </button>
         ))}
       </div>
@@ -315,38 +472,216 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* AI Keys */}
-      {tab === 'aikeys' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>مفاتيح Gemini AI</h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>أضف عدة مفاتيح للتبديل التلقائي عند استنفاذ الحصة</p>
-
-          <div className="flex gap-2">
-            <input value={keyInput}
-              onChange={e => setKeyInput(e.target.value)}
-              placeholder="أدخل مفتاح Gemini API"
-              className="flex-1 px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-            <button onClick={addKey}
-              className="px-4 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm">إضافة</button>
-          </div>
-
-          <div className="space-y-2">
-            {aiKeys.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد مفاتيح</p>}
-            {aiKeys.map((key, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <code className="text-xs truncate ltr" style={{ color: 'var(--text)' }}>{key.substring(0, 20)}...</code>
-                <button onClick={() => removeKey(i)}
-                  className="text-red-500 text-xs">حذف</button>
+      {/* AI Providers */}
+      {tab === 'ai' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-6 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="font-bold" style={{ color: 'var(--text)' }}>مزوّدات الذكاء الاصطناعي</h2>
+                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                  أضف مزوّداً واملأ البيانات. التغيير محلي (Draft) — اضغط "💾 حفظ" لإرسال التعديلات.
+                </p>
               </div>
-            ))}
-          </div>
+              <div className="flex gap-2">
+                <button onClick={resetAll} disabled={!isDirty}
+                  className="px-3 py-2 rounded-xl text-sm border disabled:opacity-30"
+                  style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  ↩ تراجع
+                </button>
+                <button onClick={saveAll} disabled={!isDirty || savingAi}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap ${isDirty ? 'bg-[var(--primary)] text-white' : 'border opacity-40'}`}>
+                  {savingAi ? 'جاري...' : '💾 حفظ'}
+                </button>
+                <button onClick={openAddModal}
+                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm whitespace-nowrap">+ إضافة مزوّد</button>
+              </div>
+            </div>
 
-          <button onClick={saveKeys} disabled={saving}
-            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
-            {saving ? 'جاري الحفظ...' : 'حفظ المفاتيح'}
-          </button>
+            {isDirty && (
+              <div className="px-3 py-2 mb-3 rounded-xl text-xs" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                ⚠ توجد تغييرات غير محفوظة. اضغط "💾 حفظ" لتطبيقها.
+              </div>
+            )}
+
+            {providers.length === 0 && (
+              <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>لا توجد مزوّدات — اضغط "+ إضافة مزوّد"</p>
+            )}
+
+            <div className="space-y-3">
+              {providers.map((p, i) => (
+                <div key={p.id} className="rounded-xl p-4 transition-colors"
+                  style={{
+                    backgroundColor: 'var(--bg)',
+                    border: p.enabled ? '1px solid var(--primary)' : '1px solid var(--border)',
+                    opacity: p.enabled ? 1 : 0.6,
+                  }}>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <button onClick={() => toggleDraft(p.id)}
+                        className={`w-10 h-6 rounded-full relative transition-colors ${p.enabled ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
+                        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${p.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </button>
+                      <div>
+                        <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>
+                          {p.type === 'gemini' ? '🧠' : p.type === 'openai' ? '🔵' : p.type === 'anthropic' ? '🟢' : '⚙'} {p.name}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => moveDraft(i, -1)} disabled={i === 0}
+                        className="w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-30 hover:opacity-70">↑</button>
+                      <button onClick={() => moveDraft(i, 1)} disabled={i === providers.length - 1}
+                        className="w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-30 hover:opacity-70">↓</button>
+                      <button onClick={() => removeDraft(p.id)}
+                        className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-70" style={{ color: '#dc2626' }}>🗑</button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API Key</label>
+                      <input type="password" value={p.apiKey}
+                        onChange={e => updateDraft(p.id, 'apiKey', e.target.value)}
+                        placeholder={PROVIDER_DEFAULTS[p.type as keyof typeof PROVIDER_DEFAULTS]?.placeholder || '...'}
+                        className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
+                        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        onFocus={e => e.target.type = 'text'}
+                        onBlur={e => { e.target.type = 'password'; if (e.target.value) fetchModelsFor({ ...providers.find(x => x.id === p.id), apiKey: e.target.value }); }} />
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API URL</label>
+                      <div className="flex gap-1">
+                        <input value={p.apiUrl}
+                          onChange={e => {
+                            updateDraft(p.id, 'apiUrl', e.target.value);
+                            const t = detectTypeFrom(e.target.value, p.apiKey);
+                            if (t !== p.type) {
+                              const def = PROVIDER_DEFAULTS[t as keyof typeof PROVIDER_DEFAULTS] || PROVIDER_DEFAULTS['openai-compat'];
+                              updateDraft(p.id, 'type', t);
+                              updateDraft(p.id, 'name', def.name);
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 rounded-lg border text-sm font-mono ltr"
+                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموديل</label>
+                      <div className="flex gap-1">
+                        <select value={p.selectedModel}
+                          onChange={e => updateDraft(p.id, 'selectedModel', e.target.value)}
+                          className="flex-1 px-3 py-2 rounded-lg border text-sm"
+                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                          {p.models?.map((m: string) => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                          {(!p.models || p.models.length === 0) && (
+                            <option value="">-- لا توجد موديلات --</option>
+                          )}
+                        </select>
+                        <button onClick={() => fetchModelsFor(p)}
+                          className="px-2 py-2 rounded-lg text-xs border"
+                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>🔍</button>
+                      </div>
+                    </div>
+                    <div className="flex items-end gap-2">
+                      <button onClick={() => testProvider(p)}
+                        className="flex-1 px-3 py-2 rounded-lg text-sm border transition-colors hover:opacity-80"
+                        style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                        🧪 اختبار الاتصال
+                      </button>
+                    </div>
+                  </div>
+                  {p.type === 'openai-compat' && (
+                    <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                      💡 للمزوّدات المحلية (Ollama, LM Studio) أو Azure OpenAI
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       )}
+
+      {/* Add Provider Modal */}
+      <Modal open={addModal} onClose={() => setAddModal(false)} title="إضافة مزوّد جديد">
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>📋 لصق أمر CURL (اختياري — يكشف النوع تلقائياً)</label>
+            <textarea value={addForm.curlInput}
+              onChange={e => setAddForm(prev => ({ ...prev, curlInput: e.target.value }))}
+              placeholder="curl 'https://generativelanguage.googleapis.com/...' -H 'X-goog-api-key: AIzaSy...'"
+              className="w-full h-20 px-3 py-2 rounded-xl border text-xs font-mono ltr leading-relaxed"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            <button onClick={applyCurlToForm}
+              className="w-full mt-1 py-1.5 rounded-lg text-xs border"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              🔄 تحليل CURL وتعبئة الحقول
+            </button>
+          </div>
+
+          <div className="border-t" style={{ borderColor: 'var(--border)' }} />
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع المزوّد</label>
+            <select value={addForm.type}
+              onChange={e => updateAddForm('type', e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              {Object.entries(PROVIDER_DEFAULTS).map(([k, v]) => (
+                <option key={k} value={k}>{v.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API Key</label>
+            <input type="password" value={addForm.apiKey}
+              onChange={e => {
+                setAddForm(prev => ({ ...prev, apiKey: e.target.value }));
+                const t = detectTypeFrom(addForm.apiUrl, e.target.value);
+                if (t !== addForm.type) updateAddForm('type', t);
+              }}
+              placeholder={PROVIDER_DEFAULTS[addForm.type as keyof typeof PROVIDER_DEFAULTS]?.placeholder || '...'}
+              className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              onFocus={e => e.target.type = 'text'}
+              onBlur={e => { e.target.type = 'password'; if (e.target.value) autoFetchAddForm(addForm.type, e.target.value, addForm.apiUrl); }} />
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API URL</label>
+            <input value={addForm.apiUrl}
+              onChange={e => setAddForm(prev => ({ ...prev, apiUrl: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+              الموديل {addFetching && <span className="inline-block mr-1 text-[10px]">جاري الجلب...</span>}
+            </label>
+            <select value={addForm.selectedModel}
+              onChange={e => setAddForm(prev => ({ ...prev, selectedModel: e.target.value }))}
+              className="w-full px-3 py-2 rounded-lg border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              {addForm.models.map((m: string) => (
+                <option key={m} value={m}>{m}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <button onClick={confirmAddProvider}
+              className="flex-1 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium">إضافة</button>
+            <button onClick={() => setAddModal(false)}
+              className="px-4 py-2.5 rounded-xl text-sm border"
+              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>إلغاء</button>
+          </div>
+        </div>
+      </Modal>
     </div></ErrorBoundary>;
 }
 

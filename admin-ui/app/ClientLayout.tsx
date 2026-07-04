@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '../lib/auth';
 import Sidebar from '../components/Sidebar';
-import Chatbot from '../components/Chatbot';
+import AIAssistant from '../components/AIAssistant';
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAdminAuth();
@@ -42,7 +42,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
       <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
         {children}
       </main>
-      <Chatbot />
+      <AIAssistant />
     </div>
   );
 }

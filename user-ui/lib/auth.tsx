@@ -10,13 +10,20 @@ interface User {
   role: string;
   phone?: string;
   avatar?: string;
+  nationalId?: string;
+  birthDate?: string;
+  gender?: string;
+  governorate?: string;
+  isEnrolled?: number;
+  universityName?: string;
+  universityCode?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
   login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, phone?: string) => Promise<void>;
+  register: (name: string, email: string, password: string, phone?: string, nationalId?: string, birthDate?: string, gender?: string, governorate?: string, isEnrolled?: boolean, universityName?: string, universityCode?: string) => Promise<void>;
   logout: () => void;
   loading: boolean;
 }
@@ -50,10 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(data.user);
   };
 
-  const register = async (name: string, email: string, password: string, phone?: string) => {
+  const register = async (name: string, email: string, password: string, phone?: string, nationalId?: string, birthDate?: string, gender?: string, governorate?: string, isEnrolled?: boolean, universityName?: string, universityCode?: string) => {
     const data = await api('/api/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password, phone }),
+      body: JSON.stringify({ name, email, password, phone, nationalId, birthDate, gender, governorate, isEnrolled, universityName, universityCode }),
     });
     localStorage.setItem('token', data.token);
     setToken(data.token);

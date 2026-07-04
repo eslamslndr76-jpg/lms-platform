@@ -31,7 +31,8 @@ router.get('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Re
     const total = Number(countResult.rows[0].count);
 
     const result = await sql(
-      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.is_active, u.role_id, u.created_at, r.name as role_name
+      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.is_active, u.role_id, u.created_at, r.name as role_name,
+              u.national_id, u.birth_date, u.gender, u.governorate, u.is_enrolled, u.university_name, u.university_code
        FROM users u JOIN roles r ON u.role_id=r.id ${where}
        ORDER BY u.created_at DESC LIMIT ? OFFSET ?`,
       ...params, limit, offset,
@@ -46,7 +47,7 @@ router.get('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Re
 
 router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { name, email, password, phone, role_id } = req.body;
+    const { name, email, password, phone, role_id, nationalId, birthDate, gender, governorate, isEnrolled, universityName, universityCode } = req.body;
     if (!name || !email || !password) return res.status(400).json({ error: 'Name, email, and password required' });
 
     const existing = await sql('SELECT id FROM users WHERE email=?', email);
@@ -54,8 +55,11 @@ router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: R
 
     const hashed = await bcrypt.hash(password, 10);
     const result = await sql(
-      'INSERT INTO users (name, email, password, phone, role_id) VALUES (?,?,?,?,?)',
+      `INSERT INTO users (name, email, password, phone, role_id, national_id, birth_date, gender, governorate, is_enrolled, university_name, university_code)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
       name, email, hashed, phone || null, role_id || 3,
+      nationalId || null, birthDate || null, gender || null, governorate || null,
+      isEnrolled ? 1 : 0, universityName || null, universityCode || null,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid) });
   } catch {
@@ -65,7 +69,7 @@ router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: R
 
 router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { name, email, phone, role_id, is_active, password, avatar } = req.body;
+    const { name, email, phone, role_id, is_active, password, avatar, nationalId, birthDate, gender, governorate, isEnrolled, universityName, universityCode } = req.body;
     let sets = 'name=COALESCE(?,name), email=COALESCE(?,email), phone=COALESCE(?,phone), role_id=COALESCE(?,role_id), avatar=COALESCE(?,avatar)';
     const params: unknown[] = [name || null, email || null, phone !== undefined ? phone : null, role_id || null, avatar || null];
 
@@ -78,6 +82,13 @@ router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res:
       sets += ', password=?';
       params.push(hashed);
     }
+    if (nationalId !== undefined) { sets += ', national_id=?'; params.push(nationalId || null); }
+    if (birthDate !== undefined) { sets += ', birth_date=?'; params.push(birthDate || null); }
+    if (gender !== undefined) { sets += ', gender=?'; params.push(gender || null); }
+    if (governorate !== undefined) { sets += ', governorate=?'; params.push(governorate || null); }
+    if (isEnrolled !== undefined) { sets += ', is_enrolled=?'; params.push(isEnrolled ? 1 : 0); }
+    if (universityName !== undefined) { sets += ', university_name=?'; params.push(universityName || null); }
+    if (universityCode !== undefined) { sets += ', university_code=?'; params.push(universityCode || null); }
 
     params.push(req.params.id);
     await sql(`UPDATE users SET ${sets} WHERE id=?`, ...params);
@@ -102,7 +113,9 @@ router.delete('/:id/hard', authMiddleware, requireRole(ADMIN), async (req: Reque
   try {
     const id = Number(req.params.id);
     if (id === req.user!.userId) return res.status(400).json({ error: 'Cannot delete yourself' });
+    await sql('DELETE FROM cart_items WHERE user_id=?', id);
     await sql('DELETE FROM group_students WHERE user_id=?', id);
+    await sql('DELETE FROM receipts WHERE order_id IN (SELECT id FROM orders WHERE user_id=?)', id);
     await sql('DELETE FROM orders WHERE user_id=?', id);
     await sql('DELETE FROM certificates WHERE user_id=?', id);
     await sql('DELETE FROM users WHERE id=?', id);
@@ -124,7 +137,8 @@ router.put('/:id/reactivate', authMiddleware, requireRole(ADMIN), async (req: Re
 router.get('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
     const user = await sql(
-      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.is_active, u.role_id, u.created_at, r.name as role_name, r.permissions
+      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.is_active, u.role_id, u.created_at, r.name as role_name, r.permissions,
+              u.national_id, u.birth_date, u.gender, u.governorate, u.is_enrolled, u.university_name, u.university_code
        FROM users u JOIN roles r ON u.role_id=r.id WHERE u.id=?`,
       req.params.id,
     );

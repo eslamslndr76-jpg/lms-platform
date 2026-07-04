@@ -7,18 +7,47 @@ const router = Router();
 
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { name, email, password, phone } = req.body;
+    const { name, email, password, phone, nationalId, birthDate, gender, governorate, isEnrolled, universityName, universityCode } = req.body;
     if (!name || !email || !password) {
-      return res.status(400).json({ error: 'Name, email, and password required' });
+      return res.status(400).json({ error: 'الاسم والبريد الإلكتروني وكلمة المرور مطلوبة' });
+    }
+    if (!phone) {
+      return res.status(400).json({ error: 'رقم الهاتف مطلوب' });
+    }
+    if (!/^01[0-9]{9}$/.test(phone.replace(/\s/g, ''))) {
+      return res.status(400).json({ error: 'رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 01' });
+    }
+    if (!nationalId) {
+      return res.status(400).json({ error: 'الرقم القومى مطلوب' });
+    }
+    if (!/^\d{14}$/.test(nationalId.replace(/\s/g, ''))) {
+      return res.status(400).json({ error: 'الرقم القومى يجب أن يكون 14 رقماً' });
+    }
+    if (isEnrolled) {
+      if (!universityName || !universityName.trim()) {
+        return res.status(400).json({ error: 'اسم المعهد او الجامعه مطلوب' });
+      }
+      if (!universityCode || !universityCode.trim()) {
+        return res.status(400).json({ error: 'الكود الجامعى مطلوب' });
+      }
     }
     const existing = await sql('SELECT id FROM users WHERE email=?', email);
     if (existing.rows.length > 0) {
-      return res.status(409).json({ error: 'Email already registered' });
+      return res.status(409).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
+    }
+    if (nationalId) {
+      const idCheck = await sql('SELECT id FROM users WHERE national_id=?', nationalId);
+      if (idCheck.rows.length > 0) {
+        return res.status(409).json({ error: 'الرقم القومى مستخدم بالفعل' });
+      }
     }
     const hashed = await bcrypt.hash(password, 10);
     const result = await sql(
-      'INSERT INTO users (name, email, password, phone, role_id) VALUES (?,?,?,?,3)',
+      `INSERT INTO users (name, email, password, phone, role_id, national_id, birth_date, gender, governorate, is_enrolled, university_name, university_code)
+       VALUES (?,?,?,?,3,?,?,?,?,?,?,?)`,
       name, email, hashed, phone || null,
+      nationalId || null, birthDate || null, gender || null, governorate || null,
+      isEnrolled ? 1 : 0, universityName || null, universityCode || null,
     );
     const userId = Number(result.lastInsertRowid);
     const token = generateToken({ userId, roleId: 3, role: 'student' });

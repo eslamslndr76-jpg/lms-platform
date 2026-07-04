@@ -1,6 +1,12 @@
 const TURSO_URL = (process.env.TURSO_DATABASE_URL || 'file:./data.db').replace('libsql://', 'https://');
 const AUTH_TOKEN = process.env.TURSO_AUTH_TOKEN;
 
+function normalizeValue(v: any): any {
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'object' && 'value' in v) return v.value;
+  return v;
+}
+
 interface QueryResult {
   rows: any[];
   columns: { name: string; decltype: string | null }[];
@@ -27,14 +33,17 @@ export async function execute(sql: string): Promise<QueryResult> {
   });
   const d: any = await r.json();
   const result = d.results?.[0];
-  if (result?.type === 'error') throw new Error(result.error?.message || 'Turso error');
+  if (result?.type === 'error') throw new Error(result?.error?.message || 'Turso error');
   const resp = result?.response?.result;
-  if (!resp) throw new Error('Unexpected Turso response');
+  if (!resp) {
+    if (!r.ok) throw new Error(`Turso HTTP ${r.status}: ${d?.error?.message || r.statusText}`);
+    return { rows: [], columns: [], lastInsertRowid: null, affectedRowCount: 0 } as any;
+  }
   return {
     rows: resp.rows?.map((row: any[]) => {
       const obj: any = {};
-      resp.cols.forEach((col: any, i: number) => {
-        obj[col.name] = row[i]?.value ?? null;
+      (resp.cols || []).forEach((col: any, i: number) => {
+        obj[col.name || `col${i}`] = normalizeValue(row[i]);
       });
       return obj;
     }) || [],

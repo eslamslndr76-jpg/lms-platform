@@ -23,13 +23,13 @@ export default function OrdersPage() {
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  const [editForm, setEditForm] = useState({ amount: 0, notes_team: '', notes_student: '', payment_method: '' });
+  const [editForm, setEditForm] = useState({ amount: 0, notes_team: '', notes_student: '', payment_method: '', sender_phone: '' });
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
   const [deleting, setDeleting] = useState(false);
 
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '' });
+  const [addForm, setAddForm] = useState({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '', sender_phone: '' });
   const [students, setStudents] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [adding, setAdding] = useState(false);
@@ -53,7 +53,7 @@ export default function OrdersPage() {
 
   const openDetail = (order: any) => {
     setSelectedOrder(order);
-    setEditForm({ amount: order.amount, notes_team: order.notes_team || order.notes || '', notes_student: order.notes_student || '', payment_method: order.payment_method || '' });
+    setEditForm({ amount: order.amount, notes_team: order.notes_team || order.notes || '', notes_student: order.notes_student || '', payment_method: order.payment_method || '', sender_phone: order.sender_phone || '' });
     setEditing(false);
   };
 
@@ -66,6 +66,7 @@ export default function OrdersPage() {
           notes_team: editForm.notes_team,
           notes_student: editForm.notes_student,
           payment_method: editForm.payment_method,
+          sender_phone: editForm.sender_phone,
         }),
       });
       toast('تم تحديث الطلب بنجاح', 'success');
@@ -105,7 +106,7 @@ export default function OrdersPage() {
   };
 
   const openAddOrder = async () => {
-    setAddForm({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '' });
+    setAddForm({ user_id: '', course_id: '', amount: 0, payment_method: 'cash', notes_team: '', notes_student: '', sender_phone: '' });
     setAddModal(true);
     try {
       const [studs, crs] = await Promise.all([
@@ -135,6 +136,7 @@ export default function OrdersPage() {
           payment_method: addForm.payment_method,
           notes_team: addForm.notes_team,
           notes_student: addForm.notes_student,
+          sender_phone: addForm.sender_phone,
         }),
       });
       toast('تم إنشاء الحجز بنجاح', 'success');
@@ -190,6 +192,7 @@ export default function OrdersPage() {
             { key: 'title_ar', label: 'الكورس', render: (v: string, r: any) =>
               <span className="cursor-pointer" style={{ color: 'var(--primary)' }} onClick={() => router.push(`/courses/${r.course_id}`)}>{v}</span> },
             { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
+            { key: 'sender_phone', label: 'رقم المحوِّل', render: (v: string) => v || '-' },
             { key: 'status', label: 'الحالة', render: (v: string, row: any) => (
               <select value={v} onChange={e => { e.stopPropagation(); updateStatus(row.id, e.target.value); }}
                 onClick={e => e.stopPropagation()}
@@ -204,7 +207,7 @@ export default function OrdersPage() {
             { key: 'created_at', label: 'التاريخ', render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
             { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
               <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                <button onClick={() => { setSelectedOrder(row); setEditForm({ amount: row.amount, notes_team: row.notes_team || row.notes || '', notes_student: row.notes_student || '', payment_method: row.payment_method || '' }); setEditing(true); }}
+                <button onClick={() => { setSelectedOrder(row); setEditForm({ amount: row.amount, notes_team: row.notes_team || row.notes || '', notes_student: row.notes_student || '', payment_method: row.payment_method || '', sender_phone: row.sender_phone || '' }); setEditing(true); }}
                   className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
                 <button onClick={() => setConfirmDelete(row)}
                   className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">حذف</button>
@@ -256,6 +259,12 @@ export default function OrdersPage() {
                       className="w-full px-3 py-1.5 rounded-lg border text-sm h-16"
                       style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
                   </div>
+                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</span>
+                    <input type="text" value={editForm.sender_phone} onChange={e => setEditForm({ ...editForm, sender_phone: e.target.value })}
+                      className="w-full px-3 py-1.5 rounded-lg border text-sm"
+                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  </div>
                   <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
                     <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب (تظهر له)</span>
                     <textarea value={editForm.notes_student} onChange={e => setEditForm({ ...editForm, notes_student: e.target.value })}
@@ -283,6 +292,12 @@ export default function OrdersPage() {
                     <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
                       <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب</span>
                       <span style={{ color: 'var(--text)' }}>{selectedOrder.notes_student}</span>
+                    </div>
+                  )}
+                  {selectedOrder.sender_phone && (
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</span>
+                      <span style={{ color: 'var(--text)' }}>{selectedOrder.sender_phone}</span>
                     </div>
                   )}
                 </>
@@ -367,6 +382,13 @@ export default function OrdersPage() {
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل (داخلي)</label>
             <textarea value={addForm.notes_team} onChange={e => setAddForm({ ...addForm, notes_team: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm h-16"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</label>
+            <input type="text" value={addForm.sender_phone} onChange={e => setAddForm({ ...addForm, sender_phone: e.target.value })}
+              placeholder="رقم الهاتف أو المحفظة الذي حُوِّل منه"
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
               style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
           <div>

@@ -15,7 +15,6 @@ const SECTIONS = [
   { key: 'groups', label: 'المجموعات' },
   { key: 'financials', label: 'المالية' },
   { key: 'settings', label: 'الإعدادات' },
-  { key: 'receipts', label: 'الإيصالات' },
   { key: 'categories', label: 'التصنيفات' },
 ];
 

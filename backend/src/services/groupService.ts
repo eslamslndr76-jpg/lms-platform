@@ -112,9 +112,10 @@ export async function createGroup(data: {
   instructor_name?: string;
   location?: string;
   max_students?: number | null;
+  status?: string;
 }): Promise<number> {
   const {
-    course_id, name, zoom_link, end_date, instructor_name, location, max_students,
+    course_id, name, zoom_link, end_date, instructor_name, location, max_students, status,
   } = data;
   if (!name) throw { status: 400, message: 'Group name required' };
 
@@ -125,11 +126,13 @@ export async function createGroup(data: {
     if (course.rows.length > 0) instructor = (course.rows[0] as any).instructor || '';
   }
 
+  const groupStatus = ['active', 'completed', 'cancelled'].includes(status || '') ? status : 'pending';
+
   const result = await sql(
     `INSERT INTO groups (course_id, name, zoom_link, end_date, instructor_name, location, max_students, status)
-     VALUES (?,?,?,?,?,?,?,'pending')`,
+     VALUES (?,?,?,?,?,?,?,?)`,
     course_id, name, zoom_link || null, end_date || null,
-    instructor, location || null, max_students || null,
+    instructor, location || null, max_students || null, groupStatus,
   );
   return Number(result.lastInsertRowid);
 }
