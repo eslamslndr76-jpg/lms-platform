@@ -2,28 +2,30 @@ import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 import { requireRole, STUDENT } from '../middleware/rbac';
+import * as groupService from '../services/groupService';
 
 const router = Router();
 
 router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
-    const { course_id, amount, receipt_url, payment_method, note_student } = req.body;
+    const { course_id, amount, receipt_url, payment_method, note_student, sender_phone } = req.body;
     if (!course_id || !amount) return res.status(400).json({ error: 'Course ID and amount required' });
 
     if (receipt_url) {
       const result = await sql(
-        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method, notes_student) VALUES (?,?,?,\'pending\',?,?,?)',
-        req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash', note_student || null,
+        'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method, notes_student, sender_phone) VALUES (?,?,?,\'pending\',?,?,?,?)',
+        req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash', note_student || null, sender_phone || null,
       );
       return res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
     }
     const result = await sql(
-      'INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student) VALUES (?,?,?,\'pending\',?,?)',
-      req.user!.userId, course_id, amount, payment_method || 'cash', note_student || null,
+      'INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student, sender_phone) VALUES (?,?,?,\'pending\',?,?,?)',
+      req.user!.userId, course_id, amount, payment_method || 'cash', note_student || null, sender_phone || null,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
-  } catch {
-    res.status(500).json({ error: 'Failed to create order' });
+  } catch (err: any) {
+    console.error('Order creation error:', err?.message || err);
+    res.status(500).json({ error: 'فشل إنشاء الطلب، حاول مرة أخرى' });
   }
 });
 
@@ -38,8 +40,9 @@ router.patch('/:id/receipt', authMiddleware, async (req: Request, res: Response)
     }
     await sql('UPDATE orders SET receipt_url=?, status=\'review\' WHERE id=?', receipt_url, req.params.id);
     res.json({ message: 'Receipt uploaded' });
-  } catch {
-    res.status(500).json({ error: 'Failed to upload receipt' });
+  } catch (err: any) {
+    console.error('Receipt upload error:', err?.message || err);
+    res.status(500).json({ error: 'فشل رفع الإيصال' });
   }
 });
 
@@ -52,8 +55,33 @@ router.get('/my', authMiddleware, async (req: Request, res: Response) => {
       req.user!.userId,
     );
     res.json(result.rows);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch orders' });
+  } catch (err: any) {
+    console.error('Fetch orders error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحميل الطلبات' });
+  }
+});
+
+router.get('/my/check/:courseId', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const courseId = req.params.courseId;
+
+    const orders = await sql(
+      `SELECT id FROM orders WHERE user_id=? AND course_id=? AND status='paid' LIMIT 1`,
+      userId, courseId,
+    );
+    const hasPaidOrder = orders.rows.length > 0;
+
+    const certs = await sql(
+      `SELECT id FROM certificates WHERE user_id=? AND course_id=? LIMIT 1`,
+      userId, courseId,
+    );
+    const hasCertificate = certs.rows.length > 0;
+
+    res.json({ hasPaidOrder, hasCertificate });
+  } catch (err: any) {
+    console.error('Check order error:', err?.message || err);
+    res.status(500).json({ error: 'فشل التحقق من حالة الشراء' });
   }
 });
 
@@ -79,8 +107,9 @@ router.get('/my/:id', authMiddleware, async (req: Request, res: Response) => {
     ord.groups = groups.rows;
 
     res.json(ord);
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch order details' });
+  } catch (err: any) {
+    console.error('Fetch order details error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحميل تفاصيل الطلب' });
   }
 });
 

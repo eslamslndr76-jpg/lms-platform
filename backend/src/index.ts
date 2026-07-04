@@ -16,9 +16,12 @@ import rolesRouter from './routes/roles';
 import certificatesRouter from './routes/certificates';
 import lecturesRouter from './routes/lectures';
 import cartRouter from './routes/cart';
+import aiSettingsRouter from './routes/aiSettings';
+import notificationsRouter from './routes/notifications';
 import adminOrdersRouter from './routes/admin/orders';
 import adminUsersRouter from './routes/admin/users';
 import adminCertificatesRouter from './routes/admin/certificates';
+import adminUnassignedRouter from './routes/admin/unassigned';
 
 const app = express();
 
@@ -60,6 +63,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/courses', coursesRouter);
 app.use('/api/orders', ordersRouter);
 app.use('/api/categories', categoriesRouter);
+app.use('/api/ai-settings', aiSettingsRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/exports', exportsRouter);
 app.use('/api/chat', chatRouter);
@@ -68,10 +72,12 @@ app.use('/api/uploads', uploadRouter);
 app.use('/api/roles', rolesRouter);
 app.use('/api/certificates', certificatesRouter);
 app.use('/api/lectures', lecturesRouter);
+app.use('/api/notifications', notificationsRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/certificates', adminCertificatesRouter);
+app.use('/api/admin/unassigned', adminUnassignedRouter);
 
 const PORT = process.env.PORT || 3001;
 

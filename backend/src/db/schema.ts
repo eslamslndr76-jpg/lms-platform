@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS courses (
   course_mode TEXT NOT NULL DEFAULT 'online',
   featured INTEGER NOT NULL DEFAULT 0,
   enable_direct_purchase INTEGER NOT NULL DEFAULT 1,
+  auto_assign INTEGER NOT NULL DEFAULT 0,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -52,13 +53,17 @@ CREATE TABLE IF NOT EXISTS groups (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   course_id INTEGER NOT NULL,
   name TEXT NOT NULL,
-  schedule TEXT NOT NULL DEFAULT '{}',
   zoom_link TEXT,
   start_date TEXT,
   end_date TEXT,
+  instructor_name TEXT DEFAULT '',
+  location TEXT DEFAULT '',
+  max_students INTEGER,
   is_active INTEGER NOT NULL DEFAULT 1,
+  is_complete INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (course_id) REFERENCES courses(id)
+  FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS group_students (
@@ -66,8 +71,19 @@ CREATE TABLE IF NOT EXISTS group_students (
   group_id INTEGER NOT NULL,
   user_id INTEGER NOT NULL,
   joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (group_id) REFERENCES groups(id),
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS group_student_history (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  group_id INTEGER NOT NULL,
+  action TEXT NOT NULL,
+  moved_by INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
 
 CREATE TABLE IF NOT EXISTS orders (
@@ -84,18 +100,6 @@ CREATE TABLE IF NOT EXISTS orders (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
-);
-
-CREATE TABLE IF NOT EXISTS receipts (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  order_id INTEGER NOT NULL,
-  file_url TEXT NOT NULL,
-  payment_method TEXT NOT NULL DEFAULT 'cash',
-  verified_by INTEGER,
-  verified_at DATETIME,
-  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (order_id) REFERENCES orders(id),
-  FOREIGN KEY (verified_by) REFERENCES users(id)
 );
 
 CREATE TABLE IF NOT EXISTS certificates (
@@ -118,11 +122,11 @@ CREATE TABLE IF NOT EXISTS system_settings (
 CREATE TABLE IF NOT EXISTS lectures (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   group_id INTEGER NOT NULL,
-  day_of_week TEXT NOT NULL DEFAULT '',
+  date TEXT,
   time_from TEXT DEFAULT '',
   time_to TEXT DEFAULT '',
   topic TEXT DEFAULT '',
-  date TEXT,
+  zoom_link TEXT DEFAULT '',
   is_completed INTEGER NOT NULL DEFAULT 0,
   completed_at DATETIME,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -130,11 +134,45 @@ CREATE TABLE IF NOT EXISTS lectures (
   FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS lecture_attendance (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  lecture_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  attended INTEGER NOT NULL DEFAULT 0,
+  attended_at DATETIME,
+  FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE(lecture_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  message TEXT,
+  type TEXT NOT NULL DEFAULT 'info',
+  link TEXT,
+  is_read INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS receipts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  file_url TEXT NOT NULL,
+  payment_method TEXT NOT NULL DEFAULT 'cash',
+  verified_by INTEGER,
+  verified_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES orders(id),
+  FOREIGN KEY (verified_by) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS cart_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   course_id INTEGER NOT NULL,
-  quantity INTEGER NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)

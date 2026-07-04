@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { sql } from '../../db/helpers';
+import { sql, escape } from '../../db/helpers';
+import { execute } from '../../db/turso-http';
 import { authMiddleware } from '../../middleware/auth';
 import { requireRole, ADMIN, EMPLOYEE } from '../../middleware/rbac';
+import * as groupService from '../../services/groupService';
 
 const router = Router();
 
@@ -42,8 +44,9 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
     );
 
     res.json({ orders: result.rows, total, page, limit, pages: Math.ceil(total / limit) });
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch orders' });
+  } catch (err: any) {
+    console.error('Admin fetch orders error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحميل الطلبات' });
   }
 });
 
@@ -71,8 +74,9 @@ router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_
       monthly: monthly.rows,
       recent: recent.rows,
     });
-  } catch {
-    res.status(500).json({ error: 'Failed to fetch financials' });
+  } catch (err: any) {
+    console.error('Admin fetch financials error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحميل التقارير المالية' });
   }
 });
 
@@ -82,80 +86,43 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
     if (!['pending', 'review', 'paid', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
-    await sql('UPDATE orders SET status=? WHERE id=?', status, req.params.id);
+    await sql('UPDATE orders SET status=? WHERE id=?', status, Number(req.params.id));
 
     if (status === 'paid') {
-      const order = await sql('SELECT * FROM orders WHERE id=?', req.params.id);
+      const order = await sql('SELECT * FROM orders WHERE id=?', Number(req.params.id));
       if (order.rows.length === 0) {
         return res.json({ message: `Order ${status}` });
       }
-      const o = order.rows[0] as any;
       await sql(
-        'INSERT INTO receipts (order_id, file_url, payment_method, verified_by, verified_at) VALUES (?,?,?,?,CURRENT_TIMESTAMP)',
-        req.params.id, o.receipt_url || '', 'manual', req.user!.userId,
+        'UPDATE orders SET verified_by=?, verified_at=CURRENT_TIMESTAMP WHERE id=?',
+        req.user!.userId, Number(req.params.id),
       );
 
-      // Auto-assign student to an available group
-      const studentId = Number(o.user_id);
-      const courseId = Number(o.course_id);
+      const orderRow = order.rows[0] as any;
+      const studentId = Number(orderRow.user_id);
+      const courseId = Number(orderRow.course_id);
 
-      // Check if student already assigned to any group for this course
-      const alreadyAssigned = await sql(
-        `SELECT 1 FROM group_students gs
-         JOIN groups g ON gs.group_id=g.id
-         WHERE g.course_id=? AND gs.user_id=? LIMIT 1`,
-        courseId, studentId,
-      );
-      if (alreadyAssigned.rows.length > 0) {
+      const courseCheck = await sql('SELECT auto_assign FROM courses WHERE id=?', courseId);
+      const autoAssign = courseCheck.rows.length > 0 ? Number(courseCheck.rows[0].auto_assign) : 0;
+      if (autoAssign === 0) {
+        return res.json({ message: 'Order paid. Student needs manual assignment.' });
+      }
+
+      const result = await groupService.autoAssignStudent(studentId, courseId);
+      if (!result.assigned) {
         return res.json({ message: 'Order paid (already in group)' });
-      }
-
-      const thresholdResult = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
-      let maxStudents = 30;
-      if (thresholdResult.rows.length > 0) {
-        const parsed = JSON.parse(thresholdResult.rows[0].value as string);
-        maxStudents = parsed.threshold || 30;
-      }
-      const course = await sql('SELECT max_students FROM courses WHERE id=?', courseId);
-      if (course.rows.length > 0) {
-        maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
-
-        const avail = await sql(
-          `SELECT g.id, g.max_students as group_max FROM groups g
-           WHERE g.course_id=? AND g.is_active=1
-           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < COALESCE(g.max_students, ?)
-           ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
-           LIMIT 1`,
-          courseId, maxStudents,
-        );
-
-        if (avail.rows.length > 0) {
-          const groupId = Number(avail.rows[0].id);
-          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
-        } else {
-          const groupCount = await sql(
-            "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
-            courseId,
-          );
-          const nextNum = Number(groupCount.rows[0].cnt) + 1;
-          const insertResult = await sql(
-            `INSERT INTO groups (course_id, name, is_complete) VALUES (?,?,0)`,
-            courseId, `مجموعة ${nextNum}`,
-          );
-          const newGroupId = Number(insertResult.lastInsertRowid);
-          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
-        }
       }
     }
     res.json({ message: `Order ${status}` });
-  } catch {
-    res.status(500).json({ error: 'Failed to update order' });
+  } catch (err: any) {
+    console.error('Admin update order status error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحديث حالة الطلب' });
   }
 });
 
 router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { amount, notes, notes_team, notes_student, payment_method } = req.body;
+    const { amount, notes, notes_team, notes_student, payment_method, sender_phone } = req.body;
     const sets: string[] = [];
     const params: any[] = [];
     if (amount !== undefined) { sets.push('amount=?'); params.push(amount); }
@@ -163,87 +130,62 @@ router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res:
     if (notes_team !== undefined) { sets.push('notes_team=?'); params.push(notes_team); }
     if (notes_student !== undefined) { sets.push('notes_student=?'); params.push(notes_student); }
     if (payment_method !== undefined) { sets.push('payment_method=?'); params.push(payment_method); }
+    if (sender_phone !== undefined) { sets.push('sender_phone=?'); params.push(sender_phone); }
     if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
-    params.push(req.params.id);
+    params.push(Number(req.params.id));
     await sql(`UPDATE orders SET ${sets.join(', ')} WHERE id=?`, ...params);
     res.json({ message: 'Order updated' });
-  } catch {
-    res.status(500).json({ error: 'Failed to update order' });
+  } catch (err: any) {
+    console.error('Admin update order error:', err?.message || err);
+    res.status(500).json({ error: 'فشل تحديث الطلب' });
   }
 });
 
 router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { user_id, course_id, amount, payment_method, notes_team, notes_student } = req.body;
+    const { user_id, course_id, amount, payment_method, notes_team, notes_student, sender_phone } = req.body;
     if (!user_id || !course_id || !amount) {
       return res.status(400).json({ error: 'user_id, course_id, and amount are required' });
     }
     const result = await sql(
-      `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_team, notes_student)
-       VALUES (?,?,?,'paid',?,?,?)`,
-      user_id, course_id, amount, payment_method || 'cash', notes_team || null, notes_student || null,
+      `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_team, notes_student, sender_phone, verified_by, verified_at)
+       VALUES (?,?,?,'paid',?,?,?,?,?,CURRENT_TIMESTAMP)`,
+      user_id, course_id, amount, payment_method || 'cash', notes_team || null, notes_student || null, sender_phone || null, req.user!.userId,
     );
     const orderId = Number(result.lastInsertRowid);
 
-    // Auto-assign if paid
-    const studentId = Number(user_id);
-
-    // Check if already assigned
-    const alreadyAssigned = await sql(
-      `SELECT 1 FROM group_students gs
-       JOIN groups g ON gs.group_id=g.id
-       WHERE g.course_id=? AND gs.user_id=? LIMIT 1`,
-      course_id, studentId,
-    );
-    if (alreadyAssigned.rows.length === 0) {
-      const thresholdResult = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
-      let maxStudents = 30;
-      if (thresholdResult.rows.length > 0) {
-        const parsed = JSON.parse(thresholdResult.rows[0].value as string);
-        maxStudents = parsed.threshold || 30;
-      }
-      const course = await sql('SELECT max_students FROM courses WHERE id=?', course_id);
-      if (course.rows.length > 0) {
-        maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
-        const avail = await sql(
-          `SELECT g.id, g.max_students as group_max FROM groups g
-           WHERE g.course_id=? AND g.is_active=1
-           AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < COALESCE(g.max_students, ?)
-           ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
-           LIMIT 1`,
-          course_id, maxStudents,
-        );
-        if (avail.rows.length > 0) {
-          const groupId = Number(avail.rows[0].id);
-          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
-        } else {
-          const groupCount = await sql(
-            "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
-            course_id,
-          );
-          const nextNum = Number(groupCount.rows[0].cnt) + 1;
-          const insertResult = await sql(
-            `INSERT INTO groups (course_id, name, is_complete) VALUES (?,?,0)`,
-            course_id, `مجموعة ${nextNum}`,
-          );
-          const newGroupId = Number(insertResult.lastInsertRowid);
-          await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', newGroupId, studentId);
-        }
-      }
+    const courseCheck = await sql('SELECT auto_assign FROM courses WHERE id=?', course_id);
+    const autoAssign = courseCheck.rows.length > 0 ? Number(courseCheck.rows[0].auto_assign) : 0;
+    if (autoAssign > 0) {
+      await groupService.autoAssignStudent(Number(user_id), Number(course_id));
     }
-    res.status(201).json({ id: orderId, message: 'Order created and student auto-assigned' });
-  } catch {
-    res.status(500).json({ error: 'Failed to create order' });
+    res.status(201).json({ id: orderId, message: autoAssign ? 'Order created and student auto-assigned' : 'Order created' });
+  } catch (err: any) {
+    console.error('Admin create order error:', err?.message || err);
+    res.status(500).json({ error: 'فشل إنشاء الطلب' });
   }
 });
 
 router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    await sql('DELETE FROM receipts WHERE order_id=?', req.params.id);
-    await sql('DELETE FROM orders WHERE id=?', req.params.id);
+    const id = Number(req.params.id);
+    if (isNaN(id)) { return res.status(400).json({ error: 'Invalid ID' }); }
+
+    // Remove student from any group for this course
+    const order = await sql('SELECT user_id, course_id FROM orders WHERE id=?', id);
+    if (order.rows.length > 0) {
+      const row = order.rows[0] as any;
+      await sql('DELETE FROM group_students WHERE user_id=? AND group_id IN (SELECT id FROM groups WHERE course_id=?)', row.user_id, row.course_id);
+    }
+
+    // Delete child records first to satisfy FK constraints
+    await execute('DELETE FROM receipts WHERE order_id=' + escape(id));
+    await sql('DELETE FROM orders WHERE id=?', id);
+
     res.json({ message: 'Order deleted permanently' });
-  } catch {
-    res.status(500).json({ error: 'Failed to delete order' });
+  } catch (err: any) {
+    console.error('Admin delete order error:', err?.message || err);
+    res.status(500).json({ error: 'فشل حذف الطلب' });
   }
 });
 
