@@ -18,9 +18,9 @@ router.get('/:groupId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req
 // POST /api/lectures/:groupId
 router.post('/:groupId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { date, time_from, time_to, topic, zoom_link } = req.body;
+    const { date, time_from, time_to, topic, location, zoom_link } = req.body;
     if (!date) return res.status(400).json({ error: 'Lecture date required' });
-    const id = await groupService.addLecture(Number(req.params.groupId), { date, time_from, time_to, topic, zoom_link });
+    const id = await groupService.addLecture(Number(req.params.groupId), { date, time_from, time_to, topic, location, zoom_link });
     res.status(201).json({ id });
   } catch (err: any) {
     res.status(err?.status || 500).json({ error: err?.message || 'Failed to create lecture' });
@@ -30,8 +30,8 @@ router.post('/:groupId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (re
 // PUT /api/lectures/:groupId/:lectureId
 router.put('/:groupId/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { date, time_from, time_to, topic, zoom_link, is_completed } = req.body;
-    await groupService.updateLecture(Number(req.params.groupId), Number(req.params.lectureId), { date, time_from, time_to, topic, zoom_link, is_completed });
+    const { date, time_from, time_to, topic, location, zoom_link, is_completed } = req.body;
+    await groupService.updateLecture(Number(req.params.groupId), Number(req.params.lectureId), { date, time_from, time_to, topic, location, zoom_link, is_completed });
     res.json({ message: 'Lecture updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update lecture' });

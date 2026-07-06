@@ -18,7 +18,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: false });
+  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: true });
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -55,7 +55,7 @@ export default function CoursesPage() {
         body: JSON.stringify({ ...addForm, category_id: addForm.category_id ? Number(addForm.category_id) : null }),
       });
       setAddModal(false);
-      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: false });
+      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: true });
       toast('تم إضافة الكورس', 'success');
       load();
     } catch {

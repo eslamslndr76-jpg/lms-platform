@@ -20,7 +20,26 @@ router.get('/', optionalAuth, async (req: Request, res: Response) => {
        FROM courses c LEFT JOIN categories cat ON c.category_id = cat.id${where} ORDER BY c.created_at DESC`,
       ...params,
     );
-    let rows: any[] = result.rows.map((r: any) => ({ ...r, is_active: Number(r.is_active), featured: Number(r.featured || 0), enable_direct_purchase: Number(r.enable_direct_purchase ?? 1), auto_assign: Number(r.auto_assign ?? 0) }));
+    let rows: any[] = result.rows.map((r: any) => ({ ...r, is_active: Number(r.is_active), featured: Number(r.featured || 0), enable_direct_purchase: Number(r.enable_direct_purchase ?? 1), auto_assign: Number(r.auto_assign ?? 1), prevent_overlap: Number(r.prevent_overlap ?? 1) }));
+
+    // Group fill info for all courses (student listing)
+    if (!isAdmin && rows.length > 0) {
+      const ids = rows.map((r: any) => r.id);
+      const fillResult = await sql(
+      `SELECT g.course_id, g.max_students as group_max, COUNT(gs.id) as group_current
+       FROM groups g LEFT JOIN group_students gs ON gs.group_id=g.id
+       WHERE g.status IN ('active','pending') AND g.course_id IN (${ids.map(() => '?').join(',')})
+       GROUP BY g.course_id, g.id`,
+        ...ids,
+      );
+      const fillMap: Record<number, { group_max: number; group_current: number }> = {};
+      for (const f of fillResult.rows) {
+        const cid = Number((f as any).course_id);
+        if (!fillMap[cid]) fillMap[cid] = { group_max: Number((f as any).group_max), group_current: Number((f as any).group_current) };
+      }
+      rows = rows.map((r: any) => ({ ...r, ...fillMap[r.id] }));
+    }
+
     if (req.query.featured === '1') rows = rows.filter((r: any) => r.featured === 1);
     res.json(rows);
   } catch {
@@ -37,7 +56,21 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       req.params.id,
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
-    const course = { ...result.rows[0], is_active: Number(result.rows[0].is_active), auto_assign: Number(result.rows[0].auto_assign ?? 0) };
+    const course = { ...result.rows[0], is_active: Number(result.rows[0].is_active), auto_assign: Number(result.rows[0].auto_assign ?? 1), prevent_overlap: Number(result.rows[0].prevent_overlap ?? 1) };
+
+    // Active group fill info for student UI
+    const groupFill = await sql(
+      `SELECT g.max_students as group_max, COUNT(gs.id) as group_current
+       FROM groups g LEFT JOIN group_students gs ON gs.group_id=g.id
+       WHERE g.course_id=? AND g.status IN ('active','pending')
+       GROUP BY g.id LIMIT 1`,
+      req.params.id,
+    );
+    if (groupFill.rows.length > 0) {
+      (course as any).group_max = Number(groupFill.rows[0].group_max);
+      (course as any).group_current = Number(groupFill.rows[0].group_current);
+    }
+
     res.json(course);
   } catch {
     res.status(500).json({ error: 'Failed to fetch course' });
@@ -51,7 +84,7 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
     const result = await sql(
       `INSERT INTO courses (title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode, featured, enable_direct_purchase, auto_assign)
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, lecture_duration || 0, instructor || '', materials_url || null, course_mode || 'online', featured ? 1 : 0, enable_direct_purchase !== undefined ? (enable_direct_purchase ? 1 : 0) : 1, auto_assign !== undefined ? (auto_assign ? 1 : 0) : 0,
+      title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, lecture_duration || 0, instructor || '', materials_url || null, course_mode || 'online', featured ? 1 : 0, enable_direct_purchase !== undefined ? (enable_direct_purchase ? 1 : 0) : 1, auto_assign !== undefined ? (auto_assign ? 1 : 0) : 1,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid) });
   } catch {
@@ -61,7 +94,7 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const allowed = ['title_ar', 'title_en', 'description', 'price', 'category_id', 'image_url', 'max_students', 'lecture_count', 'lecture_duration', 'instructor', 'materials_url', 'course_mode', 'is_active', 'featured', 'enable_direct_purchase', 'auto_assign'];
+    const allowed = ['title_ar', 'title_en', 'description', 'price', 'category_id', 'image_url', 'max_students', 'lecture_count', 'lecture_duration', 'instructor', 'materials_url', 'course_mode', 'is_active', 'featured', 'enable_direct_purchase', 'auto_assign', 'prevent_overlap'];
     const sets: string[] = [];
     const params: any[] = [];
     for (const key of allowed) {

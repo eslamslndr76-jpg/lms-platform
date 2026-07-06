@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS courses (
   course_mode TEXT NOT NULL DEFAULT 'online',
   featured INTEGER NOT NULL DEFAULT 0,
   enable_direct_purchase INTEGER NOT NULL DEFAULT 1,
-  auto_assign INTEGER NOT NULL DEFAULT 0,
+  auto_assign INTEGER NOT NULL DEFAULT 1,
+  prevent_overlap INTEGER NOT NULL DEFAULT 1,
   is_active INTEGER NOT NULL DEFAULT 1,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES categories(id)
@@ -126,10 +127,15 @@ CREATE TABLE IF NOT EXISTS lectures (
   time_from TEXT DEFAULT '',
   time_to TEXT DEFAULT '',
   topic TEXT DEFAULT '',
+  location TEXT DEFAULT '',
   zoom_link TEXT DEFAULT '',
   is_completed INTEGER NOT NULL DEFAULT 0,
   completed_at DATETIME,
   sort_order INTEGER NOT NULL DEFAULT 0,
+  attendance_active INTEGER NOT NULL DEFAULT 0,
+  attendance_seed TEXT,
+  attendance_started_at DATETIME,
+  attendance_expires_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
@@ -140,6 +146,9 @@ CREATE TABLE IF NOT EXISTS lecture_attendance (
   user_id INTEGER NOT NULL,
   attended INTEGER NOT NULL DEFAULT 0,
   attended_at DATETIME,
+  verification_method TEXT DEFAULT 'qr',
+  code_used TEXT,
+  ip_address TEXT,
   FOREIGN KEY (lecture_id) REFERENCES lectures(id) ON DELETE CASCADE,
   FOREIGN KEY (user_id) REFERENCES users(id),
   UNIQUE(lecture_id, user_id)

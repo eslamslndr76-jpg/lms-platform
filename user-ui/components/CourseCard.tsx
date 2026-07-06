@@ -11,6 +11,8 @@ interface Course {
   price: number;
   image_url?: string;
   category_name_ar?: string;
+  group_max?: number;
+  group_current?: number;
 }
 
 export function CourseCard({ course, index = 0 }: { course: Course; index?: number }) {
@@ -35,6 +37,24 @@ export function CourseCard({ course, index = 0 }: { course: Course; index?: numb
               {course.category_name_ar}
             </span>
           )}
+          {(() => {
+            const gMax = course.group_max;
+            const gCur = course.group_current;
+            if (!gMax || gMax <= 0) return null;
+            const pct = Math.min(Math.round((gCur! / gMax) * 100), 100);
+            const barColor = pct >= 80 ? '#dc2626' : pct >= 50 ? '#d97706' : '#16a34a';
+            return (
+              <div className="mt-2">
+                <div className="flex items-center justify-between text-[10px] mb-1">
+                  <span style={{ color: 'var(--text-muted)' }}>المجموعة</span>
+                  <span style={{ color: barColor, fontWeight: 700 }}>{gCur}/{gMax}</span>
+                </div>
+                <div className="w-full h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: `${barColor}15` }}>
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: barColor }} />
+                </div>
+              </div>
+            );
+          })()}
           <div className="mt-3 flex items-center justify-between">
             <span className="text-lg font-bold" style={{ color: primaryColor }}>
               {course.price > 0 ? `${course.price} ج.م` : 'مجاني'}

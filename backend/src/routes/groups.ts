@@ -35,6 +35,16 @@ router.get('/my/all', authMiddleware, async (req: Request, res: Response) => {
   }
 });
 
+// GET /api/groups/my/:id/lectures — student's lecture list for their group
+router.get('/my/:id/lectures', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const lectures = await groupService.getMyGroupLectures(req.user!.userId, Number(req.params.id));
+    res.json(lectures);
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to fetch lectures' });
+  }
+});
+
 // GET /api/groups — list (filter by ?courseId)
 router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
@@ -78,6 +88,73 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
     res.json({ message: 'Group updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update group' });
+  }
+});
+
+// ──────────────────────────────
+// Batch operations (MUST be before /:id routes)
+// ──────────────────────────────
+
+// POST /api/groups/batch/delete
+router.post('/batch/delete', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    const deleted = await groupService.batchDeleteGroups(ids);
+    res.json({ message: `${deleted} groups deleted`, deleted });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to batch delete' });
+  }
+});
+
+// POST /api/groups/batch/toggle
+router.post('/batch/toggle', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { ids, is_active } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    const updated = await groupService.batchToggleGroups(ids, !!is_active);
+    res.json({ message: `${updated} groups updated`, updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to batch toggle' });
+  }
+});
+
+// POST /api/groups/batch/status
+router.post('/batch/status', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { ids, status } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    if (!status) return res.status(400).json({ error: 'status required' });
+    const updated = await groupService.batchUpdateGroupStatus(ids, status);
+    res.json({ message: `${updated} groups updated`, updated });
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to batch update status' });
+  }
+});
+
+// PATCH /api/groups/batch/instructor
+router.patch('/batch/instructor', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { ids, instructor_name } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
+    if (!instructor_name) return res.status(400).json({ error: 'instructor_name required' });
+    const updated = await groupService.batchUpdateGroupInstructor(ids, instructor_name);
+    res.json({ message: `${updated} groups updated`, updated });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Failed to batch update instructor' });
+  }
+});
+
+// POST /api/groups/batch/assign-students
+router.post('/batch/assign-students', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { user_ids, group_id } = req.body;
+    if (!Array.isArray(user_ids) || user_ids.length === 0) return res.status(400).json({ error: 'user_ids array required' });
+    if (!group_id) return res.status(400).json({ error: 'group_id required' });
+    const assigned = await groupService.batchAssignStudents(user_ids, group_id, req.user!.userId);
+    res.json({ message: `${assigned} students assigned`, assigned });
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to batch assign students' });
   }
 });
 
@@ -203,9 +280,9 @@ router.get('/:id/lectures', authMiddleware, requireRole(ADMIN, EMPLOYEE), async 
 // POST /api/groups/:id/lectures
 router.post('/:id/lectures', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { date, time_from, time_to, topic, zoom_link } = req.body;
+    const { date, time_from, time_to, topic, location, zoom_link } = req.body;
     if (!date) return res.status(400).json({ error: 'Lecture date required' });
-    const id = await groupService.addLecture(Number(req.params.id), { date, time_from, time_to, topic, zoom_link });
+    const id = await groupService.addLecture(Number(req.params.id), { date, time_from, time_to, topic, location, zoom_link });
     res.status(201).json({ id });
   } catch (err: any) {
     res.status(err?.status || 500).json({ error: err?.message || 'Failed to create lecture' });
@@ -215,8 +292,8 @@ router.post('/:id/lectures', authMiddleware, requireRole(ADMIN, EMPLOYEE), async
 // PUT /api/groups/:id/lectures/:lectureId
 router.put('/:id/lectures/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { date, time_from, time_to, topic, zoom_link, is_completed } = req.body;
-    await groupService.updateLecture(Number(req.params.id), Number(req.params.lectureId), { date, time_from, time_to, topic, zoom_link, is_completed });
+    const { date, time_from, time_to, topic, location, zoom_link, is_completed } = req.body;
+    await groupService.updateLecture(Number(req.params.id), Number(req.params.lectureId), { date, time_from, time_to, topic, location, zoom_link, is_completed });
     res.json({ message: 'Lecture updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update lecture' });

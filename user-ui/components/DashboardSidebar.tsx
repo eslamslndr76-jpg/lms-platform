@@ -9,6 +9,7 @@ import { useBranding } from './BrandingProvider';
 
 const sections = [
   { href: '/dashboard', label: 'لوحة التحكم', icon: '📊' },
+  { href: '/my-courses', label: 'كورساتي', icon: '🎓' },
   { href: '/courses', label: 'الكورسات', icon: '📚' },
   { href: '/orders', label: 'طلباتي', icon: '📋' },
   { href: '/cart', label: 'السلة', icon: '🛒' },

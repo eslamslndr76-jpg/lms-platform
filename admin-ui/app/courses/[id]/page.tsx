@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
@@ -11,8 +11,9 @@ import Skeleton from '../../../components/Skeleton';
 import StatusBadge from '../../../components/StatusBadge';
 import { compressAndEncode } from '../../../lib/imageUtils';
 import { useToast } from '../../../components/Toast';
+import { QRCodeSVG } from 'qrcode.react';
 
-const daysOfWeek = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+const daysOfWeek = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 export default function CourseDetailPage({ params }: { params: { id: string } }) {
   const courseId = Number(params.id);
@@ -34,7 +35,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [addGroupModal, setAddGroupModal] = useState(false);
-  const [groupForm, setGroupForm] = useState({ name: '', location: '', max_students: '', end_date: '', status: 'pending' });
+  const [groupForm, setGroupForm] = useState({ name: '', location: '', max_students: '', status: 'pending' });
   const [groupSaving, setGroupSaving] = useState(false);
 
   const [editGroupModal, setEditGroupModal] = useState(false);
@@ -47,13 +48,27 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   const [lectures, setLectures] = useState<any[]>([]);
   const [lecturesLoading, setLecturesLoading] = useState(false);
-  const [lectureForm, setLectureForm] = useState({ day_of_week: '', time_from: '', time_to: '', topic: '', date: '' });
+  const [lectureForm, setLectureForm] = useState({ date: '', time_from: '', time_to: '', topic: '', location: '' });
   const [addLectureModal, setAddLectureModal] = useState(false);
   const [lectureSaving, setLectureSaving] = useState(false);
   const [editLectureModal, setEditLectureModal] = useState(false);
   const [editLectureForm, setEditLectureForm] = useState<any>({});
   const [editingLectureId, setEditingLectureId] = useState<number | null>(null);
   const [editLectureSaving, setEditLectureSaving] = useState(false);
+
+  // Attendance
+  const [attendanceModal, setAttendanceModal] = useState<{ lectureId: number; topic: string } | null>(null);
+  const [attendanceCode, setAttendanceCode] = useState('');
+  const [attendanceQR, setAttendanceQR] = useState('');
+  const [attendanceExpiresIn, setAttendanceExpiresIn] = useState(15);
+  const [attendanceActive, setAttendanceActive] = useState(false);
+  const [attendanceSeed, setAttendanceSeed] = useState('');
+  const [attendanceStudents, setAttendanceStudents] = useState<any[]>([]);
+  const [attendanceSummary, setAttendanceSummary] = useState<{ present: number; total: number; percentage: number } | null>(null);
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceCountdown, setAttendanceCountdown] = useState(15);
+  const attendanceTimerRef = useRef<any>(null);
+  const attendanceRefreshRef = useRef<any>(null);
 
   const [groupStudents, setGroupStudents] = useState<any[]>([]);
   const [groupStudentsLoading, setGroupStudentsLoading] = useState(false);
@@ -75,6 +90,23 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [moveStudentTarget, setMoveStudentTarget] = useState<any>(null);
   const [moveTargetGroupId, setMoveTargetGroupId] = useState<number | null>(null);
   const [movingStudent, setMovingStudent] = useState(false);
+
+  // Filter & sort
+  const [statusFilter, setStatusFilter] = useState('');
+  const [instructorFilter, setInstructorFilter] = useState('');
+
+  // Batch selection
+  const [selectedGroupIds, setSelectedGroupIds] = useState<Set<number>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [confirmBatchDelete, setConfirmBatchDelete] = useState(false);
+  const [batchStatusModal, setBatchStatusModal] = useState(false);
+  const [batchStatusValue, setBatchStatusValue] = useState('active');
+  const [batchInstructorModal, setBatchInstructorModal] = useState(false);
+  const [batchInstructorValue, setBatchInstructorValue] = useState('');
+
+  // Unassigned batch selection
+  const [selectedUnassignedIds, setSelectedUnassignedIds] = useState<Set<number>>(new Set());
+  const [batchAssignGroupId, setBatchAssignGroupId] = useState<number | null>(null);
 
   const [confirmToggleCourse, setConfirmToggleCourse] = useState<any>(null);
   const [confirmDeleteCourse, setConfirmDeleteCourse] = useState<any>(null);
@@ -138,6 +170,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       course_mode: course.course_mode || 'online',
       featured: Boolean(Number(course.featured)), enable_direct_purchase: course.enable_direct_purchase !== 0,
       auto_assign: Boolean(Number(course.auto_assign)),
+      prevent_overlap: course.prevent_overlap !== undefined ? Boolean(Number(course.prevent_overlap)) : true,
     });
     setEditModal(true);
   };
@@ -193,7 +226,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         body: JSON.stringify({ ...groupForm, course_id: courseId, max_students: groupForm.max_students ? Number(groupForm.max_students) : null }),
       });
       setAddGroupModal(false);
-      setGroupForm({ name: '', location: '', max_students: '', end_date: '', status: 'pending' });
+      setGroupForm({ name: '', location: '', max_students: '', status: 'pending' });
       toast('تم إضافة المجموعة', 'success');
       loadGroups();
     } catch {
@@ -210,7 +243,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       is_active: Number(row.is_active),
       status: row.status || 'pending',
       location: row.location || '', max_students: row.max_students?.toString() || '',
-      end_date: row.end_date || '',
     });
     setEditGroupModal(true);
   };
@@ -301,15 +333,15 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     try {
       await api(`/api/lectures/${detailGroup.id}`, {
         method: 'POST',
-        body: JSON.stringify(lectureForm),
+        body: JSON.stringify({ date: lectureForm.date, time_from: lectureForm.time_from, time_to: lectureForm.time_to, topic: lectureForm.topic, location: lectureForm.location }),
       });
       setAddLectureModal(false);
-      setLectureForm({ day_of_week: '', time_from: '', time_to: '', topic: '', date: '' });
+      setLectureForm({ date: '', time_from: '', time_to: '', topic: '', location: '' });
       toast('تم إضافة المحاضرة', 'success');
       loadLectures(detailGroup.id);
       loadGroups();
-    } catch {
-      toast('فشل إضافة المحاضرة', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل إضافة المحاضرة', 'error');
     } finally {
       setLectureSaving(false);
     }
@@ -317,10 +349,9 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   const startEditLecture = (lec: any) => {
     setEditingLectureId(lec.id);
-    setEditLectureForm({
-      day_of_week: lec.day_of_week || '', time_from: lec.time_from || '', time_to: lec.time_to || '',
-      topic: lec.topic || '', date: lec.date || '',
-    });
+      setEditLectureForm({
+        topic: lec.topic || '', date: lec.date || '', time_from: lec.time_from || '', time_to: lec.time_to || '', location: lec.location || '',
+      });
     setEditLectureModal(true);
   };
 
@@ -337,8 +368,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast('تم تحديث المحاضرة', 'success');
       loadLectures(detailGroup.id);
       loadGroups();
-    } catch {
-      toast('فشل تحديث المحاضرة', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل تحديث المحاضرة', 'error');
     } finally {
       setEditLectureSaving(false);
     }
@@ -350,8 +381,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast(res.is_completed ? 'تم إتمام المحاضرة' : 'تم إلغاء الإتمام', 'success');
       loadLectures(detailGroup.id);
       loadGroups();
-    } catch {
-      toast('فشل تغيير حالة المحاضرة', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل تبديل حالة المحاضرة', 'error');
     }
   };
 
@@ -365,6 +396,104 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل حذف المحاضرة', 'error');
+    }
+  };
+
+  // ── Attendance ──
+
+  const startAttendance = async (lectureId: number) => {
+    setAttendanceLoading(true);
+    try {
+      const res = await api(`/api/attendance/${lectureId}/start`, { method: 'POST' });
+      setAttendanceSeed(res.seed);
+      setAttendanceCode(res.code);
+      setAttendanceQR(res.qrData);
+      setAttendanceExpiresIn(res.expiresIn);
+      setAttendanceActive(true);
+      setAttendanceCountdown(res.expiresIn);
+      startAttendanceRefresh(lectureId);
+      loadAttendanceReport(lectureId);
+    } catch (err: any) {
+      toast(err?.message || 'فشل بدء تسجيل الحضور', 'error');
+    } finally {
+      setAttendanceLoading(false);
+    }
+  };
+
+  const stopAttendance = async (lectureId: number) => {
+    try {
+      await api(`/api/attendance/stop/${lectureId}`, { method: 'POST' });
+    } catch { /* ignore */ }
+    setAttendanceActive(false);
+    clearAttendanceTimers();
+    setAttendanceModal(null);
+    toast('تم إيقاف تسجيل الحضور', 'success');
+  };
+
+  const fetchCurrentCode = async (lectureId: number) => {
+    try {
+      const res = await api(`/api/attendance/${lectureId}/current`);
+      if (res.code) {
+        setAttendanceCode(res.code);
+        setAttendanceQR(res.qrData);
+        setAttendanceExpiresIn(res.expiresIn);
+        setAttendanceCountdown(res.expiresIn);
+        setAttendanceActive(true);
+        loadAttendanceReport(lectureId);
+      } else {
+        setAttendanceActive(false);
+        clearAttendanceTimers();
+        toast('انتهت جلسة تسجيل الحضور', 'info');
+        setAttendanceModal(null);
+      }
+    } catch {
+      setAttendanceActive(false);
+      clearAttendanceTimers();
+    }
+  };
+
+  const startAttendanceRefresh = (lectureId: number) => {
+    clearAttendanceTimers();
+    attendanceTimerRef.current = setInterval(() => {
+      setAttendanceCountdown(prev => {
+        if (prev <= 1) return attendanceExpiresIn;
+        return prev - 1;
+      });
+    }, 1000);
+    attendanceRefreshRef.current = setInterval(() => {
+      fetchCurrentCode(lectureId);
+    }, attendanceExpiresIn * 1000);
+  };
+
+  const clearAttendanceTimers = () => {
+    if (attendanceTimerRef.current) { clearInterval(attendanceTimerRef.current); attendanceTimerRef.current = null; }
+    if (attendanceRefreshRef.current) { clearInterval(attendanceRefreshRef.current); attendanceRefreshRef.current = null; }
+  };
+
+  const loadAttendanceReport = async (lectureId: number) => {
+    try {
+      const res = await api(`/api/attendance/${lectureId}`);
+      setAttendanceStudents(res.students || []);
+      setAttendanceSummary(res.summary || null);
+    } catch { /* ignore */ }
+  };
+
+  const openAttendanceModal = (lec: any) => {
+    setAttendanceModal({ lectureId: lec.id, topic: lec.topic || 'محاضرة' });
+    setAttendanceCode('');
+    setAttendanceQR('');
+    setAttendanceActive(false);
+    setAttendanceStudents([]);
+    setAttendanceSummary(null);
+    startAttendance(lec.id);
+  };
+
+  const closeAttendanceModal = () => {
+    if (attendanceModal && attendanceActive) {
+      stopAttendance(attendanceModal.lectureId);
+    } else {
+      clearAttendanceTimers();
+      setAttendanceModal(null);
     }
   };
 
@@ -478,13 +607,127 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     setMovingStudent(false);
   };
 
+  // ── Batch actions ──
+  const batchDelete = async () => {
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedGroupIds);
+      await api('/api/groups/batch/delete', { method: 'POST', body: JSON.stringify({ ids }) });
+      toast(`تم حذف ${ids.length} مجموعة`, 'success');
+      setConfirmBatchDelete(false);
+      setSelectedGroupIds(new Set());
+      loadGroups();
+    } catch {
+      toast('فشل الحذف الجماعي', 'error');
+    }
+    setBatchLoading(false);
+  };
+
+  const batchToggle = async () => {
+    if (batchToggleAction === undefined && !mixedToggle) return;
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedGroupIds);
+      // Mixed toggle: each group gets the opposite of its current state
+      if (mixedToggle) {
+        for (const id of ids) {
+          const g = groups.find((g: any) => g.id === id);
+          await api('/api/groups/batch/toggle', { method: 'POST', body: JSON.stringify({ ids: [id], is_active: !Number(g?.is_active) }) });
+        }
+      } else {
+        await api('/api/groups/batch/toggle', { method: 'POST', body: JSON.stringify({ ids, is_active: batchToggleAction }) });
+      }
+      toast('تم تحديث حالة المجموعات', 'success');
+      setSelectedGroupIds(new Set());
+      loadGroups();
+    } catch {
+      toast('فشل التحديث الجماعي', 'error');
+    }
+    setBatchLoading(false);
+  };
+
+  const batchUpdateStatus = async () => {
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedGroupIds);
+      await api('/api/groups/batch/status', { method: 'POST', body: JSON.stringify({ ids, status: batchStatusValue }) });
+      toast(`تم تغيير حالة ${ids.length} مجموعة`, 'success');
+      setBatchStatusModal(false);
+      setSelectedGroupIds(new Set());
+      loadGroups();
+    } catch {
+      toast('فشل تغيير الحالة الجماعي', 'error');
+    }
+    setBatchLoading(false);
+  };
+
+  const batchUpdateInstructor = async () => {
+    if (!batchInstructorValue.trim()) return;
+    setBatchLoading(true);
+    try {
+      const ids = Array.from(selectedGroupIds);
+      await api('/api/groups/batch/instructor', { method: 'PATCH', body: JSON.stringify({ ids, instructor_name: batchInstructorValue }) });
+      toast(`تم تغيير مدرب ${ids.length} مجموعة`, 'success');
+      setBatchInstructorModal(false);
+      setBatchInstructorValue('');
+      setSelectedGroupIds(new Set());
+      loadGroups();
+    } catch {
+      toast('فشل تغيير المدرب الجماعي', 'error');
+    }
+    setBatchLoading(false);
+  };
+
+  const batchAssignStudents = async () => {
+    if (!batchAssignGroupId || selectedUnassignedIds.size === 0) return;
+    setBatchLoading(true);
+    try {
+      const userIds = Array.from(selectedUnassignedIds);
+      await api('/api/groups/batch/assign-students', {
+        method: 'POST',
+        body: JSON.stringify({ user_ids: userIds, group_id: batchAssignGroupId }),
+      });
+      toast(`تم تسكين ${userIds.length} طالب`, 'success');
+      setSelectedUnassignedIds(new Set());
+      setBatchAssignGroupId(null);
+      loadUnassigned();
+      if (detailGroup) {
+        const students = await api(`/api/groups/${detailGroup.id}/students`);
+        setGroupStudents(students);
+      }
+      loadGroups();
+    } catch {
+      toast('فشل التسكين الجماعي', 'error');
+    }
+    setBatchLoading(false);
+  };
+
   const filteredStudents = allStudents.filter((s: any) =>
     !studentSearch || s.name.includes(studentSearch) || s.email.includes(studentSearch) || s.phone?.includes(studentSearch)
   );
 
+  const uniqueInstructors = Array.from(new Set(groups.map((g: any) => g.instructor_name).filter(Boolean)));
+
+  const filteredGroups = groups.filter((g: any) => {
+    if (statusFilter) {
+      const gStatus = g.status || (Number(g.is_active) ? 'active' : 'cancelled');
+      if (gStatus !== statusFilter) return false;
+    }
+    if (instructorFilter && g.instructor_name !== instructorFilter) return false;
+    return true;
+  });
+
+  // Smart batch toggle: determine if selected groups are all active, all inactive, or mixed
+  const selectedGroups = groups.filter((g: any) => selectedGroupIds.has(g.id));
+  const allSelectedActive = selectedGroups.length > 0 && selectedGroups.every((g: any) => Number(g.is_active));
+  const allSelectedInactive = selectedGroups.length > 0 && selectedGroups.every((g: any) => !Number(g.is_active));
+  const mixedToggle = selectedGroups.length > 0 && !allSelectedActive && !allSelectedInactive;
+  const batchToggleLabel = allSelectedActive ? '🔴 تعطيل الكل' : allSelectedInactive ? '🟢 تفعيل الكل' : '🔁 عكس حالة الكل';
+  const batchToggleAction = allSelectedActive ? false : allSelectedInactive ? true : undefined;
+
   const tabs = [
     { key: 'info', label: 'معلومات الكورس' },
-    { key: 'groups', label: 'المجموعات' },
+    { key: 'groups', label: `المجموعات (${groups.length})` },
     { key: 'students', label: 'الطلاب المسجلين' },
     { key: 'unassigned', label: `غير مسكنين (${unassignedStudents.length})` },
   ];
@@ -594,6 +837,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 </span>
               </div>
             )}
+            {course.prevent_overlap !== undefined && (
+              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>منع تداخل المجموعات</span>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{
+                    backgroundColor: Number(course.prevent_overlap) ? 'rgba(251,191,36,0.15)' : 'rgba(239,68,68,0.1)',
+                    color: Number(course.prevent_overlap) ? '#92400e' : '#dc2626',
+                  }}>
+                  {Number(course.prevent_overlap) ? '🔒 مفعل' : '🔓 غير مفعل'}
+                </span>
+              </div>
+            )}
           {course.max_students && (
               <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
                 <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى</span>
@@ -625,18 +880,77 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       {tab === 'groups' && (
         <div className="rounded-2xl p-6 shadow-sm border space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between">
-            <h2 className="font-bold" style={{ color: 'var(--text)' }}>المجموعات ({groups.length})</h2>
+            <h2 className="font-bold" style={{ color: 'var(--text)' }}>المجموعات ({filteredGroups.length})</h2>
             <button onClick={() => setAddGroupModal(true)}
               className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>
               + إضافة مجموعة
             </button>
           </div>
+
+          {/* Filters */}
+          <div className="flex gap-2 flex-wrap">
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="px-3 py-2 rounded-xl border text-xs" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">كل الحالات</option>
+              <option value="pending">⏳ قيد الانتظار</option>
+              <option value="active">🟢 نشط</option>
+              <option value="completed">✅ مكتمل</option>
+              <option value="cancelled">❌ ملغي</option>
+            </select>
+            {uniqueInstructors.length > 0 && (
+              <select value={instructorFilter} onChange={e => setInstructorFilter(e.target.value)}
+                className="px-3 py-2 rounded-xl border text-xs" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                <option value="">كل المدربين</option>
+                {uniqueInstructors.map((name: string) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
+            )}
+            {selectedGroupIds.size > 0 && (
+              <span className="px-3 py-2 rounded-xl text-xs font-medium" style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+                ✓ {selectedGroupIds.size} مختارة
+              </span>
+            )}
+          </div>
+
+          {/* Batch action bar */}
+          {selectedGroupIds.size > 0 && (
+            <div className="flex items-center gap-2 p-3 rounded-xl border animate-fade-in"
+              style={{ backgroundColor: 'rgba(59,130,246,0.06)', borderColor: 'rgba(59,130,246,0.2)' }}>
+              <span className="text-sm font-medium ml-2" style={{ color: 'var(--text)' }}>إجراء جماعي:</span>
+              <button onClick={batchToggle} disabled={batchLoading}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ backgroundColor: allSelectedActive ? '#fef2f2' : '#f0fdf4', color: allSelectedActive ? '#dc2626' : '#16a34a' }}>
+                {batchToggleLabel}
+              </button>
+              <button onClick={() => { setBatchStatusValue('active'); setBatchStatusModal(true); }} disabled={batchLoading}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}>📋 تغيير الحالة</button>
+              <button onClick={() => { setBatchInstructorValue(''); setBatchInstructorModal(true); }} disabled={batchLoading}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ backgroundColor: '#f5f3ff', color: '#7c3aed' }}>🔄 تغيير المدرب</button>
+              <button onClick={() => setConfirmBatchDelete(true)} disabled={batchLoading}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                style={{ backgroundColor: '#fef2f2', color: '#dc2626' }}>🗑️ حذف</button>
+              {batchLoading && <div className="animate-spin h-4 w-4 border-2 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />}
+            </div>
+          )}
+
           {groupsLoading ? (
             <Skeleton rows={4} cols={6} />
           ) : (
             <DataTable
+              selectable
+              rowKey="id"
+              selectedIds={selectedGroupIds}
+              onSelectionChange={setSelectedGroupIds}
               columns={[
-                { key: 'name', label: 'اسم المجموعة' },
+                { key: 'name', label: 'اسم المجموعة', render: (v: string, row: any) => (
+                  <span className="flex items-center gap-1.5">
+                    {v}
+                    {row.has_started && <span title="بدأت — لا يمكن التسكين" className="text-xs" style={{ color: '#1d4ed8' }}>🚀</span>}
+                  </span>
+                )},
                 { key: 'instructor_name', label: 'المدرب' },
                 { key: 'student_count', label: 'عدد الطلاب', render: (v: number) => `${v || 0} طالب` },
                 { key: 'schedule_display', label: 'الموعد', render: (v: string) => v || 'لم يتم تحديد الميعاد بعد' },
@@ -660,7 +974,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   </div>
                 )},
               ]}
-              data={groups}
+              data={filteredGroups}
               onRowClick={openDetailGroup}
             />
           )}
@@ -709,31 +1023,93 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             </div>
           ) : (
             <div className="space-y-2">
-              {unassignedStudents.map((u: any) => (
-                <div key={u.order_id} className="flex items-center justify-between p-3 rounded-xl text-sm border-2" style={{ backgroundColor: '#fef2f2', borderColor: '#fecaca' }}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">🔴</span>
-                    <div>
-                      <span className="font-medium" style={{ color: 'var(--text)' }}>{u.name}</span>
-                      <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</span>
-                      {u.phone && <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.phone}</span>}
+              {/* Batch assign bar */}
+              {selectedUnassignedIds.size > 0 && (
+                <div className="flex items-center gap-2 p-3 rounded-xl border animate-fade-in"
+                  style={{ backgroundColor: 'rgba(59,130,246,0.06)', borderColor: 'rgba(59,130,246,0.2)' }}>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>✓ {selectedUnassignedIds.size} طالب — تسكين في:</span>
+                  <select value={batchAssignGroupId || ''} onChange={e => setBatchAssignGroupId(Number(e.target.value))}
+                    className="px-3 py-1.5 rounded-lg text-xs border flex-1" style={{ backgroundColor: 'white', borderColor: 'var(--border)' }}>
+                    <option value="">اختر مجموعة...</option>
+                    {groups.filter((g: any) => Number(g.is_active) && !g.has_started).map((g: any) => (
+                      <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'}){g.has_started ? ' 🚀' : ''}</option>
+                    ))}
+                    {groups.filter((g: any) => Number(g.is_active) && g.has_started).length > 0 && (
+                      <optgroup label="🚀 مجموعات بدأت (غير متاح)">
+                        {groups.filter((g: any) => Number(g.is_active) && g.has_started).map((g: any) => (
+                          <option key={g.id} value={g.id} disabled>{g.name} — بدأت</option>
+                        ))}
+                      </optgroup>
+                    )}
+                  </select>
+                  <button onClick={batchAssignStudents} disabled={!batchAssignGroupId || batchLoading}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                    style={{ backgroundColor: 'var(--primary)' }}>
+                    {batchLoading ? 'جاري...' : 'تسكين'}
+                  </button>
+                  <button onClick={() => { setSelectedUnassignedIds(new Set()); setBatchAssignGroupId(null); }}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium" style={{ backgroundColor: '#f3f4f6', color: 'var(--text)' }}>إلغاء</button>
+                </div>
+              )}
+              {/* Check all toggle */}
+              <label className="flex items-center gap-2 px-1 py-1 cursor-pointer">
+                <input type="checkbox"
+                  checked={unassignedStudents.length > 0 && unassignedStudents.every((u: any) => selectedUnassignedIds.has(u.user_id))}
+                  onChange={() => {
+                    if (unassignedStudents.every((u: any) => selectedUnassignedIds.has(u.user_id))) {
+                      setSelectedUnassignedIds(new Set());
+                    } else {
+                      setSelectedUnassignedIds(new Set(unassignedStudents.map((u: any) => u.user_id)));
+                    }
+                  }}
+                  className="accent-blue-600 w-4 h-4 cursor-pointer" />
+                <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>تحديد الكل</span>
+              </label>
+              {unassignedStudents.map((u: any) => {
+                const isSelected = selectedUnassignedIds.has(u.user_id);
+                return (
+                  <div key={u.order_id} className="flex items-center justify-between p-3 rounded-xl text-sm border-2"
+                    style={{
+                      backgroundColor: isSelected ? 'rgba(59,130,246,0.08)' : '#fef2f2',
+                      borderColor: isSelected ? 'rgba(59,130,246,0.3)' : '#fecaca',
+                    }}>
+                    <div className="flex items-center gap-3" onClick={() => {
+                      const next = new Set(selectedUnassignedIds);
+                      if (next.has(u.user_id)) next.delete(u.user_id); else next.add(u.user_id);
+                      setSelectedUnassignedIds(next);
+                    }}>
+                      <input type="checkbox" checked={isSelected} readOnly
+                        className="accent-blue-600 w-4 h-4 cursor-pointer" />
+                      <span className="text-lg">🔴</span>
+                      <div>
+                        <span className="font-medium" style={{ color: 'var(--text)' }}>{u.name}</span>
+                        <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.email}</span>
+                        {u.phone && <span className="mr-2 text-xs" style={{ color: 'var(--text-muted)' }}>{u.phone}</span>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <select
+                        onChange={e => {
+                          const gid = Number(e.target.value);
+                          if (gid) assignStudent(u.user_id, gid);
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-xs border" style={{ backgroundColor: 'white', borderColor: 'var(--border)' }}>
+                        <option value="">تسكين في...</option>
+                        {groups.filter((g: any) => Number(g.is_active) && !g.has_started).map((g: any) => (
+                          <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'})</option>
+                        ))}
+                        {groups.filter((g: any) => Number(g.is_active) && g.has_started).length > 0 && (
+                          <optgroup label="🚀 غير متاح (بدأت)">
+                            {groups.filter((g: any) => Number(g.is_active) && g.has_started).map((g: any) => (
+                              <option key={g.id} value={g.id} disabled>{g.name} — بدأت</option>
+                            ))}
+                          </optgroup>
+                        )}
+                      </select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <select
-                      onChange={e => {
-                        const gid = Number(e.target.value);
-                        if (gid) assignStudent(u.user_id, gid);
-                      }}
-                      className="px-3 py-1.5 rounded-lg text-xs border" style={{ backgroundColor: 'white', borderColor: 'var(--border)' }}>
-                      <option value="">تسكين في...</option>
-                      {groups.filter((g: any) => Number(g.is_active)).map((g: any) => (
-                        <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -844,6 +1220,15 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 : 'الطلاب يظهرون في "غير مسكنين" ويحتاجون تسكين يدوي من المشرف'}
             </p>
           </div>
+          <div className="flex items-center gap-3 py-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={editForm.prevent_overlap} onChange={e => setEditForm({ ...editForm, prevent_overlap: e.target.checked })} className="accent-amber-600 w-4 h-4" />
+              <span className="text-sm font-medium" style={{ color: '#92400e' }}>🔒 منع تداخل المجموعات النشطة</span>
+            </label>
+          </div>
+          <div className="col-span-2 -mt-1 mb-2 p-2.5 rounded-xl text-xs" style={{ backgroundColor: '#fffbeb', border: '1px solid #fde68a' }}>
+            <span style={{ color: '#92400e' }}>عند التفعيل: لا يُسمح بوجود أكثر من مجموعة نشطة (is_active=1) لنفس الكورس في نفس الوقت. أي مجموعة جديدة تُنشأ كـ "غير نشطة" تلقائياً.</span>
+          </div>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
             <input type="file" accept="image/*"
@@ -886,13 +1271,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <input placeholder="الحد الأقصى للطلاب" type="number" value={groupForm.max_students}
             onChange={e => setGroupForm({ ...groupForm, max_students: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
-            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
-            <span style={{ color: 'var(--text-muted)' }}>يُحدد من أول محاضرة</span>
+          <div className="col-span-2 p-3 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b' }}>
+            <span style={{ color: '#92400e' }}>📅</span>
+            <span style={{ color: '#92400e', fontWeight: 500 }}>الموعد يُحدد من تاريخ أول محاضرة</span>
           </div>
-          <input placeholder="تاريخ النهاية" type="date" value={groupForm.end_date}
-            onChange={e => setGroupForm({ ...groupForm, end_date: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <select value={groupForm.status || 'pending'}
             onChange={e => setGroupForm({ ...groupForm, status: e.target.value })}
             className="col-span-2 w-full px-4 py-2.5 rounded-xl border text-sm"
@@ -930,13 +1312,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <input placeholder="الحد الأقصى للطلاب" type="number" value={editGroupForm.max_students}
             onChange={e => setEditGroupForm({ ...editGroupForm, max_students: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
-            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
-            <span style={{ color: 'var(--text-muted)' }}>يُحدد من أول محاضرة</span>
+          <div className="col-span-2 p-3 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b' }}>
+            <span style={{ color: '#92400e' }}>📅</span>
+            <span style={{ color: '#92400e', fontWeight: 500 }}>الموعد يُحدد من تاريخ أول محاضرة</span>
           </div>
-          <input placeholder="تاريخ النهاية" type="date" value={editGroupForm.end_date}
-            onChange={e => setEditGroupForm({ ...editGroupForm, end_date: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <select value={editGroupForm.status || 'pending'}
             onChange={e => setEditGroupForm({ ...editGroupForm, status: e.target.value })}
             className="col-span-2 w-full px-4 py-2.5 rounded-xl border text-sm"
@@ -998,13 +1377,23 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     backgroundColor: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '#fef3c7' : 'var(--bg)',
                     border: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '1px solid #f59e0b' : 'none',
                   }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموعد</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs" style={{ color: 'var(--text-muted)' }}>الموعد</span>
+                      {detailGroup.has_started && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ backgroundColor: '#dbeafe', color: '#1d4ed8' }}>
+                          🚀 بدأت
+                        </span>
+                      )}
+                    </div>
                     <span style={{
                       color: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '#92400e' : 'var(--text)',
                       fontWeight: detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '600' : '400',
                     }}>
                       {detailGroup.schedule_display === 'لم يتم تحديد الميعاد بعد' ? '⚠️ ' : ''}{detailGroup.schedule_display}
                     </span>
+                    {detailGroup.has_started && (
+                      <div className="mt-2 text-xs" style={{ color: '#dc2626' }}>لا يمكن تسكين طلاب جدد في هذه المجموعة لأنها بدأت بالفعل</div>
+                    )}
                   </div>
                 )}
                 {detailGroup.end_date && (
@@ -1034,7 +1423,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>جدول المحاضرات</h4>
-                  <button onClick={() => { setAddLectureModal(true); setLectureForm({ day_of_week: '', time_from: '', time_to: '', topic: '', date: '' }); }}
+                  <button onClick={() => { setAddLectureModal(true); setLectureForm({ date: '', time_from: '', time_to: '', topic: '', location: '' }); }}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>+ إضافة محاضرة</button>
                 </div>
                 {lecturesLoading ? (
@@ -1050,9 +1439,9 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                             <span style={{ color: Number(lec.is_completed) ? '#16a34a' : '#dc2626' }}>
                               {Number(lec.is_completed) ? '✅' : '⬜'}
                             </span>
-                            <span style={{ color: 'var(--text)' }}>{daysOfWeek[Number(lec.day_of_week)] || lec.day_of_week}</span>
+                            <span style={{ color: 'var(--text)' }}>{lec.day_of_week_name || daysOfWeek[Number(lec.day_of_week)] || ''}</span>
                           </div>
-                          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{lec.time_from} - {lec.time_to}</span>
+                          {lec.location && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>📍 {lec.location}</span>}
                           {lec.topic && <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>{lec.topic}</span>}
                           {lec.date && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{lec.date}</span>}
                         </div>
@@ -1061,6 +1450,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                             className="px-2 py-1 rounded text-xs font-medium"
                             style={{ backgroundColor: Number(lec.is_completed) ? '#fef2f2' : '#f0fdf4', color: Number(lec.is_completed) ? '#dc2626' : '#16a34a' }}>
                             {Number(lec.is_completed) ? 'إلغاء' : 'إتمام'}
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); openAttendanceModal(lec); }}
+                            className="px-2 py-1 rounded text-xs font-medium"
+                            style={{ backgroundColor: '#fefce8', color: '#a16207' }}>
+                            🎯 حضور
                           </button>
                           <button onClick={() => { startEditLecture(lec); }}
                             className="px-2 py-1 rounded text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
@@ -1078,7 +1472,12 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
                 <div className="flex items-center justify-between mb-2">
                   <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>الطلاب المسجلين</h4>
-                  <button onClick={openAddStudent} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>+ إضافة طالب</button>
+                  <button onClick={openAddStudent} disabled={detailGroup?.has_started}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                    style={{ backgroundColor: detailGroup?.has_started ? '#9ca3af' : 'var(--primary)' }}
+                    title={detailGroup?.has_started ? 'المجموعة بدأت ولا يمكن إضافة طلاب جدد' : ''}>
+                    {detailGroup?.has_started ? '🚀 بدأت' : '+ إضافة طالب'}
+                  </button>
                 </div>
                 {groupStudentsLoading ? (
                   <div className="animate-spin h-5 w-5 border-2 rounded-full mx-auto" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
@@ -1115,9 +1514,16 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   <select value={moveTargetGroupId || ''} onChange={e => setMoveTargetGroupId(Number(e.target.value))}
                     className="flex-1 px-3 py-1.5 rounded-lg text-xs border" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
                     <option value="">اختر مجموعة...</option>
-                    {otherGroups.map((g: any) => (
+                    {otherGroups.filter((g: any) => !g.has_started).map((g: any) => (
                       <option key={g.id} value={g.id}>{g.name} ({g.student_count || 0}/{g.max_students || '∞'})</option>
                     ))}
+                    {otherGroups.filter((g: any) => g.has_started).length > 0 && (
+                      <optgroup label="🚀 غير متاح (بدأت)">
+                        {otherGroups.filter((g: any) => g.has_started).map((g: any) => (
+                          <option key={g.id} value={g.id} disabled>{g.name} — بدأت</option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                   <button onClick={moveStudent} disabled={!moveTargetGroupId || movingStudent}
                     className="px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ backgroundColor: 'var(--primary)' }}>
@@ -1142,24 +1548,28 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       {/* ===================== LECTURE MODALS ===================== */}
       <Modal open={addLectureModal} onClose={() => setAddLectureModal(false)} title="إضافة محاضرة">
         <div className="space-y-3">
-          <select value={lectureForm.day_of_week} onChange={e => setLectureForm({ ...lectureForm, day_of_week: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
-            <option value="">اختر اليوم</option>
-            {daysOfWeek.map((d, i) => <option key={i} value={i}>{d}</option>)}
-          </select>
-          <div className="grid grid-cols-2 gap-3">
-            <input type="time" placeholder="من" value={lectureForm.time_from}
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تاريخ بداية المحاضرة *</label>
+            <input type="date" value={lectureForm.date}
+              onChange={e => setLectureForm({ ...lectureForm, date: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            {lectureForm.date && (
+              <p className="text-xs mt-1" style={{ color: 'var(--primary)' }}>
+                📅 {(() => { const d = new Date(lectureForm.date + 'T12:00:00'); return daysOfWeek[d.getDay()]; })()}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>وقت البداية</label>
+            <input type="time" value={lectureForm.time_from}
               onChange={e => setLectureForm({ ...lectureForm, time_from: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-            <input type="time" placeholder="إلى" value={lectureForm.time_to}
-              onChange={e => setLectureForm({ ...lectureForm, time_to: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
-          <input placeholder="الموضوع" value={lectureForm.topic}
+          <input placeholder="الموضوع (اختياري)" value={lectureForm.topic}
             onChange={e => setLectureForm({ ...lectureForm, topic: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="التاريخ" type="date" value={lectureForm.date}
-            onChange={e => setLectureForm({ ...lectureForm, date: e.target.value })}
+          <input placeholder="المكان (اختياري)" value={lectureForm.location}
+            onChange={e => setLectureForm({ ...lectureForm, location: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <button onClick={saveLecture} disabled={lectureSaving}
             className="w-full py-3 rounded-xl font-medium disabled:opacity-50"
@@ -1171,24 +1581,28 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
       <Modal open={editLectureModal} onClose={() => setEditLectureModal(false)} title="تعديل المحاضرة">
         <div className="space-y-3">
-          <select value={editLectureForm.day_of_week} onChange={e => setEditLectureForm({ ...editLectureForm, day_of_week: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
-            <option value="">اختر اليوم</option>
-            {daysOfWeek.map((d, i) => <option key={i} value={i}>{d}</option>)}
-          </select>
-          <div className="grid grid-cols-2 gap-3">
-            <input type="time" placeholder="من" value={editLectureForm.time_from}
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تاريخ بداية المحاضرة *</label>
+            <input type="date" value={editLectureForm.date}
+              onChange={e => setEditLectureForm({ ...editLectureForm, date: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            {editLectureForm.date && (
+              <p className="text-xs mt-1" style={{ color: 'var(--primary)' }}>
+                📅 {(() => { const d = new Date(editLectureForm.date + 'T12:00:00'); return daysOfWeek[d.getDay()]; })()}
+              </p>
+            )}
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>وقت البداية</label>
+            <input type="time" value={editLectureForm.time_from || ''}
               onChange={e => setEditLectureForm({ ...editLectureForm, time_from: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-            <input type="time" placeholder="إلى" value={editLectureForm.time_to}
-              onChange={e => setEditLectureForm({ ...editLectureForm, time_to: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
-          <input placeholder="الموضوع" value={editLectureForm.topic}
+          <input placeholder="الموضوع (اختياري)" value={editLectureForm.topic}
             onChange={e => setEditLectureForm({ ...editLectureForm, topic: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="التاريخ" type="date" value={editLectureForm.date}
-            onChange={e => setEditLectureForm({ ...editLectureForm, date: e.target.value })}
+          <input placeholder="المكان (اختياري)" value={editLectureForm.location || ''}
+            onChange={e => setEditLectureForm({ ...editLectureForm, location: e.target.value })}
             className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           <button onClick={saveEditLecture} disabled={editLectureSaving}
             className="w-full py-3 rounded-xl font-medium disabled:opacity-50"
@@ -1264,6 +1678,147 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         message="حذف هذه المحاضرة نهائياً؟"
         confirmLabel="حذف" variant="danger"
         onConfirm={deleteLecture} onCancel={() => setConfirmDeleteLecture(null)} />
+
+      <ConfirmDialog open={confirmBatchDelete}
+        title={`حذف ${selectedGroupIds.size} مجموعة`}
+        message={`حذف ${selectedGroupIds.size} مجموعة نهائياً؟ سيتم إزالة جميع الطلاب والمحاضرات منها.`}
+        confirmLabel="حذف الكل" variant="danger"
+        loading={batchLoading}
+        onConfirm={batchDelete} onCancel={() => setConfirmBatchDelete(false)} />
+
+      <Modal open={batchStatusModal} onClose={() => setBatchStatusModal(false)} title={`تغيير حالة ${selectedGroupIds.size} مجموعة`}>
+        <div className="space-y-3">
+          <select value={batchStatusValue} onChange={e => setBatchStatusValue(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-xl border text-sm"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+            <option value="pending">قيد الانتظار</option>
+            <option value="active">نشطة</option>
+            <option value="completed">مكتملة</option>
+            <option value="cancelled">ملغية</option>
+          </select>
+          <button onClick={batchUpdateStatus} disabled={batchLoading}
+            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            {batchLoading ? 'جاري...' : 'تغيير الحالة'}
+          </button>
+        </div>
+      </Modal>
+
+      <Modal open={batchInstructorModal} onClose={() => setBatchInstructorModal(false)} title={`تغيير مدرب ${selectedGroupIds.size} مجموعة`}>
+        <div className="space-y-3">
+          <input placeholder="اسم المدرب الجديد" value={batchInstructorValue}
+            onChange={e => setBatchInstructorValue(e.target.value)}
+            className="w-full px-4 py-2.5 rounded-xl border text-sm"
+            style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          <button onClick={batchUpdateInstructor} disabled={!batchInstructorValue.trim() || batchLoading}
+            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            {batchLoading ? 'جاري...' : 'تغيير المدرب'}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ===================== ATTENDANCE QR MODAL ===================== */}
+      <Modal open={!!attendanceModal} onClose={closeAttendanceModal} title={attendanceModal ? `🎯 حضور: ${attendanceModal.topic}` : 'تسجيل الحضور'} size="lg">
+        {attendanceModal && (
+          <div className="flex flex-col items-center gap-4 py-4">
+            {attendanceActive ? (
+              <>
+                <div className="w-full flex items-center justify-between px-2 mb-2">
+                  <span className="text-sm font-medium" style={{ color: '#16a34a' }}>🟢 تسجيل الحضور نشط</span>
+                  <span className="text-sm font-bold" style={{ color: attendanceCountdown <= 3 ? '#dc2626' : 'var(--text)' }}>
+                    {attendanceCountdown} ثانية
+                  </span>
+                </div>
+
+                <div className="bg-white p-4 rounded-2xl shadow-sm">
+                    {attendanceQR && (
+                    <QRCodeSVG value={attendanceQR} size={240} level="M" />
+                  )}
+                </div>
+
+                <div className="text-center">
+                  <p className="text-3xl font-mono font-bold tracking-[0.5em] text-center px-6 py-3 rounded-xl select-all"
+                    style={{ backgroundColor: 'var(--bg)', color: 'var(--text)', letterSpacing: '0.5em' }}>
+                    {attendanceCode || '------'}
+                  </p>
+                  <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                    امسح QR بالكاميرا أو أدخل الكود يدوياً
+                  </p>
+                </div>
+
+                {/* Attendance summary */}
+                {attendanceSummary && (
+                  <div className="w-full grid grid-cols-3 gap-3 mt-2">
+                    <div className="text-center p-3 rounded-xl" style={{ backgroundColor: '#f0fdf4' }}>
+                      <p className="text-lg font-bold" style={{ color: '#16a34a' }}>{attendanceSummary.present}</p>
+                      <p className="text-xs" style={{ color: '#16a34a' }}>حاضر</p>
+                    </div>
+                    <div className="text-center p-3 rounded-xl" style={{ backgroundColor: '#fef2f2' }}>
+                      <p className="text-lg font-bold" style={{ color: '#dc2626' }}>{attendanceSummary.total - attendanceSummary.present}</p>
+                      <p className="text-xs" style={{ color: '#dc2626' }}>غائب</p>
+                    </div>
+                    <div className="text-center p-3 rounded-xl" style={{ backgroundColor: '#eff6ff' }}>
+                      <p className="text-lg font-bold" style={{ color: '#2563eb' }}>{attendanceSummary.percentage}%</p>
+                      <p className="text-xs" style={{ color: '#2563eb' }}>نسبة الحضور</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Student list */}
+                {attendanceStudents.length > 0 && (
+                  <div className="w-full mt-2">
+                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>قائمة الحضور:</p>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {attendanceStudents.map((s: any) => (
+                        <div key={s.userId} className="flex items-center justify-between px-3 py-2 rounded-xl text-xs"
+                          style={{ backgroundColor: 'var(--bg)' }}>
+                          <span style={{ color: 'var(--text)' }}>{s.name}</span>
+                          <span style={{ color: Number(s.attended) ? '#16a34a' : '#dc2626' }}>
+                            {Number(s.attended) ? `✅ ${s.method === 'manual' ? 'يدوي' : 'QR'}` : '⬜'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 w-full mt-3">
+                  <button onClick={() => fetchCurrentCode(attendanceModal.lectureId)} disabled={attendanceLoading}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                    🔄 تحديث
+                  </button>
+                  <button onClick={() => stopAttendance(attendanceModal.lectureId)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white"
+                    style={{ backgroundColor: '#dc2626' }}>
+                    ⏹ إيقاف التسجيل
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="text-center py-8">
+                {attendanceLoading ? (
+                  <>
+                    <div className="animate-spin h-8 w-8 border-2 rounded-full mx-auto mb-3" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+                    <p style={{ color: 'var(--text-muted)' }}>جاري بدء تسجيل الحضور...</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-4xl mb-3">🎯</p>
+                    <p className="font-bold mb-1" style={{ color: 'var(--text)' }}>انتهت جلسة تسجيل الحضور</p>
+                    <button onClick={() => startAttendance(attendanceModal!.lectureId)}
+                      className="mt-3 px-6 py-2.5 rounded-xl text-sm font-medium text-white"
+                      style={{ backgroundColor: 'var(--primary)' }}>
+                      🔄 إعادة البدء
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

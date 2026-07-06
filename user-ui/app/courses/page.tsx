@@ -13,6 +13,8 @@ interface Course {
   title_en: string;
   price: number;
   category_name_ar?: string;
+  group_max?: number;
+  group_current?: number;
 }
 
 export default function CoursesPage() {

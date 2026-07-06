@@ -1,7 +1,7 @@
 import { sql } from '../db/helpers';
 import { createNotification } from './notificationService';
 
-const DAY_NAMES_AR = ['السبت', 'الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة'];
+const DAY_NAMES_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function formatRow(r: any): any {
   const out = { ...r };
@@ -24,9 +24,42 @@ function getDayNameFromDate(dateStr: string): string {
 }
 
 // ──────────────────────────────────────────────
+// Rule helpers
+// ──────────────────────────────────────────────
+
+async function groupHasStarted(groupId: number): Promise<boolean> {
+  const result = await sql('SELECT COUNT(*) as cnt FROM lectures WHERE group_id=?', groupId);
+  return Number(result.rows[0].cnt) > 0;
+}
+
+async function checkPendingExists(courseId: number, excludeGroupId?: number): Promise<boolean> {
+  let query = "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND status='pending'";
+  const params: any[] = [courseId];
+  if (excludeGroupId) { query += ' AND id!=?'; params.push(excludeGroupId); }
+  const result = await sql(query, ...params);
+  return Number(result.rows[0].cnt) > 0;
+}
+
+async function checkPreventOverlap(courseId: number, excludeGroupId?: number): Promise<boolean> {
+  const course = await sql('SELECT prevent_overlap FROM courses WHERE id=?', courseId);
+  if (course.rows.length === 0) return false;
+  if (!Number((course.rows[0] as any).prevent_overlap)) return false;
+  let query = 'SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND is_active=1';
+  const params: any[] = [courseId];
+  if (excludeGroupId) { query += ' AND id!=?'; params.push(excludeGroupId); }
+  const result = await sql(query, ...params);
+  return Number(result.rows[0].cnt) > 0;
+}
+
+// ──────────────────────────────────────────────
 // Status helpers
 // ──────────────────────────────────────────────
 async function recalcStatus(groupId: number): Promise<void> {
+  // Read old state before update
+  const old = await sql('SELECT is_complete, course_id FROM groups WHERE id=?', groupId);
+  const wasComplete = old.rows.length > 0 ? Number((old.rows[0] as any).is_complete) : 0;
+  const courseId = old.rows.length > 0 ? Number((old.rows[0] as any).course_id) : null;
+
   const lec = await sql(
     'SELECT COUNT(*) as total, SUM(is_completed) as done FROM lectures WHERE group_id=?',
     groupId,
@@ -39,6 +72,31 @@ async function recalcStatus(groupId: number): Promise<void> {
     'UPDATE groups SET is_complete=?, status=? WHERE id=?',
     isComplete, status, groupId,
   );
+
+  // Auto-create next group when transitioning to completed and prevent_overlap is ON
+  if (isComplete && !wasComplete && courseId) {
+    const course = await sql('SELECT prevent_overlap, instructor, max_students FROM courses WHERE id=?', courseId);
+    if (course.rows.length > 0 && Number((course.rows[0] as any).prevent_overlap)) {
+      // Deactivate the completed group
+      await sql('UPDATE groups SET is_active=0 WHERE id=?', groupId);
+
+      // Create a new pending group
+      const groupCount = await sql(
+        "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
+        courseId,
+      );
+      const nextNum = Number(groupCount.rows[0].cnt) + 1;
+      const instructor = (course.rows[0] as any).instructor || '';
+      const maxStudents = (course.rows[0] as any).max_students || null;
+
+      await sql(
+        `INSERT INTO groups (course_id, name, instructor_name, max_students, status, is_active)
+         VALUES (?,?,?,?,'pending',1)`,
+        courseId, `مجموعة ${nextNum}`, instructor, maxStudents,
+      );
+    }
+  }
+
   // Sync start_date from earliest lecture
   const dates = await sql(
     'SELECT MIN(date) as first_date FROM lectures WHERE group_id=? AND date IS NOT NULL',
@@ -69,6 +127,7 @@ async function enrich(group: any): Promise<any> {
   group.lecture_progress = { total, done };
   const cnt = await sql('SELECT COUNT(*) as cnt FROM group_students WHERE group_id=?', group.id);
   group.student_count = Number(cnt.rows[0].cnt);
+  group.has_started = all.length > 0;
   return group;
 }
 
@@ -126,13 +185,19 @@ export async function createGroup(data: {
     if (course.rows.length > 0) instructor = (course.rows[0] as any).instructor || '';
   }
 
+  // Prevent duplicate pending groups for the same course
+  const hasPending = await checkPendingExists(course_id);
+  if (hasPending) throw { status: 400, message: 'يوجد مجموعة قيد الانتظار بالفعل لهذا الكورس' };
+
   const groupStatus = ['active', 'completed', 'cancelled'].includes(status || '') ? status : 'pending';
+  const hasOverlap = await checkPreventOverlap(course_id);
+  const isActive = hasOverlap ? 0 : 1;
 
   const result = await sql(
-    `INSERT INTO groups (course_id, name, zoom_link, end_date, instructor_name, location, max_students, status)
-     VALUES (?,?,?,?,?,?,?,?)`,
+    `INSERT INTO groups (course_id, name, zoom_link, end_date, instructor_name, location, max_students, status, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
     course_id, name, zoom_link || null, end_date || null,
-    instructor, location || null, max_students || null, groupStatus,
+    instructor, location || null, max_students || null, groupStatus, isActive,
   );
   return Number(result.lastInsertRowid);
 }
@@ -147,6 +212,30 @@ export async function updateGroup(id: number, data: {
   is_active?: number;
   status?: string;
 }): Promise<void> {
+  // Prevent activating if another active group exists in the same course
+  if (data.is_active !== undefined && Number(data.is_active)) {
+    const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
+    if (grp.rows.length > 0) {
+      const courseId = Number(grp.rows[0].course_id);
+      const hasOverlap = await checkPreventOverlap(courseId, id);
+      if (hasOverlap) {
+        throw { status: 400, message: 'يوجد مجموعة نشطة بالفعل لهذا الكورس، قم بتعطيلها أولاً' };
+      }
+    }
+  }
+
+  // Prevent setting to pending if another pending group exists
+  if (data.status === 'pending') {
+    const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
+    if (grp.rows.length > 0) {
+      const courseId = Number(grp.rows[0].course_id);
+      const hasPending = await checkPendingExists(courseId, id);
+      if (hasPending) {
+        throw { status: 400, message: 'يوجد مجموعة قيد الانتظار بالفعل لهذا الكورس' };
+      }
+    }
+  }
+
   const sets: string[] = [];
   const params: any[] = [];
   const fields: (keyof typeof data)[] = ['name', 'zoom_link', 'end_date', 'instructor_name', 'location', 'max_students', 'is_active', 'status'];
@@ -160,11 +249,80 @@ export async function updateGroup(id: number, data: {
 }
 
 export async function deleteGroup(id: number): Promise<void> {
-  await sql('DELETE FROM group_student_history WHERE group_id=?', id);
-  await sql('DELETE FROM lecture_attendance WHERE lecture_id IN (SELECT id FROM lectures WHERE group_id=?)', id);
-  await sql('DELETE FROM lectures WHERE group_id=?', id);
-  await sql('DELETE FROM group_students WHERE group_id=?', id);
+  const safeDelete = async (query: string, ...params: any[]) => {
+    try { await sql(query, ...params); } catch { /* table may not exist */ }
+  };
+  await safeDelete('DELETE FROM group_student_history WHERE group_id=?', id);
+  await safeDelete('DELETE FROM lecture_attendance WHERE lecture_id IN (SELECT id FROM lectures WHERE group_id=?)', id);
+  await safeDelete('DELETE FROM lectures WHERE group_id=?', id);
+  await safeDelete('DELETE FROM group_students WHERE group_id=?', id);
   await sql('DELETE FROM groups WHERE id=?', id);
+}
+
+// ──────────────────────────────────────────────
+// Batch operations
+// ──────────────────────────────────────────────
+
+export async function batchDeleteGroups(ids: number[]): Promise<number> {
+  let deleted = 0;
+  for (const id of ids) {
+    try { await deleteGroup(id); deleted++; } catch { /* skip failed */ }
+  }
+  return deleted;
+}
+
+export async function batchToggleGroups(ids: number[], isActive: boolean): Promise<number> {
+  let updated = 0;
+  const val = isActive ? 1 : 0;
+  for (const id of ids) {
+    try {
+      // Only check overlap when activating
+      if (val) {
+        const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
+        if (grp.rows.length > 0) {
+          const courseId = Number(grp.rows[0].course_id);
+          const hasOverlap = await checkPreventOverlap(courseId, id);
+          if (hasOverlap) continue; // skip — another active group exists
+        }
+      }
+      await sql('UPDATE groups SET is_active=? WHERE id=?', val, id);
+      updated++;
+    } catch { /* skip */ }
+  }
+  return updated;
+}
+
+export async function batchUpdateGroupStatus(ids: number[], status: string): Promise<number> {
+  if (!['active', 'completed', 'cancelled', 'pending'].includes(status)) {
+    throw { status: 400, message: `Invalid status: ${status}` };
+  }
+  let updated = 0;
+  for (const id of ids) {
+    try {
+      // Skip if this would create duplicate pending
+      if (status === 'pending') {
+        const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
+        if (grp.rows.length > 0) {
+          const hasPending = await checkPendingExists(Number(grp.rows[0].course_id), id);
+          if (hasPending) continue;
+        }
+      }
+      await sql('UPDATE groups SET status=? WHERE id=?', status, id);
+      updated++;
+    } catch { /* skip */ }
+  }
+  return updated;
+}
+
+export async function batchUpdateGroupInstructor(ids: number[], instructorName: string): Promise<number> {
+  let updated = 0;
+  for (const id of ids) {
+    try {
+      await sql('UPDATE groups SET instructor_name=? WHERE id=?', instructorName, id);
+      updated++;
+    } catch { /* skip */ }
+  }
+  return updated;
 }
 
 // ──────────────────────────────────────────────
@@ -181,6 +339,9 @@ export async function getGroupStudents(groupId: number): Promise<any[]> {
 }
 
 export async function addStudentsToGroup(groupId: number, userIds: number[], movedBy?: number): Promise<number> {
+  const hasStarted = await groupHasStarted(groupId);
+  if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل — تمتلك محاضرات مسجلة' };
+
   let added = 0;
   for (const userId of userIds) {
     const exists = await sql(
@@ -219,6 +380,10 @@ export async function moveStudent(sourceGroupId: number, userId: number, targetG
   const tgt = await sql('SELECT course_id, max_students FROM groups WHERE id=? AND is_active=1', targetGroupId);
   if (tgt.rows.length === 0) throw { status: 404, message: 'Target group not found or inactive' };
   const tgtCourseId = Number((tgt.rows[0] as any).course_id);
+
+  // Check if target group has started
+  const targetHasStarted = await groupHasStarted(targetGroupId);
+  if (targetHasStarted) throw { status: 400, message: 'لا يمكن نقل طالب إلى مجموعة بدأت بالفعل' };
   if (srcCourseId !== tgtCourseId) throw { status: 400, message: 'Groups must belong to the same course' };
 
   const count = await sql('SELECT COUNT(*) as cnt FROM group_students WHERE group_id=?', targetGroupId);
@@ -239,15 +404,37 @@ export async function moveStudent(sourceGroupId: number, userId: number, targetG
 
 export async function getMyGroups(userId: number): Promise<any[]> {
   const result = await sql(
-    `SELECT g.*, c.id as course_id, c.title_ar, c.title_en
+    `SELECT g.*, c.id as course_id, c.title_ar, c.title_en, c.image_url
      FROM group_students gs
      JOIN groups g ON gs.group_id=g.id
      JOIN courses c ON g.course_id=c.id
-     WHERE gs.user_id=? AND g.is_active=1
+     WHERE gs.user_id=?
      ORDER BY g.created_at DESC`,
     userId,
   );
   return Promise.all(result.rows.map(enrich));
+}
+
+export async function getMyGroupLectures(userId: number, groupId: number): Promise<any[]> {
+  const member = await sql(
+    'SELECT 1 FROM group_students WHERE group_id=? AND user_id=?',
+    groupId, userId,
+  );
+  if (member.rows.length === 0) throw { status: 403, message: 'غير مصرح لك بالوصول إلى هذه المجموعة' };
+
+  const result = await sql(
+    `SELECT l.*, COALESCE(la.attended,0) as attended, la.attended_at as attended_at_time,
+            la.verification_method as attendance_method
+     FROM lectures l
+     LEFT JOIN lecture_attendance la ON la.lecture_id=l.id AND la.user_id=?
+     WHERE l.group_id=? ORDER BY l.sort_order ASC, l.id ASC`,
+    userId, groupId,
+  );
+  return result.rows.map((r: any) => ({
+    ...r,
+    day_of_week_name: getDayNameFromDate(r.date),
+    attended: Boolean(Number(r.attended)),
+  }));
 }
 
 export async function getMyLatestGroup(userId: number): Promise<any | null> {
@@ -300,17 +487,18 @@ export async function autoAssignStudent(studentId: number, courseId: number): Pr
   if (avail.rows.length > 0) {
     groupId = Number(avail.rows[0].id);
   } else {
-    // Create new group
+    // Create new group via createGroup to respect prevent_overlap
     const groupCount = await sql(
       "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
       courseId,
     );
     const nextNum = Number(groupCount.rows[0].cnt) + 1;
-    const ins = await sql(
-      `INSERT INTO groups (course_id, name, max_students, status) VALUES (?,?,?,'pending')`,
-      courseId, `مجموعة ${nextNum}`, maxStudents,
-    );
-    groupId = Number(ins.lastInsertRowid);
+    groupId = await createGroup({
+      course_id: courseId,
+      name: `مجموعة ${nextNum}`,
+      max_students: maxStudents,
+      status: 'pending',
+    });
   }
 
   await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, studentId);
@@ -375,7 +563,28 @@ export async function getUnassignedByCourse(courseId: number): Promise<any[]> {
   return result.rows.map(formatRow);
 }
 
+export async function batchAssignStudents(userIds: number[], groupId: number, movedBy?: number): Promise<number> {
+  const hasStarted = await groupHasStarted(groupId);
+  if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل' };
+
+  let assigned = 0;
+  for (const userId of userIds) {
+    try {
+      const exists = await sql('SELECT 1 FROM group_students WHERE group_id=? AND user_id=?', groupId, userId);
+      if (exists.rows.length === 0) {
+        await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, userId);
+        await addHistory(userId, groupId, 'batch_assigned', movedBy);
+        assigned++;
+      }
+    } catch { /* skip duplicate */ }
+  }
+  return assigned;
+}
+
 export async function assignStudentToGroup(userId: number, groupId: number, movedBy?: number): Promise<void> {
+  const hasStarted = await groupHasStarted(groupId);
+  if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل' };
+
   const exists = await sql(
     'SELECT 1 FROM group_students WHERE group_id=? AND user_id=?',
     groupId, userId,
@@ -415,21 +624,41 @@ export async function getGroupLectures(groupId: number): Promise<any[]> {
   }));
 }
 
+function todayDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export async function addLecture(groupId: number, data: {
   date?: string;
   time_from?: string;
   time_to?: string;
   topic?: string;
+  location?: string;
   zoom_link?: string;
 }): Promise<number> {
   if (!data.date) throw { status: 400, message: 'Lecture date required' };
+
+  // Enforce date ordering — new lecture must be >= last lecture's date
+  const lastDate = await sql(
+    'SELECT MAX(date) as max_date FROM lectures WHERE group_id=? AND date IS NOT NULL',
+    groupId,
+  );
+  const maxDate = lastDate.rows.length > 0 ? (lastDate.rows[0] as any).max_date : null;
+  if (maxDate && data.date < maxDate) {
+    throw { status: 400, message: 'تاريخ المحاضرة الجديدة يجب أن لا يسبق تاريخ آخر محاضرة' };
+  }
+
   const maxSort = await sql('SELECT COALESCE(MAX(sort_order),0) as m FROM lectures WHERE group_id=?', groupId);
   const nextSort = Number(maxSort.rows[0].m) + 1;
   const result = await sql(
-    `INSERT INTO lectures (group_id, date, time_from, time_to, topic, zoom_link, sort_order)
-     VALUES (?,?,?,?,?,?,?)`,
+    `INSERT INTO lectures (group_id, date, time_from, time_to, topic, location, zoom_link, sort_order)
+     VALUES (?,?,?,?,?,?,?,?)`,
     groupId, data.date || null, data.time_from || '', data.time_to || '',
-    data.topic || '', data.zoom_link || null, nextSort,
+    data.topic || '', data.location || '', data.zoom_link || null, nextSort,
   );
   await recalcStatus(groupId);
   return Number(result.lastInsertRowid);
@@ -440,12 +669,51 @@ export async function updateLecture(groupId: number, lectureId: number, data: {
   time_from?: string;
   time_to?: string;
   topic?: string;
+  location?: string;
   zoom_link?: string;
   is_completed?: number;
 }): Promise<void> {
+  const today = todayDateString();
+
+  // Fetch current lecture to check ordering & completion rules
+  const current = await sql('SELECT date, sort_order FROM lectures WHERE id=?', lectureId);
+  if (current.rows.length === 0) throw { status: 404, message: 'Lecture not found' };
+
+  const newDate = data.date !== undefined ? data.date : (current.rows[0] as any).date;
+
+  // Prevent completing a lecture before its date
+  if (data.is_completed !== undefined && data.is_completed) {
+    if (newDate && newDate > today) {
+      throw { status: 400, message: 'لا يمكن إكمال محاضرة قبل تاريخها' };
+    }
+  }
+
+  // Enforce date ordering on update
+  if (data.date !== undefined) {
+    // Check previous lecture (sort_order < current, max sort_order)
+    const prev = await sql(
+      `SELECT date FROM lectures WHERE group_id=? AND sort_order < ? AND id!=?
+       ORDER BY sort_order DESC LIMIT 1`,
+      groupId, (current.rows[0] as any).sort_order, lectureId,
+    );
+    if (prev.rows.length > 0 && (prev.rows[0] as any).date && data.date < (prev.rows[0] as any).date) {
+      throw { status: 400, message: 'تاريخ المحاضرة يجب أن لا يسبق تاريخ المحاضرة التي قبلها' };
+    }
+
+    // Check next lecture (sort_order > current, min sort_order)
+    const next = await sql(
+      `SELECT date FROM lectures WHERE group_id=? AND sort_order > ? AND id!=?
+       ORDER BY sort_order ASC LIMIT 1`,
+      groupId, (current.rows[0] as any).sort_order, lectureId,
+    );
+    if (next.rows.length > 0 && (next.rows[0] as any).date && data.date > (next.rows[0] as any).date) {
+      throw { status: 400, message: 'تاريخ المحاضرة يجب أن لا يتجاوز تاريخ المحاضرة التي بعدها' };
+    }
+  }
+
   const sets: string[] = [];
   const params: any[] = [];
-  const fields: (keyof typeof data)[] = ['date', 'time_from', 'time_to', 'topic', 'zoom_link'];
+  const fields: (keyof typeof data)[] = ['date', 'time_from', 'time_to', 'topic', 'location', 'zoom_link'];
   for (const f of fields) {
     if (data[f] !== undefined) { sets.push(`${f}=?`); params.push(data[f]); }
   }
@@ -460,10 +728,19 @@ export async function updateLecture(groupId: number, lectureId: number, data: {
 }
 
 export async function toggleLectureComplete(groupId: number, lectureId: number): Promise<number> {
-  const lec = await sql('SELECT is_completed FROM lectures WHERE id=?', lectureId);
+  const lec = await sql('SELECT is_completed, date FROM lectures WHERE id=?', lectureId);
   if (lec.rows.length === 0) throw { status: 404, message: 'Lecture not found' };
   const current = Number(lec.rows[0].is_completed);
   const newVal = current ? 0 : 1;
+
+  if (newVal) {
+    const today = todayDateString();
+    const lecDate = (lec.rows[0] as any).date;
+    if (lecDate && lecDate > today) {
+      throw { status: 400, message: 'لا يمكن إكمال محاضرة قبل تاريخها' };
+    }
+  }
+
   await sql(
     'UPDATE lectures SET is_completed=?, completed_at=? WHERE id=?',
     newVal, newVal ? new Date().toISOString() : null, lectureId,
@@ -521,4 +798,12 @@ export async function bulkSetAttendance(lectureId: number, records: { user_id: n
   for (const r of records) {
     await setAttendance(lectureId, r.user_id, r.attended);
   }
+}
+
+export async function getLectureById(lectureId: number): Promise<any | null> {
+  const result = await sql(
+    `SELECT l.*, g.course_id FROM lectures l JOIN groups g ON l.group_id=g.id WHERE l.id=?`,
+    lectureId,
+  );
+  return result.rows.length > 0 ? result.rows[0] : null;
 }

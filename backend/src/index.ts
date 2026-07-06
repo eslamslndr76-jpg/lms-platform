@@ -18,6 +18,7 @@ import lecturesRouter from './routes/lectures';
 import cartRouter from './routes/cart';
 import aiSettingsRouter from './routes/aiSettings';
 import notificationsRouter from './routes/notifications';
+import attendanceRouter from './routes/attendance';
 import adminOrdersRouter from './routes/admin/orders';
 import adminUsersRouter from './routes/admin/users';
 import adminCertificatesRouter from './routes/admin/certificates';
@@ -73,6 +74,7 @@ app.use('/api/roles', rolesRouter);
 app.use('/api/certificates', certificatesRouter);
 app.use('/api/lectures', lecturesRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/attendance', attendanceRouter);
 app.use('/api/cart', cartRouter);
 app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/users', adminUsersRouter);
@@ -81,14 +83,22 @@ app.use('/api/admin/unassigned', adminUnassignedRouter);
 
 const PORT = process.env.PORT || 3001;
 
+// Ensure DB is initialized before handling requests
+let dbInitPromise = initializeDatabase();
 if (process.env.NODE_ENV !== 'production') {
-  initializeDatabase().then(() => {
+  dbInitPromise.then(() => {
     app.listen(PORT, () => {
       console.log(`Server running on http://localhost:${PORT}`);
     });
   });
 } else {
-  initializeDatabase().catch(e => console.error('DB init error:', e.message));
+  dbInitPromise.catch(e => console.error('DB init error:', e.message));
 }
+
+// Middleware to wait for DB init on every request
+app.use(async (_req: any, _res: any, next: any) => {
+  try { await dbInitPromise; } catch { /* ignore */ }
+  next();
+});
 
 export default app;

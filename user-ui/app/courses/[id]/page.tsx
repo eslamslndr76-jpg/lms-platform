@@ -25,6 +25,8 @@ interface Course {
   max_students?: number;
   enable_direct_purchase?: number;
   featured?: number;
+  group_max?: number;
+  group_current?: number;
 }
 
 export default function CourseDetailPage() {
@@ -153,6 +155,46 @@ export default function CourseDetailPage() {
               </div>
             ))}
           </div>
+
+          {/* Group Progress Bar */}
+          {(() => {
+            const groupMax = course.group_max;
+            const groupCurrent = course.group_current;
+            if (!groupMax || groupMax <= 0) return null;
+            const pct = Math.round((groupCurrent! / groupMax) * 100);
+            const remaining = groupMax - groupCurrent!;
+            const isFull = groupCurrent! >= groupMax;
+            let barColor: string, msg: string;
+            if (isFull) {
+              barColor = '#dc2626';
+              msg = '🏆 المجموعة الحالية اكتملت — احجز الآن لتكون أول شخص في المجموعة الجديدة';
+            } else if (pct >= 80) {
+              barColor = '#dc2626';
+              msg = `🔥 لم يتبق سوى ${remaining} مقاعد فقط! احجز الآن قبل نفادها`;
+            } else if (pct >= 50) {
+              barColor = '#d97706';
+              msg = `⚡ تم حجز أكثر من النصف! ${remaining} مقاعد متبقية`;
+            } else {
+              barColor = '#16a34a';
+              msg = `🟢 مازال متسع — ${remaining} مقعد متاح`;
+            }
+            return (
+              <div className="rounded-2xl p-4 mb-6 border" style={{ backgroundColor: `${barColor}08`, borderColor: `${barColor}30` }}>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>
+                    {isFull ? 'المجموعة الحالية' : 'المجموعة الحالية'}
+                  </span>
+                  <span className="text-xs font-bold" style={{ color: barColor }}>
+                    {groupCurrent} / {groupMax} طالب
+                  </span>
+                </div>
+                <div className="w-full h-3 rounded-full overflow-hidden" style={{ backgroundColor: `${barColor}15` }}>
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: barColor }} />
+                </div>
+                <p className="text-xs mt-2 text-center font-medium" style={{ color: barColor }}>{msg}</p>
+              </div>
+            );
+          })()}
 
           {/* Description */}
           <div className="mb-6">

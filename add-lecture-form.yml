@@ -1,0 +1,113 @@
+- generic [ref=f2e1]:
+  - generic [ref=f2e2]:
+    - complementary [ref=f2e5]:
+      - img "مركز تدريب نادى ريادة الاعمال" [ref=f2e8]
+      - paragraph [ref=f2e10]: Admin · admin
+      - navigation [ref=f2e11]:
+        - link "📊 لوحة التحكم" [ref=f2e12] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f2e13]: 📊
+          - generic [ref=f2e14]: لوحة التحكم
+        - link "📚 الكورسات" [ref=f2e15] [cursor=pointer]:
+          - /url: /courses
+          - generic [ref=f2e16]: 📚
+          - generic [ref=f2e17]: الكورسات
+        - link "📋 الطلبات" [ref=f2e18] [cursor=pointer]:
+          - /url: /orders
+          - generic [ref=f2e19]: 📋
+          - generic [ref=f2e20]: الطلبات
+        - link "👥 الطلاب" [ref=f2e21] [cursor=pointer]:
+          - /url: /students
+          - generic [ref=f2e22]: 👥
+          - generic [ref=f2e23]: الطلاب
+        - link "🎓 الشهادات" [ref=f2e24] [cursor=pointer]:
+          - /url: /certificates
+          - generic [ref=f2e25]: 🎓
+          - generic [ref=f2e26]: الشهادات
+        - link "💰 المالية" [ref=f2e27] [cursor=pointer]:
+          - /url: /financials
+          - generic [ref=f2e28]: 💰
+          - generic [ref=f2e29]: المالية
+        - link "🔐 الموظفين" [ref=f2e30] [cursor=pointer]:
+          - /url: /employees
+          - generic [ref=f2e31]: 🔐
+          - generic [ref=f2e32]: الموظفين
+        - link "⚙️ الإعدادات" [ref=f2e33] [cursor=pointer]:
+          - /url: /settings
+          - generic [ref=f2e34]: ⚙️
+          - generic [ref=f2e35]: الإعدادات
+      - generic [ref=f2e36]:
+        - link "👤 حسابي" [ref=f2e37] [cursor=pointer]:
+          - /url: /account
+          - generic [ref=f2e38]: 👤
+          - generic [ref=f2e39]: حسابي
+        - button "🌙 وضع مظلم" [ref=f2e40] [cursor=pointer]:
+          - generic [ref=f2e41]: 🌙
+          - generic [ref=f2e42]: وضع مظلم
+        - button "تسجيل خروج" [ref=f2e43] [cursor=pointer]
+    - main [ref=f2e44]:
+      - generic [ref=f2e45]:
+        - generic [ref=f2e46]:
+          - generic [ref=f2e47]:
+            - link "→ العودة إلى الكورسات" [ref=f2e48] [cursor=pointer]:
+              - /url: /courses
+            - heading "التجاره الالكترونية" [level=1] [ref=f2e49]
+          - generic [ref=f2e50]:
+            - button "🔴 تعطيل" [ref=f2e51] [cursor=pointer]
+            - button "🗑️ حذف" [ref=f2e52] [cursor=pointer]
+        - generic [ref=f2e53]:
+          - button "معلومات الكورس" [ref=f2e54] [cursor=pointer]
+          - button "المجموعات (1)" [ref=f2e95] [cursor=pointer]
+          - button "الطلاب المسجلين" [ref=f2e56] [cursor=pointer]
+          - button "غير مسكنين (0)" [ref=f2e57] [cursor=pointer]
+        - generic [ref=f2e96]:
+          - generic [ref=f2e97]:
+            - heading "المجموعات (1)" [level=2] [ref=f2e98]
+            - button "+ إضافة مجموعة" [ref=f2e99] [cursor=pointer]
+          - generic [ref=f2e100]:
+            - combobox [ref=f2e101]:
+              - option "كل الحالات" [selected]
+              - option "⏳ قيد الانتظار"
+              - option "🟢 نشط"
+              - option "✅ مكتمل"
+              - option "❌ ملغي"
+            - combobox [ref=f2e102]:
+              - option "كل المدربين" [selected]
+              - option "اسلام هاني"
+          - generic [ref=f2e103]:
+            - textbox "بحث..." [ref=f2e105]
+            - table [ref=f2e107]:
+              - rowgroup [ref=f2e108]
+              - rowgroup [ref=f2e118]
+            - paragraph [ref=f2e136]: 1 نتيجة
+        - generic [ref=f2e139]:
+          - generic [ref=f2e140]:
+            - heading "مجموعة اختبار" [level=3] [ref=f2e141]
+            - button "✕" [ref=f2e142] [cursor=pointer]
+          - generic [ref=f2e143]:
+            - generic [ref=f2e144]:
+              - button "معلومات" [ref=f2e145] [cursor=pointer]
+              - button "جدول المحاضرات" [ref=f2e146] [cursor=pointer]
+              - button "الطلاب" [ref=f2e147] [cursor=pointer]
+            - generic [ref=f2e171]:
+              - generic [ref=f2e172]
+              - generic [ref=f2e175]
+            - generic [ref=f2e168]:
+              - button "تعديل المجموعة" [ref=f2e169] [cursor=pointer]
+              - button "🗑️ حذف" [ref=f2e170] [cursor=pointer]
+        - generic [ref=f2e199]:
+          - generic [ref=f2e200]:
+            - heading "إضافة محاضرة" [level=3] [ref=f2e201]
+            - button "✕" [ref=f2e202] [cursor=pointer]
+          - generic [ref=f2e203]:
+            - generic [ref=f2e204]:
+              - generic [ref=f2e205]: تاريخ بداية المحاضرة *
+              - textbox [ref=f2e206]
+            - generic [ref=f2e207]:
+              - generic [ref=f2e208]: وقت البداية
+              - textbox [ref=f2e209]
+            - textbox "الموضوع (اختياري)" [ref=f2e210]
+            - textbox "المكان (اختياري)" [ref=f2e211]
+            - button "حفظ" [ref=f2e212] [cursor=pointer]
+    - button "🤖" [ref=f2e94] [cursor=pointer]
+  - alert [ref=f2e4]
