@@ -1,11 +1,5 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "agents": {
-    "paths": [".opencode/agents"]
-  },
-  "skills": {
-    "paths": [".agents/skills"]
-  },
   "mcp": {
     "playwright": {
       "type": "local",
