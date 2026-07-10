@@ -32,6 +32,7 @@ const allowedOrigins = [
   'https://lms-admin-x2-hims.vercel.app',
   'https://lms-user-psi.vercel.app',
   'https://lms-user-x2-hims.vercel.app',
+  'https://lms-user.vercel.app',
 ].filter(Boolean);
 
 app.use(cors({
