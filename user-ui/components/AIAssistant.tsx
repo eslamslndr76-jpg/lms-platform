@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { usePathname } from 'next/navigation';
 import { api } from '../lib/api';
 
 interface Message {
@@ -34,7 +35,11 @@ const QUICK_ACTIONS = [
   { label: 'كورساتي', message: 'اعرض الكورسات المتاحة' },
 ];
 
+const PUBLIC_PATHS = ['/', '/login', '/register', '/register/success'];
+
 export default function AIAssistant() {
+  const pathname = usePathname();
+  const isPublic = PUBLIC_PATHS.includes(pathname);
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', text: 'مرحباً! كيف يمكنني مساعدتك؟' },
@@ -68,6 +73,7 @@ export default function AIAssistant() {
 
   return (
     <>
+    {isPublic ? null : (<>
       <button onClick={() => setOpen(!open)}
         className="fixed bottom-5 left-5 z-50 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 transition">
         {open ? '✕' : '🧠'}
@@ -120,6 +126,7 @@ export default function AIAssistant() {
           </div>
         </div>
       )}
+    </>)}
     </>
   );
 }
