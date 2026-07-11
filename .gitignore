@@ -14,3 +14,10 @@ test-results/
 skills-lock.json
 backend/scripts/
 *.tsbuildinfo
+
+# Root-level artifacts (screenshots, snapshots, mockups)
+/*.png
+/*.yml
+/*.yaml
+dev-server.log
+.opencode/

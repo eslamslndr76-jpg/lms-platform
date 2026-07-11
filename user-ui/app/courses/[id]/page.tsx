@@ -235,7 +235,7 @@ export default function CourseDetailPage() {
           {/* Extra Info */}
           <div className="rounded-2xl p-4 text-sm leading-relaxed" style={{ backgroundColor: 'var(--bg)' }}>
             <p style={{ color: 'var(--text-muted)' }}>
-              الكورس مقدم من <strong>فريق تدريب X2</strong> بالتعاون مع <strong>المعهد العالي للعلوم الإدارية بالقطامية (HIMS)</strong>.
+              الكورس مقدم من <strong>نادي ريادة الاعمال</strong> بالتعاون مع <strong>المعهد العالي للعلوم الإدارية بالقطامية (HIMS)</strong>.
               بعد إتمام الكورس بنجاح، ستحصل على شهادة معتمدة برقم تسلسلي يمكن التحقق منه.
             </p>
           </div>

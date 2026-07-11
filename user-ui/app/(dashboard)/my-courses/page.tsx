@@ -40,6 +40,9 @@ interface Lecture {
   zoom_link?: string;
   is_completed: number;
   sort_order: number;
+  attended?: number;
+  attended_at_time?: string;
+  attendance_active?: number;
 }
 
 const statusColors: Record<string, string> = {
@@ -66,6 +69,18 @@ function getProgressColor(pct: number): string {
   if (pct >= 80) return '#dc2626';
   if (pct >= 50) return '#d97706';
   return '#16a34a';
+}
+
+function formatTime(dt: string): string {
+  if (!dt) return '';
+  try {
+    const d = new Date(dt);
+    const hours = d.getHours();
+    const mins = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hours >= 12 ? 'م' : 'ص';
+    const h12 = hours % 12 || 12;
+    return `${h12}:${mins} ${ampm}`;
+  } catch { return dt; }
 }
 
 function getProgressLabel(pct: number, isComplete: boolean): string {
@@ -97,6 +112,12 @@ export default function MyCoursesPage() {
   const qrVideoRef = useRef<HTMLDivElement>(null);
   const qrScannerRef = useRef<any>(null);
 
+  // Polling + toast
+  const [toastVisible, setToastVisible] = useState(false);
+  const [toastData, setToastData] = useState<{ topic: string; groupName: string; lectureId: number; groupId: number } | null>(null);
+  const toastTimerRef = useRef<any>(null);
+  const prevPollRef = useRef<string>('');
+
   const load = async () => {
     if (!user) return;
     setLoading(true);
@@ -115,6 +136,64 @@ export default function MyCoursesPage() {
     if (!authLoading && !user) router.push('/login');
     if (user) load();
   }, [user, authLoading, router]);
+
+  // Poll for active attendance
+  useEffect(() => {
+    if (!user) return;
+    const poll = async () => {
+      try {
+        const data = await api('/api/attendance/poll');
+        const key = JSON.stringify(data.active);
+        if (key === prevPollRef.current) return;
+        prevPollRef.current = key;
+        if (data.hasActive && data.active?.length > 0) {
+          const first = data.active[0];
+          setToastData({ topic: first.topic || 'بدون عنوان', groupName: first.groupName || '', lectureId: first.lectureId, groupId: first.groupId });
+          setToastVisible(true);
+          // Auto-expand the relevant group's lectures
+          setExpandedLectures(prev => {
+            if (prev[first.groupId]) return prev;
+            // Trigger loading lectures for the group
+            api(`/api/groups/my/${first.groupId}/lectures`).then(lecs => {
+              setExpandedLectures(p => ({ ...p, [first.groupId]: lecs || [] }));
+            }).catch(() => {});
+            return prev;
+          });
+          // Browser notification
+          if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
+            new Notification('📢 تم فتح باب الحضور!', {
+              body: `${first.topic || 'محاضرة'} - ${first.groupName} — افتح الصفحة للتسجيل`,
+              icon: '/favicon.ico',
+            });
+          }
+        }
+      } catch { /* ignore polling errors */ }
+    };
+    const interval = setInterval(poll, 10000);
+    // Initial poll after a short delay
+    const initial = setTimeout(poll, 2000);
+    return () => { clearInterval(interval); clearTimeout(initial); };
+  }, [user]);
+
+  // Auto-hide toast after 5 seconds
+  useEffect(() => {
+    if (toastVisible) {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => setToastVisible(false), 5000);
+    }
+    return () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); };
+  }, [toastVisible]);
+
+  // Request notification permission on first user interaction (not auto on mount)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('Notification' in window) || Notification.permission !== 'default') return;
+    const requestPerm = () => {
+      Notification.requestPermission();
+      document.removeEventListener('click', requestPerm);
+    };
+    document.addEventListener('click', requestPerm, { once: true });
+    return () => document.removeEventListener('click', requestPerm);
+  }, []);
 
   const filtered = groups.filter(g => {
     if (activeFilter === 'active') return g.status === 'active' || g.status === 'pending';
@@ -410,14 +489,19 @@ export default function MyCoursesPage() {
                               {lec.location && <span className="hidden sm:inline" style={{ color: 'var(--text-muted)' }}>📍{lec.location}</span>}
                             </div>
                             <div className="flex items-center gap-2 shrink-0">
-                              {(lec as any).attended ? (
-                                <span className="text-green-600 font-medium">✅ حاضر</span>
-                              ) : (
+                              {lec.attended ? (
+                                <span className="text-green-600 font-medium flex items-center gap-1">
+                                  ✅ حاضر
+                                  {lec.attended_at_time && <span className="text-[10px] opacity-70">{formatTime(lec.attended_at_time)}</span>}
+                                </span>
+                              ) : Number(lec.attendance_active) === 1 ? (
                                 <button onClick={(e) => { e.stopPropagation(); openAttendance(lec.id, group.id); }}
-                                  className="px-2 py-1 rounded text-[10px] font-medium"
+                                  className="px-2 py-1 rounded text-[10px] font-medium animate-pulse"
                                   style={{ backgroundColor: '#fefce8', color: '#a16207' }}>
                                   🎯 تسجيل حضور
                                 </button>
+                              ) : (
+                                <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>⏳ غير متاح</span>
                               )}
                               <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{lec.date}</span>
                             </div>
@@ -439,6 +523,27 @@ export default function MyCoursesPage() {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ========== ATTENDANCE TOAST ========== */}
+      {toastVisible && toastData && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-[60] animate-slide-down">
+          <div onClick={() => { setToastVisible(false); openAttendance(toastData.lectureId, toastData.groupId); }}
+            className="flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl border text-sm font-medium cursor-pointer"
+            style={{ backgroundColor: '#fefce8', borderColor: '#fde047', color: '#854d0e' }}>
+            <span className="text-xl">📢</span>
+            <div className="flex-1 min-w-0">
+              <p className="font-bold">تم فتح باب الحضور!</p>
+              <p className="text-xs mt-0.5 opacity-80">
+                {toastData.topic} — {toastData.groupName}
+              </p>
+              <p className="text-xs mt-1 font-bold" style={{ color: '#a16207' }}>
+                🎯 اضغط هنا لتسجيل الحضور
+              </p>
+            </div>
+            <button onClick={(e) => { e.stopPropagation(); setToastVisible(false); }} className="shrink-0 text-lg opacity-60 hover:opacity-100">✕</button>
+          </div>
         </div>
       )}
 

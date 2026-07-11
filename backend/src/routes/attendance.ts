@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 import { requireRole, ADMIN, EMPLOYEE, STUDENT } from '../middleware/rbac';
+import { notifyGroupStudents } from '../services/notificationService';
 
 const router = Router();
 
@@ -19,59 +20,16 @@ function getQRData(lectureId: number, code: string): string {
   return JSON.stringify({ v: 1, l: lectureId, c: code, t: Math.floor(Date.now() / 1000) });
 }
 
-function todayDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-async function getLectureTimeWindow(lectureId: number): Promise<{ lectureDate: string; timeFrom: string; timeTo: string } | null> {
-  const result = await sql('SELECT date, time_from, time_to FROM lectures WHERE id=?', lectureId);
-  if (result.rows.length === 0) return null;
-  const row = result.rows[0] as any;
-  return { lectureDate: row.date, timeFrom: row.time_from || '', timeTo: row.time_to || '' };
-}
-
-function isWithinTimeWindow(lectureDate: string, timeFrom: string, timeTo: string): { ok: boolean; message: string } {
-  const today = todayDateString();
-
-  if (lectureDate !== today) {
-    return { ok: false, message: 'الحضور متاح فقط في يوم المحاضرة' };
-  }
-
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-
-  if (timeFrom && timeTo) {
-    const [fh, fm] = timeFrom.split(':').map(Number);
-    const [th, tm] = timeTo.split(':').map(Number);
-    const fromMinutes = fh * 60 + fm;
-    const toMinutes = th * 60 + tm;
-
-    const graceBefore = 30;
-    const graceAfter = 60;
-    const windowStart = fromMinutes - graceBefore;
-    const windowEnd = toMinutes + graceAfter;
-
-    if (currentMinutes < windowStart) {
-      return { ok: false, message: 'لم يحن وقت تسجيل الحضور بعد' };
-    }
-    if (currentMinutes > windowEnd) {
-      return { ok: false, message: 'انتهى وقت تسجيل الحضور' };
-    }
-  }
-
-  return { ok: true, message: '' };
-}
-
 // POST /api/attendance/:lectureId/start - Admin starts attendance session
 router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
     const lectureId = Number(req.params.lectureId);
-    const lecture = await sql('SELECT id, date FROM lectures WHERE id=?', lectureId);
+    const lecture = await sql(
+      'SELECT l.id, l.date, l.topic, l.group_id, g.name as group_name FROM lectures l JOIN groups g ON l.group_id=g.id WHERE l.id=?',
+      lectureId,
+    );
     if (lecture.rows.length === 0) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
+    const lecRow = lecture.rows[0] as any;
 
     const seed = randomBytes(16).toString('hex');
     const now = new Date();
@@ -81,6 +39,16 @@ router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), a
       `UPDATE lectures SET attendance_active=1, attendance_seed=?, attendance_started_at=datetime('now'), attendance_expires_at=? WHERE id=?`,
       seed, expiresAt.toISOString(), lectureId,
     );
+
+    // Notify all students in the group
+    const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
+    notifyGroupStudents(
+      lecRow.group_id,
+      '📢 تم فتح باب الحضور!',
+      `باب الحضور مفتوح الآن لمحاضرة${topicText} — وجه الكاميرا نحو QR code أو أدخل الكود`,
+      'success',
+      '/my-courses',
+    ).catch(() => {});
 
     const nowSec = Math.floor(Date.now() / 1000);
     const code = generateCode(lectureId, seed, nowSec);
@@ -169,14 +137,6 @@ router.post('/mark', authMiddleware, requireRole(STUDENT), async (req: Request, 
       return res.status(403).json({ success: false, error: 'غير مسجل في هذه المجموعة' });
     }
 
-    // Time window check
-    if (row.date) {
-      const check = isWithinTimeWindow(row.date, row.time_from || '', row.time_to || '');
-      if (!check.ok) {
-        return res.status(400).json({ success: false, error: check.message });
-      }
-    }
-
     // Verify code (check current and previous time period for grace)
     const nowSec = Math.floor(Date.now() / 1000);
     const expectedCurrent = generateCode(lectureId, seed, nowSec);
@@ -211,6 +171,37 @@ router.post('/mark', authMiddleware, requireRole(STUDENT), async (req: Request, 
     res.json({ success: true, message: '✅ تم تسجيل الحضور بنجاح' });
   } catch {
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء تسجيل الحضور' });
+  }
+});
+
+// GET /api/attendance/poll - Student polls for active attendance lectures
+router.get('/poll', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+
+    const result = await sql(
+      `SELECT l.id as lectureId, l.topic, l.group_id as groupId, g.name as groupName
+       FROM lectures l
+       JOIN groups g ON l.group_id=g.id
+       JOIN group_students gs ON gs.group_id=g.id AND gs.user_id=?
+       WHERE l.attendance_active=1
+       AND l.id NOT IN (
+         SELECT lecture_id FROM lecture_attendance WHERE user_id=? AND attended=1
+       )`,
+      userId, userId,
+    );
+
+    res.json({
+      active: result.rows.map((r: any) => ({
+        lectureId: Number(r.lectureId),
+        groupId: Number(r.groupId),
+        groupName: r.groupName,
+        topic: r.topic || '',
+      })),
+      hasActive: result.rows.length > 0,
+    });
+  } catch {
+    res.status(500).json({ error: 'فشل جلب بيانات الحضور النشط' });
   }
 });
 

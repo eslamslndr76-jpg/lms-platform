@@ -16,7 +16,7 @@ interface Branding {
 }
 
 const defaultBranding: Branding = {
-  systemName: 'نظام إدارة التعلم - تدريب X2',
+  systemName: 'منصة نادي ريادة الاعمال',
   logoHeader: '',
   logoFooter: '',
   favicon: '',
@@ -24,7 +24,7 @@ const defaultBranding: Branding = {
   secondaryColor: '#7c3aed',
   sloganAr: 'جودة . ثقة . امان',
   sloganEn: 'Make Your Power',
-  messageFooter: 'الكورس مقدم من فريق تدريب X2 بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
+  messageFooter: 'هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
 };
 
 const BrandingContext = createContext<Branding>(defaultBranding);

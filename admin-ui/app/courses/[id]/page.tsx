@@ -15,6 +15,17 @@ import { QRCodeSVG } from 'qrcode.react';
 
 const daysOfWeek = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
+function formatTime(dt: string): string {
+  if (!dt) return '';
+  const d = new Date(dt);
+  if (isNaN(d.getTime())) return dt;
+  const hours = d.getHours();
+  const mins = String(d.getMinutes()).padStart(2, '0');
+  const ampm = hours >= 12 ? 'م' : 'ص';
+  const h12 = hours % 12 || 12;
+  return `${h12}:${mins} ${ampm}`;
+}
+
 export default function CourseDetailPage({ params }: { params: { id: string } }) {
   const courseId = Number(params.id);
   const router = useRouter();
@@ -469,6 +480,9 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     if (attendanceTimerRef.current) { clearInterval(attendanceTimerRef.current); attendanceTimerRef.current = null; }
     if (attendanceRefreshRef.current) { clearInterval(attendanceRefreshRef.current); attendanceRefreshRef.current = null; }
   };
+
+  // Cleanup attendance timers on unmount to prevent memory leaks
+  useEffect(() => () => clearAttendanceTimers(), []);
 
   const loadAttendanceReport = async (lectureId: number) => {
     try {
@@ -1774,8 +1788,13 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                         <div key={s.userId} className="flex items-center justify-between px-3 py-2 rounded-xl text-xs"
                           style={{ backgroundColor: 'var(--bg)' }}>
                           <span style={{ color: 'var(--text)' }}>{s.name}</span>
-                          <span style={{ color: Number(s.attended) ? '#16a34a' : '#dc2626' }}>
-                            {Number(s.attended) ? `✅ ${s.method === 'manual' ? 'يدوي' : 'QR'}` : '⬜'}
+                          <span style={{ color: Number(s.attended) ? '#16a34a' : '#dc2626' }} className="flex items-center gap-1">
+                            {Number(s.attended) ? (
+                              <>
+                                ✅ {s.method === 'manual' ? 'يدوي' : 'QR'}
+                                {s.attendedAt && <span className="text-[10px] opacity-70">{formatTime(s.attendedAt)}</span>}
+                              </>
+                            ) : '⬜'}
                           </span>
                         </div>
                       ))}
