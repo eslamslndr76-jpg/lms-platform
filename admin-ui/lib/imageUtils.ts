@@ -1,4 +1,4 @@
-export function compressAndEncode(file: File, maxWidth = 800, quality = 0.7): Promise<string> {
+export function compressAndEncode(file: File, maxWidth = 800, quality = 0.7, format: 'image/jpeg' | 'image/png' = 'image/jpeg'): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -14,7 +14,7 @@ export function compressAndEncode(file: File, maxWidth = 800, quality = 0.7): Pr
         canvas.height = height;
         const ctx = canvas.getContext('2d')!;
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        resolve(canvas.toDataURL(format, format === 'image/jpeg' ? quality : undefined));
       };
       img.onerror = reject;
       img.src = reader.result as string;

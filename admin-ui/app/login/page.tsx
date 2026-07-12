@@ -33,7 +33,9 @@ export default function AdminLoginPage() {
       <div className="rounded-3xl shadow-xl p-8 w-full max-w-sm animate-scale-in" style={{ backgroundColor: 'var(--card)' }}>
         <div className="flex justify-between items-center mb-6">
           {logoHeader ? (
-            <img src={logoHeader} alt={systemName} className="h-8" />
+            <div className="rounded-xl p-0.5 shadow-sm border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+              <img src={logoHeader} alt={systemName} className="h-12" />
+            </div>
           ) : (
             <h1 className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>{systemName}</h1>
           )}

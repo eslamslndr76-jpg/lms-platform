@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useBranding } from './BrandingProvider';
 
 export default function Footer() {
-  const { primaryColor, secondaryColor, sloganAr, sloganEn } = useBranding();
+  const { primaryColor, secondaryColor, sloganAr, sloganEn, logoFooter, systemName } = useBranding();
   const [showBackToTop, setShowBackToTop] = useState(false);
 
   useEffect(() => {
@@ -64,14 +64,20 @@ export default function Footer() {
             {/* Brand Column */}
             <div className="lg:col-span-1">
               <Link href="/" className="inline-block group mb-3">
-                <h3
-                  className="text-xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105 inline-block"
-                  style={{
-                    backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-                  }}
-                >
-                  نادي ريادة الاعمال
-                </h3>
+                {logoFooter ? (
+                  <div className="rounded-xl p-0.5 shadow-sm border inline-block transition-all duration-300 group-hover:scale-105" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                    <img src={logoFooter} alt={systemName} className="h-14 sm:h-16" />
+                  </div>
+                ) : (
+                  <h3
+                    className="text-xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-300 group-hover:scale-105 inline-block"
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
+                    }}
+                  >
+                    نادي ريادة الاعمال
+                  </h3>
+                )}
               </Link>
               <p
                 className="text-sm leading-relaxed mb-3"

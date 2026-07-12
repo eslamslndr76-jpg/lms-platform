@@ -11,6 +11,11 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     const { course_id, amount, receipt_url, payment_method, note_student, sender_phone } = req.body;
     if (!course_id || !amount) return res.status(400).json({ error: 'Course ID and amount required' });
 
+    const course = await sql('SELECT price FROM courses WHERE id=?', course_id);
+    if (course.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+    const actualPrice = Number((course.rows[0] as any).price);
+    if (Number(amount) !== actualPrice) return res.status(400).json({ error: 'Invalid amount' });
+
     if (receipt_url) {
       const result = await sql(
         'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method, notes_student, sender_phone) VALUES (?,?,?,\'pending\',?,?,?,?)',

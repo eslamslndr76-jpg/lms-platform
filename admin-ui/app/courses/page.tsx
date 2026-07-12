@@ -18,7 +18,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: true });
+  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -55,7 +55,7 @@ export default function CoursesPage() {
         body: JSON.stringify({ ...addForm, category_id: addForm.category_id ? Number(addForm.category_id) : null }),
       });
       setAddModal(false);
-      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, auto_assign: true });
+      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
       toast('تم إضافة الكورس', 'success');
       load();
     } catch {
@@ -80,6 +80,7 @@ export default function CoursesPage() {
         instructor: c.instructor || '', materials_url: c.materials_url || '',
         course_mode: c.course_mode || 'online',
         featured: Boolean(Number(c.featured)), enable_direct_purchase: c.enable_direct_purchase !== 0,
+        enable_mobile_sticky_cta: c.enable_mobile_sticky_cta !== 0,
         auto_assign: Boolean(Number(c.auto_assign)),
       });
       setEditModal(true);
@@ -251,6 +252,12 @@ export default function CoursesPage() {
                 <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
               </label>
             </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={addForm.enable_mobile_sticky_cta} onChange={e => setAddForm({ ...addForm, enable_mobile_sticky_cta: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>📱 إظهار شريط الشراء السفلي في الموبايل (ثابت أسفل الشاشة)</span>
+              </label>
+            </div>
             <div>
               <label className="block text-xs mb-2" style={{ color: 'var(--text-muted)' }}>نوع التسكين</label>
               <div className="flex rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
@@ -377,6 +384,12 @@ export default function CoursesPage() {
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={editForm.enable_direct_purchase} onChange={e => setEditForm({ ...editForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
                 <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر (زر &apos;شراء الآن&apos; في صفحة الكورس)</span>
+              </label>
+            </div>
+            <div className="flex items-center gap-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={editForm.enable_mobile_sticky_cta} onChange={e => setEditForm({ ...editForm, enable_mobile_sticky_cta: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+                <span className="text-sm" style={{ color: 'var(--text)' }}>📱 إظهار شريط الشراء السفلي في الموبايل (ثابت أسفل الشاشة)</span>
               </label>
             </div>
             <div>

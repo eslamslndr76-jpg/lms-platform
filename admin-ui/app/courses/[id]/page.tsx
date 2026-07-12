@@ -180,6 +180,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       instructor: course.instructor || '', materials_url: course.materials_url || '',
       course_mode: course.course_mode || 'online',
       featured: Boolean(Number(course.featured)), enable_direct_purchase: course.enable_direct_purchase !== 0,
+      enable_mobile_sticky_cta: course.enable_mobile_sticky_cta !== 0,
       auto_assign: Boolean(Number(course.auto_assign)),
       prevent_overlap: course.prevent_overlap !== undefined ? Boolean(Number(course.prevent_overlap)) : true,
     });
@@ -1198,6 +1199,12 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={editForm.enable_direct_purchase} onChange={e => setEditForm({ ...editForm, enable_direct_purchase: e.target.checked })} className="accent-blue-600 w-4 h-4" />
               <span className="text-sm" style={{ color: 'var(--text)' }}>💳 تفعيل الشراء المباشر</span>
+            </label>
+          </div>
+          <div className="flex items-center gap-3 py-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={editForm.enable_mobile_sticky_cta} onChange={e => setEditForm({ ...editForm, enable_mobile_sticky_cta: e.target.checked })} className="accent-blue-600 w-4 h-4" />
+              <span className="text-sm" style={{ color: 'var(--text)' }}>📱 إظهار شريط الشراء السفلي في الموبايل</span>
             </label>
           </div>
           <div>

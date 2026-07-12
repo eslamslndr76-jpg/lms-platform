@@ -1,561 +1,761 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
-import { Skeleton } from '../../../components/Skeleton';
-import { useBranding } from '../../../components/BrandingProvider';
 import { useAuth } from '../../../lib/auth';
+import { useBranding } from '../../../components/BrandingProvider';
 import { useToast } from '../../../components/Toast';
-import {
-  HeroBanner,
-  StickyBookingBar,
-  TrustBar,
-  InfoGrid,
-  CurriculumAccordion,
-  InstructorCard,
-  FAQAccordion,
-  CourseDetailSkeleton,
-} from '@/components/course-detail';
 
+/* ─── Types ─── */
 interface Course {
   id: number;
   title_ar: string;
   title_en: string;
   description?: string;
   price: number;
-  original_price?: number;
+  image_url?: string;
+  category_id?: number;
   category_name_ar?: string;
   instructor?: string;
-  course_mode?: 'online' | 'offline';
+  course_mode?: string;
   lecture_count?: number;
   lecture_duration?: number;
-  max_students?: number;
-  enable_direct_purchase?: number;
-  featured?: number;
   group_max?: number;
   group_current?: number;
-  image_url?: string;
-  what_you_learn?: string[];
-  requirements?: string[];
-  target_audience?: string[];
+  featured?: number;
+  enable_direct_purchase?: number;
+  enable_mobile_sticky_cta?: number;
 }
 
-interface Module {
-  id: number | string;
-  title: string;
-  description?: string;
-  lessons: Array<{
-    id: number | string;
-    title: string;
-    duration?: string;
-    type?: 'video' | 'reading' | 'quiz' | 'assignment' | 'live';
-    is_free?: boolean;
-    is_completed?: boolean;
-    is_locked?: boolean;
-    description?: string;
-  }>;
-  is_completed?: boolean;
-  progress?: number;
+/* ─── SVG Fallback (large hero variant) ─── */
+function CourseHeroFallback({ seed, mode }: { seed: number; mode?: string }) {
+  const variant = Math.abs(seed) % 3;
+  const vw = 400;
+  const vh = 300;
+  const sc = 'rgba(255,255,255,0.3)';
+  const sc2 = 'rgba(255,255,255,0.18)';
+  const sf = 'rgba(255,255,255,0.1)';
+  const sf2 = 'rgba(255,255,255,0.06)';
+
+  if (variant === 0) {
+    return (
+      <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+        {/* Book */}
+        <path d="M160 200 C160 180 200 170 200 170 C200 170 240 180 240 200 L240 220 C240 220 200 208 200 208 C200 208 160 220 160 220Z" fill={sf} stroke={sc} strokeWidth="2" />
+        <line x1="200" y1="170" x2="200" y2="220" stroke={sc2} strokeWidth="2" />
+        <polygon points="200,110 240,130 200,150 160,130" fill={sf} stroke={sc} strokeWidth="2" />
+        <line x1="200" y1="150" x2="200" y2="170" stroke={sc} strokeWidth="1.5" />
+        <circle cx="200" cy="92" r="14" fill={sc2} stroke={sc} strokeWidth="1.5" />
+        {/* Decorative lines */}
+        <line x1="140" y1="250" x2="260" y2="250" stroke={sc2} strokeWidth="1" />
+        <line x1="150" y1="260" x2="250" y2="260" stroke={sf2} strokeWidth="1" />
+        <line x1="160" y1="270" x2="240" y2="270" stroke={sf2} strokeWidth="1" />
+      </svg>
+    );
+  }
+  if (variant === 1) {
+    return (
+      <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+        {/* Laptop */}
+        <rect x="140" y="130" width="120" height="80" rx="8" fill={sf} stroke={sc} strokeWidth="2" />
+        <rect x="148" y="138" width="104" height="56" rx="4" fill={sf2} />
+        <path d="M140 210 L260 210 L250 230 L150 230Z" fill={sf} stroke={sc} strokeWidth="1.5" />
+        <circle cx="200" cy="166" r="20" fill={sc2} stroke={sc} strokeWidth="1" />
+        <circle cx="200" cy="166" r="8" fill="none" stroke={sc} strokeWidth="1" />
+        <text x="195" y="170" fill={sc} fontSize="10" fontFamily="sans-serif">▶</text>
+        {/* Code brackets */}
+        <text x="170" y="240" fill={sc2} fontSize="11" fontFamily="monospace">&lt;/&gt;</text>
+        <line x1="250" y1="100" x2="270" y2="80" stroke={sc2} strokeWidth="1.5" />
+        <circle cx="275" cy="75" r="3" fill={sc} />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox={`0 0 ${vw} ${vh}`} className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+      {/* Online / Video */}
+      <rect x="150" y="100" width="100" height="80" rx="10" fill={sf} stroke={sc} strokeWidth="2" />
+      <polygon points="210,140 230,155 210,170" fill={sc2} stroke={sc} strokeWidth="1" />
+      {/* Play button */}
+      <circle cx="200" cy="140" r="14" fill="none" stroke={sc} strokeWidth="1.5" />
+      <polygon points="197,133 197,147 207,140" fill={sc} />
+      {/* Signal bars */}
+      <line x1="170" y1="200" x2="170" y2="220" stroke={sc2} strokeWidth="2" strokeLinecap="round" />
+      <line x1="185" y1="195" x2="185" y2="220" stroke={sc2} strokeWidth="2" strokeLinecap="round" />
+      <line x1="200" y1="190" x2="200" y2="220" stroke={sc2} strokeWidth="2" strokeLinecap="round" />
+      <line x1="215" y1="195" x2="215" y2="220" stroke={sc2} strokeWidth="2" strokeLinecap="round" />
+      <line x1="230" y1="200" x2="230" y2="220" stroke={sc2} strokeWidth="2" strokeLinecap="round" />
+      {/* Ce badge */}
+      <text x="260" y="115" fill={sc} fontSize="8" fontFamily="sans-serif">{mode === 'offline' ? '📍' : '📡'}</text>
+    </svg>
+  );
 }
 
+/* ─── Loading Skeleton ─── */
+function CourseDetailSkeleton() {
+  return (
+    <div style={{ backgroundColor: 'var(--bg)' }}>
+      {/* Hero Skeleton */}
+      <div className="relative overflow-hidden" style={{ backgroundColor: 'var(--surface)' }}>
+        <div className="max-w-6xl mx-auto px-4 py-10 md:py-16">
+          {/* Back link */}
+          <div className="skeleton h-5 w-32 rounded-lg mb-6" />
+          <div className="grid md:grid-cols-5 gap-8 items-center">
+            {/* Image placeholder */}
+            <div className="md:col-span-2">
+              <div className="skeleton rounded-3xl" style={{ width: '100%', height: '280px' }} />
+            </div>
+            {/* Info placeholder */}
+            <div className="md:col-span-3 space-y-4">
+              <div className="skeleton h-6 w-24 rounded-lg" />
+              <div className="skeleton h-10 w-full rounded-xl" />
+              <div className="skeleton h-10 w-3/4 rounded-xl" />
+              <div className="skeleton h-5 w-48 rounded-lg" />
+              <div className="flex gap-3 pt-2">
+                <div className="skeleton h-10 w-28 rounded-2xl" />
+                <div className="skeleton h-10 w-28 rounded-2xl" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {/* Stats Skeleton */}
+      <div className="max-w-6xl mx-auto px-4 -mt-6 mb-8">
+        <div className="skeleton h-16 w-full rounded-2xl" />
+      </div>
+      {/* Description Skeleton */}
+      <div className="max-w-6xl mx-auto px-4 pb-16 space-y-4">
+        <div className="skeleton h-8 w-40 rounded-lg" />
+        <div className="skeleton h-5 w-full rounded-lg" />
+        <div className="skeleton h-5 w-full rounded-lg" />
+        <div className="skeleton h-5 w-3/4 rounded-lg" />
+        <div className="skeleton h-5 w-full rounded-lg" />
+        <div className="skeleton h-5 w-1/2 rounded-lg" />
+        {/* CTA skeleton */}
+        <div className="skeleton h-20 w-full rounded-2xl mt-8" />
+      </div>
+    </div>
+  );
+}
+
+/* ─── Error Display ─── */
+function ErrorDisplay({ message, onRetry }: { message: string; onRetry: () => void }) {
+  const { primaryColor } = useBranding();
+  return (
+    <div className="min-h-[70vh] flex items-center justify-center px-4" style={{ backgroundColor: 'var(--bg)' }}>
+      <div className="text-center max-w-md">
+        <div
+          className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl"
+          style={{ backgroundColor: `${primaryColor}15` }}
+        >
+          ⚠️
+        </div>
+        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+          تعذر تحميل الكورس
+        </h2>
+        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+          {message}
+        </p>
+        <div className="flex flex-wrap justify-center gap-3">
+          <button
+            onClick={onRetry}
+            className="px-6 py-3 rounded-xl text-white font-bold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+            style={{ backgroundColor: primaryColor }}
+          >
+            إعادة المحاولة
+          </button>
+          <Link
+            href="/courses"
+            className="px-6 py-3 rounded-xl font-bold border-2 transition-all hover:-translate-y-0.5"
+            style={{ borderColor: primaryColor, color: primaryColor }}
+          >
+            العودة للكورسات
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main Page ─── */
 export default function CourseDetailPage() {
-  const { id } = useParams<{ id: string }>();
+  const params = useParams();
   const router = useRouter();
-  const { user } = useAuth();
-  const { primaryColor, secondaryColor, systemName, sloganAr } = useBranding();
-  const { show } = useToast();
+  const courseId = Number(params.id);
+  const { token, loading: authLoading } = useAuth();
+  const { primaryColor, secondaryColor, sloganAr, sloganEn, systemName } = useBranding();
+  const { show: showToast } = useToast();
+
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [addingToCart, setAddingToCart] = useState(false);
-  const [rePurchaseWarn, setRePurchaseWarn] = useState<{ show: boolean; hasCertificate: boolean }>({ show: false, hasCertificate: false });
-  const [activeTab, setActiveTab] = useState<'overview' | 'curriculum' | 'instructor' | 'faqs' | 'reviews'>('overview');
+  const [purchased, setPurchased] = useState<boolean | null>(null);
+  const [cartLoading, setCartLoading] = useState(false);
+
+  const heroGradient = `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`;
+  const heroGradientSoft = `linear-gradient(135deg, ${primaryColor}08 0%, ${secondaryColor}08 100%)`;
+
+  /* ── Fetch Course ── */
+  const fetchCourse = useCallback(() => {
+    setLoading(true);
+    setError('');
+    api(`/api/courses/${courseId}`)
+      .then((data) => {
+        setCourse(data);
+        // Check enrollment status if authenticated
+        if (token) {
+          api(`/api/orders/my/check/${courseId}`)
+            .then((checkData) => setPurchased(Boolean(checkData.hasPaidOrder)))
+            .catch(() => setPurchased(false));
+        }
+      })
+      .catch((err) => {
+        setError(err.message || 'حدث خطأ غير متوقع');
+      })
+      .finally(() => setLoading(false));
+  }, [courseId, token]);
 
   useEffect(() => {
-    api(`/api/courses/${id}`).then(setCourse).catch(() => setError('فشل تحميل بيانات الكورس')).finally(() => setLoading(false));
-  }, [id]);
+    if (courseId) fetchCourse();
+  }, [courseId, fetchCourse]);
 
+  /* ── Add to Cart ── */
   const handleAddToCart = async () => {
-    if (!user) { router.push('/login'); return; }
-    setAddingToCart(true);
+    if (!token) {
+      router.push('/login');
+      return;
+    }
+    setCartLoading(true);
     try {
-      await api('/api/cart', { method: 'POST', body: JSON.stringify({ course_id: Number(id) }) });
-      show('تمت الإضافة للسلة! 🛒');
-    } catch (err: any) {
-      show(err.message || 'فشل الإضافة للسلة', 'error');
+      await api('/api/cart', {
+        method: 'POST',
+        body: JSON.stringify({ course_id: courseId }),
+      });
+      showToast('✓ تمت إضافة الكورس إلى السلة', 'success');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'فشلت الإضافة إلى السلة', 'error');
     } finally {
-      setAddingToCart(false);
+      setCartLoading(false);
     }
   };
 
-  const handleBuyNow = async () => {
-    if (!user) { router.push('/login'); return; }
-    try {
-      const check = await api(`/api/orders/my/check/${course!.id}`);
-      if (check.hasPaidOrder || check.hasCertificate) {
-        setRePurchaseWarn({ show: true, hasCertificate: check.hasCertificate });
-        return;
-      }
-    } catch {
-      // proceed anyway if check fails
-    }
-    router.push(`/checkout?course_id=${course!.id}&amount=${course!.price}`);
-  };
+  /* ── Handlers ── */
+  const handleRetry = () => fetchCourse();
 
-  const confirmRePurchase = () => {
-    setRePurchaseWarn({ show: false, hasCertificate: false });
-    router.push(`/checkout?course_id=${course!.id}&amount=${course!.price}`);
-  };
+  /* ── Loading ── */
+  if (loading || (authLoading && token)) return <CourseDetailSkeleton />;
+  if (error) return <ErrorDisplay message={error} onRetry={handleRetry} />;
+  if (!course) return <ErrorDisplay message="لم يتم العثور على الكورس" onRetry={handleRetry} />;
 
-  if (loading) {
-    return <CourseDetailSkeleton />;
-  }
+  /* ── Derived Data ── */
+  const hasSeats =
+    course.group_max && course.group_current !== undefined
+      ? course.group_max - course.group_current
+      : null;
+  const showBuyButton = course.enable_direct_purchase !== 0 && token && !purchased;
+  const showCartButton = token && !purchased;
+  const modeLabel = course.course_mode === 'offline' ? '📍 حضور مباشر' : '💻 أونلاين';
+  const modeColor =
+    course.course_mode === 'offline' ? '#059669' : '#2563eb';
 
-  if (error) {
-    return <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4"><p style={{ color: '#dc2626' }}>{error}</p><Link href="/courses" className="px-4 py-2 rounded-xl text-white text-sm" style={{ backgroundColor: 'var(--primary)' }}>رجوع للكورسات</Link></div>;
-  }
-
-  if (!course) return null;
-
-  // Computed values
-  const totalLessons = course.lecture_count || 0;
-  const totalDuration = course.lecture_duration || 0;
-  const hasGroup = course.group_max && course.group_max > 0;
-  const groupCurrent = course.group_current || 0;
-  const groupMax = course.group_max || 0;
-  const pct = hasGroup ? Math.min(Math.round((groupCurrent / groupMax) * 100), 100) : 0;
-  const isFull = hasGroup && pct >= 100;
-  const isAlmostFull = hasGroup && pct >= 80 && pct < 100;
-  const remaining = groupMax - groupCurrent;
-  const allowDirectPurchase = course.enable_direct_purchase !== 0;
-
-  // Mock data for curriculum (in real app, this would come from API)
-  const mockCurriculum: Module[] = [
-    {
-      id: 1,
-      title: 'الوحدة 1: الأساسيات والمقدمة',
-      description: 'تعلم الأساسيات والمفاهيم الأساسية',
-      lessons: [
-        { id: 1, title: 'مرحباً بكم في الكورس', duration: '10 دقيقة', type: 'video', is_free: true, is_completed: true },
-        { id: 2, title: 'ما ستتعلمه في هذا الكورس', duration: '8 دقيقة', type: 'video', is_free: true },
-        { id: 3, title: 'المتطلبات والأدوات المطلوبة', duration: '12 دقيقة', type: 'reading', is_locked: false },
-        { id: 4, title: 'إعداد بيئة العمل', duration: '20 دقيقة', type: 'video', is_locked: false },
-        { id: 5, title: 'اختبار سريع: الأساسيات', duration: '10 دقيقة', type: 'quiz', is_locked: false },
-      ],
-    },
-    {
-      id: 2,
-      title: 'الوحدة 2: المفاهيم المتقدمة',
-      description: 'التعمق في المفاهيم المتقدمة والتطبيقات العملية',
-      lessons: [
-        { id: 6, title: 'المفهوم الأول المتقدم', duration: '25 دقيقة', type: 'video', is_locked: false },
-        { id: 7, title: 'تطبيق عملي 1', duration: '30 دقيقة', type: 'assignment', is_locked: false },
-        { id: 8, title: 'المفهوم الثاني المتقدم', duration: '22 دقيقة', type: 'video', is_locked: false },
-        { id: 9, title: 'تطبيق عملي 2', duration: '35 دقيقة', type: 'assignment', is_locked: false },
-        { id: 10, title: 'اختبار الوحدة 2', duration: '15 دقيقة', type: 'quiz', is_locked: false },
-      ],
-    },
-    {
-      id: 3,
-      title: 'الوحدة 3: المشاريع العملية',
-      description: 'بناء مشاريع حقيقية من البداية للنهاية',
-      lessons: [
-        { id: 11, title: 'مشروع 1: تطبيق بسيط', duration: '45 دقيقة', type: 'video', is_locked: true },
-        { id: 12, title: 'مشروع 2: تطبيق متوسط', duration: '60 دقيقة', type: 'video', is_locked: true },
-        { id: 13, title: 'مشروع毕业: تطبيق متكامل', duration: '90 دقيقة', type: 'video', is_locked: true },
-        { id: 14, title: 'النشر والاستضافة', duration: '20 دقيقة', type: 'video', is_locked: true },
-        { id: 15, title: 'اختبار نهائي شامل', duration: '30 دقيقة', type: 'quiz', is_locked: true },
-      ],
-    },
-  ];
-
-  const mockInstructor = {
-    name: course.instructor || 'أحمد محمد',
-    title: 'خبير ومدرب معتمد',
-    bio: 'مدرب محترف مع أكثر من 10 سنوات خبرة في المجال. حاصل على شهادات معتمدة دولياً. درب أكثر من 5000 طالب وساعدهم في تحقيق أهدافهم المهنية. شغوف بنقل المعرفة بأسلوب مبسط وعملي.',
-    avatar: undefined,
-    rating: 4.9,
-    studentsCount: 12400,
-    coursesCount: 8,
-    experience: '10+ سنوات',
-    socialLinks: {
-      linkedin: 'https://linkedin.com',
-      twitter: 'https://twitter.com',
-      website: 'https://example.com',
-    },
-    badges: [
-      { icon: '🏆', label: 'أفضل مدرب 2024', color: '#f59e0b' },
-      { icon: '📜', label: 'مدرب معتمد', color: '#16a34a' },
-      { icon: '⭐', label: 'تقييم 4.9/5', color: '#7c3aed' },
-    ],
-  };
-
-  const mockFAQs = [
-    {
-      id: 1,
-      question: 'هل الكورس مناسب للمبتدئين تماماً؟',
-      answer: 'نعم، الكورس مصمم ليبدأ من الصفر وينقلك للمستوى المتقدم تدريجياً. لا تحتاج لأي خبرة سابقة، فقط الحماس والرغبة في التعلم.',
-      category: 'البدء',
-    },
-    {
-      id: 2,
-      question: 'ما هي طرق الدفع المتاحة؟',
-      answer: 'نحن نقبل جميع طرق الدفع: البطاقات الائتمانية (فيزا، ماستركارد)، المحافظ الإلكترونية (أبل باي، جوجل باي)، إنستاباي، والدفع نقداً في منافذنا. كما يتوفر التقسيط عبر فاليو، تمارا، وتمويل.',
-      category: 'الدفع',
-    },
-    {
-      id: 3,
-      question: 'هل أحصل على شهادة معتمدة؟',
-      answer: 'نعم، عند إتمام الكورس بنجاح واجتياز الاختبارات، تحصل على شهادة معتمدة من نادي ريادة الأعمال بالتعاون مع المعهد العالي للعلوم الإدارية (HIMS) برقم تسلسلي يمكن التحقق منه إلكترونياً.',
-      category: 'الشهادة',
-    },
-    {
-      id: 4,
-      question: 'كم مدة الوصول للكورس؟',
-      answer: 'لديك وصول مدى الحياة لمحتوى الكورس بما في ذلك جميع التحديثات المستقبلية. يمكنك التعلم بالسرعة التي تناسبك والعودة للمحتوى في أي وقت.',
-      category: 'الوصول',
-    },
-    {
-      id: 5,
-      question: 'هل يوجد ضمان استرداد المال؟',
-      answer: 'نعم، نقدم ضمان استرداد المال خلال 14 يوماً من تاريخ الشراء إذا لم تكن راضياً عن الكورس، دون أي أسئلة. هدفك هو رضاك وتحقيق أهدافك التعليمية.',
-      category: 'الضمان',
-    },
-    {
-      id: 6,
-      question: 'كيف يمكنني التواصل مع المدرب؟',
-      answer: 'يمكنك طرح أسئلتك في منتدى الكورس المخصص، وسيقوم المدرب أو فريق المساعدين بالرد خلال 24 ساعة. كما يوجد جلسات أسئلة وأجوبة مباشرة أسبوعياً.',
-      category: 'الدعم',
-    },
-    {
-      id: 7,
-      question: 'هل يمكنني تحميل الفيديوهات للمشاهدة دون إنترنت؟',
-      answer: 'نعم، تطبيقنا يدعم تحميل الدروس للمشاهدة أوفلاين. يمكنك تحميل أي درس على جهازك ومشاهدته في أي وقت دون حاجة للإنترنت.',
-      category: 'التقنية',
-    },
-    {
-      id: 8,
-      question: 'هل الكورس يتضمن مشاريع عملية؟',
-      answer: 'بالتأكيد! الكورس يتضمن 3 مشاريع عملية متكاملة تبنيها خطوة بخطوة مع المدرب، بالإضافة لتمارين عملية في كل وحدة. هذه المشاريع ستكون إضافة قوية لملفك المهني.',
-      category: 'المحتوى',
-    },
-  ];
-
-  // Course badges for TrustBar
-  const courseBadges = [
-    { icon: '🏆', label: 'أفضل تقييم', color: '#f59e0b' },
-    { icon: '📜', label: 'شهادة معتمدة', color: '#16a34a' },
-    { icon: '🤝', label: 'شراكة HIMS', color: '#7c3aed' },
-    { icon: '🔄', label: 'تحديثات مجانية', color: '#2563eb' },
-  ];
-
-  // Tabs config
-  const tabs = [
-    { id: 'overview', label: 'نظرة عامة', icon: '📋', count: null },
-    { id: 'curriculum', label: 'المحتوى', icon: '📚', count: totalLessons },
-    { id: 'instructor', label: 'المدرب', icon: '🧑‍🏫', count: null },
-    { id: 'faqs', label: 'الأسئلة', icon: '❓', count: mockFAQs.length },
-    { id: 'reviews', label: 'التقييمات', icon: '⭐', count: 0 },
-  ];
+  const enableMobileStickyCta =
+    course.enable_mobile_sticky_cta !== 0 &&
+    purchased !== true;
 
   return (
-    <div className="min-h-screen max-w-4xl mx-auto">
-      {/* Hero Banner */}
-      <HeroBanner course={course} />
+    <div style={{ backgroundColor: 'var(--bg)', paddingBottom: enableMobileStickyCta ? '88px' : '0' }}>
+      {/* ==================== HERO ==================== */}
+      <section className="relative overflow-hidden border-b" style={{ borderColor: 'var(--border)', background: heroGradientSoft }}>
+        {/* Floating orbs */}
+        <div className="absolute -top-24 -right-24 w-80 h-80 rounded-full opacity-[0.05] pointer-events-none animate-float" style={{ background: primaryColor }} />
+        <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full opacity-[0.04] pointer-events-none animate-float" style={{ background: secondaryColor, animationDelay: '2.5s' }} />
 
-      {/* Content */}
-      <div className="-mt-6 relative px-4 pb-12 md:pb-20">
-        <div className="rounded-t-3xl p-4 md:p-6" style={{ backgroundColor: 'var(--card)' }}>
-          {/* Sticky Booking Bar will be rendered in sidebar */}
+        <div className="max-w-6xl mx-auto px-4 py-8 md:py-14 relative z-10">
+          {/* Back link */}
+          <Link
+            href="/courses"
+            className="inline-flex items-center gap-1.5 text-xs font-bold mb-6 transition-opacity hover:opacity-70"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            ← العودة للكورسات
+          </Link>
 
-          <div className="lg:grid lg:grid-cols-12 lg:gap-6 lg:mt-6">
-            {/* Main Content */}
-            <div className="lg:col-span-8 lg:pr-4">
-              {/* Trust Bar */}
-              <TrustBar
-                stats={{
-                  students: 12400,
-                  rating: 4.9,
-                  reviews: 847,
-                  completionRate: 94,
+          <div className="grid md:grid-cols-5 gap-8 items-center">
+            {/* ── Image / Visual ── */}
+            <div className="md:col-span-2 relative">
+              <div
+                className="relative rounded-3xl overflow-hidden shadow-2xl"
+                style={{
+                  backgroundColor: `${primaryColor}10`,
+                  border: `1px solid ${primaryColor}20`,
+                  aspectRatio: '4/3',
                 }}
-                badges={courseBadges}
-                testimonials={[
-                  { name: 'أحمد علي', role: 'مهندس برمجيات', avatar: 'أ', content: 'كورس ممتاز جداً، المدرب يشرح بأسلوب مبسط وعملي. المشاريع كانت إضافة قوية لملفي.', rating: 5 },
-                  { name: 'فاطمة الزهراء', role: 'طالب جامعي', avatar: 'ف', content: 'أفضل استثمار قمت به. الدعم الفني سريع والشهادة معتمدة ومعترف بها.', rating: 5 },
-                  { name: 'محمد عبدالله', role: 'مصمم واجهات', avatar: 'م', content: 'المحتوى منظم ومحدث. تعلمت مهارات جديدة استطع تطبيقها مباشرة في عملي.', rating: 5 },
-                ]}
-              />
-
-              {/* Tab Navigation */}
-              <div className="mb-6" role="tablist" aria-label="أقسام الكورس">
-                <div className="flex flex-wrap gap-2 lg:gap-3 p-1 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  {tabs.map((tab) => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id as typeof activeTab)}
-                      className={`flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 ${
-                        activeTab === tab.id
-                          ? 'text-white shadow-lg'
-                          : 'text-[var(--text-muted)] hover:text-[var(--text)]'
-                      }`}
-                      style={{
-                        backgroundColor: activeTab === tab.id ? primaryColor : 'transparent',
-                      }}
-                      role="tab"
-                      aria-selected={activeTab === tab.id}
-                      aria-controls={`panel-${tab.id}`}
-                    >
-                      <span aria-hidden="true">{tab.icon}</span>
-                      {tab.label}
-                      {tab.count !== null && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{
-                          backgroundColor: activeTab === tab.id ? 'rgba(255,255,255,0.2)' : 'var(--bg)',
-                          color: activeTab === tab.id ? 'white' : 'var(--text-muted)',
-                        }}>
-                          {tab.count}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Tab Panters */}
-              <div className="space-y-6">
-                {/* Overview Tab */}
-                <div
-                  id="panel-overview"
-                  role="tabpanel"
-                  aria-labelledby="tab-overview"
-                  hidden={activeTab !== 'overview'}
-                  className="animate-fade-up"
-                >
-                  {/* Description */}
-                  <section className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                        <span aria-hidden="true">📖</span>
-                      </div>
-                      <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>عن الكورس</h3>
-                    </div>
-                    <div className="prose prose-ar max-w-none" style={{ color: 'var(--text-secondary)', lineHeight: '1.9' }}>
-                      <p>{course.description || 'لا يوجد وصف متاح لهذا الكورس. تواصل معنا للمزيد من المعلومات.'}</p>
-                    </div>
-                  </section>
-
-                  {/* What You'll Learn */}
-                  {course.what_you_learn && course.what_you_learn.length > 0 && (
-                    <section className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                      <div className="flex items-center gap-3 mb-5">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                          <span aria-hidden="true">🎯</span>
-                        </div>
-                        <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>ماذا ستتعلم</h3>
-                      </div>
-                      <ul className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {course.what_you_learn.map((item, i) => (
-                          <li key={i} className="flex items-center gap-3 p-3 rounded-xl transition-all hover:shadow-md" style={{ backgroundColor: 'var(--bg)' }}>
-                            <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
-                            </div>
-                            <span style={{ color: 'var(--text)' }}>{item}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {/* Requirements */}
-                  {course.requirements && course.requirements.length > 0 && (
-                    <section className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                      <div className="flex items-center gap-3 mb-5">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                          <span aria-hidden="true">📋</span>
-                        </div>
-                        <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>المتطلبات</h3>
-                      </div>
-                      <ul className="space-y-2">
-                        {course.requirements.map((req, i) => (
-                          <li key={i} className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                            <span className="text-lg" aria-hidden="true">✓</span>
-                            <span style={{ color: 'var(--text-secondary)' }}>{req}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
-                  )}
-
-                  {/* Target Audience */}
-                  {course.target_audience && course.target_audience.length > 0 && (
-                    <section className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                      <div className="flex items-center gap-3 mb-5">
-                        <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                          <span aria-hidden="true">🎯</span>
-                        </div>
-                        <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>هذا الكورس مناسب لـ</h3>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {course.target_audience.map((audience, i) => (
-                          <span key={i} className="px-4 py-2 rounded-xl text-sm font-medium" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                            {audience}
-                          </span>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {/* Quick Info Grid */}
-                  <section className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                        <span aria-hidden="true">⚡</span>
-                      </div>
-                      <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>معلومات سريعة</h3>
-                    </div>
-                    <InfoGrid
-                      cards={[
-                        { icon: '📚', label: 'إجمالي الدروس', value: totalLessons, color: primaryColor },
-                        { icon: '⏱', label: 'إجمالي الساعات', value: `${totalDuration} ساعة`, color: '#16a34a' },
-                        { icon: '🎓', label: 'المستوى', value: 'جميع المستويات', color: '#7c3aed' },
-                        { icon: '🌐', label: 'اللغة', value: 'العربية', color: '#f59e0b' },
-                        { icon: '📜', label: 'الشهادة', value: 'معتمدة', color: '#16a34a' },
-                        { icon: '🔄', label: 'التحديثات', value: 'مجانية مدى الحياة', color: '#2563eb' },
-                      ]}
-                      columns={3}
-                    />
-                  </section>
-                </div>
-
-                {/* Curriculum Tab */}
-                <div
-                  id="panel-curriculum"
-                  role="tabpanel"
-                  aria-labelledby="tab-curriculum"
-                  hidden={activeTab !== 'curriculum'}
-                  className="animate-fade-up"
-                >
-                  <CurriculumAccordion
-                    modules={mockCurriculum}
-                    showProgress={true}
-                    completedLessons={[]}
-                    onLessonClick={(lesson, module) => {
-                      if (lesson.isFree) {
-                        show(`جاري فتح: ${lesson.title}`, 'success');
-                      }
-                    }}
+              >
+                {course.image_url ? (
+                  <img
+                    src={course.image_url}
+                    alt={course.title_ar}
+                    className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
                   />
-                </div>
+                ) : (
+                  <CourseHeroFallback seed={course.id} mode={course.course_mode} />
+                )}
 
-                {/* Instructor Tab */}
-                <div
-                  id="panel-instructor"
-                  role="tabpanel"
-                  aria-labelledby="tab-instructor"
-                  hidden={activeTab !== 'instructor'}
-                  className="animate-fade-up"
-                >
-                  <InstructorCard instructor={mockInstructor} variant="default" />
-                </div>
-
-                {/* FAQs Tab */}
-                <div
-                  id="panel-faqs"
-                  role="tabpanel"
-                  aria-labelledby="tab-faqs"
-                  hidden={activeTab !== 'faqs'}
-                  className="animate-fade-up"
-                >
-                  <FAQAccordion
-                    items={mockFAQs}
-                    title="الأسئلة الشائعة"
-                    subtitle="أكثر الأسئلة تكراراً من طلابنا - إذا لم تجد إجابتك، تواصل معنا"
-                    searchable={true}
-                    showHelpful={true}
-                    onHelpfulClick={(faqId, vote) => {
-                      show(vote === 'yes' ? 'شكراً لتقييمك! 👍' : 'سنعمل على تحسين الإجابة 👎');
-                    }}
-                  />
-                </div>
-
-                {/* Reviews Tab */}
-                <div
-                  id="panel-reviews"
-                  role="tabpanel"
-                  aria-labelledby="tab-reviews"
-                  hidden={activeTab !== 'reviews'}
-                  className="animate-fade-up"
-                >
-                  <div className="rounded-2xl p-6 md:p-8 glass-card" style={{ borderColor: 'var(--glass-border)' }}>
-                    <div className="flex items-center gap-3 mb-5">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center text-xl" style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}>
-                        <span aria-hidden="true">⭐</span>
-                      </div>
-                      <h3 className="text-xl font-bold" style={{ color: 'var(--text)' }}>تقييمات الطلاب</h3>
-                    </div>
-                    <p className="text-center py-8" style={{ color: 'var(--text-muted)' }}>
-                      🚧 قسم التقييمات قيد التطوير<br />
-                      سيعرض هنا تقييمات وآراء الطلاب الحقيقيين قريباً
-                    </p>
+                {/* Price Badge */}
+                <div className="absolute top-3 left-3">
+                  <div
+                    className="px-4 py-2 rounded-2xl text-white font-black text-lg shadow-lg backdrop-blur-sm animate-scale-in"
+                    style={{ background: heroGradient }}
+                  >
+                    {course.price > 0
+                      ? `${course.price.toLocaleString()} ج.م`
+                      : '🎯 مجاني'}
                   </div>
                 </div>
-              </div>
 
-              {/* Course Provider Info */}
-              <div className="mt-8 p-5 rounded-2xl text-center" style={{ backgroundColor: 'var(--bg)', border: '1px solid var(--border)' }}>
-                <p style={{ color: 'var(--text-muted)' }}>
-                  الكورس مقدم من <strong style={{ color: 'var(--text)' }}>{systemName || 'نادي ريادة الاعمال'}</strong> بالتعاون مع <strong style={{ color: 'var(--text)' }}>المعهد العالي للعلوم الإدارية بالقطامية (HIMS)</strong>.
-                  بعد إتمام الكورس بنجاح، ستحصل على شهادة معتمدة برقم تسلسلي يمكن التحقق منه.
-                </p>
+                {/* Featured Badge */}
+                {course.featured === 1 && (
+                  <div className="absolute top-3 right-3">
+                    <div
+                      className="px-3 py-1.5 rounded-xl text-white text-xs font-bold shadow-md"
+                      style={{ backgroundColor: '#f59e0b' }}
+                    >
+                      ⭐ مميز
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
-            {/* Sticky Booking Sidebar */}
-            <div className="lg:w-80 flex-shrink-0">
-              <StickyBookingBar
-                course={{
-                  id: course.id,
-                  title_ar: course.title_ar,
-                  price: course.price,
-                  original_price: course.original_price,
-                  enable_direct_purchase: course.enable_direct_purchase,
-                  group_max: course.group_max,
-                  group_current: course.group_current,
+            {/* ── Info ── */}
+            <div className="md:col-span-3 space-y-4">
+              {/* Category */}
+              {course.category_name_ar && (
+                <span
+                  className="inline-block px-3 py-1 rounded-lg text-[11px] font-bold tracking-wide"
+                  style={{
+                    backgroundColor: `${secondaryColor}12`,
+                    color: secondaryColor,
+                    border: `1px solid ${secondaryColor}20`,
+                  }}
+                >
+                  {course.category_name_ar}
+                </span>
+              )}
+
+              {/* Title */}
+              <h1
+                className="text-2xl md:text-4xl lg:text-5xl font-black leading-[1.15] tracking-tight animate-fade-up"
+                style={{ color: 'var(--text)' }}
+              >
+                {course.title_ar}
+              </h1>
+
+              {course.title_en && (
+                <p
+                  className="text-sm md:text-base opacity-70 animate-fade-up"
+                  style={{ animationDelay: '0.05s', color: 'var(--text-muted)' }}
+                >
+                  {course.title_en}
+                </p>
+              )}
+
+              {/* Instructor */}
+              {course.instructor && (
+                <div
+                  className="flex items-center gap-2 animate-fade-up"
+                  style={{ animationDelay: '0.1s' }}
+                >
+                  <span
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white"
+                    style={{ background: heroGradient }}
+                  >
+                    {course.instructor.charAt(0)}
+                  </span>
+                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                    {course.instructor}
+                  </span>
+                </div>
+              )}
+
+              {/* Mode + badges */}
+              <div
+                className="flex flex-wrap gap-2 animate-fade-up"
+                style={{ animationDelay: '0.15s' }}
+              >
+                <span
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
+                  style={{
+                    backgroundColor: `${modeColor}12`,
+                    color: modeColor,
+                    border: `1px solid ${modeColor}20`,
+                  }}
+                >
+                  {modeLabel}
+                </span>
+
+                {course.lecture_count && course.lecture_count > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
+                    style={{
+                      backgroundColor: `${primaryColor}08`,
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    📚 {course.lecture_count} محاضرة
+                  </span>
+                )}
+
+                {course.lecture_duration && course.lecture_duration > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold"
+                    style={{
+                      backgroundColor: `${primaryColor}08`,
+                      color: 'var(--text-muted)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    ⏱ {course.lecture_duration} ساعة
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ==================== CONTENT ==================== */}
+      <div className="max-w-6xl mx-auto px-4 py-8 md:py-12">
+        <div className="grid lg:grid-cols-3 gap-8">
+          {/* ── Main Content ── */}
+          <div className="lg:col-span-2 space-y-10">
+            {/* Stats Strip */}
+            <div
+              className="grid grid-cols-2 md:grid-cols-4 gap-3 animate-fade-up"
+              style={{ animationDelay: '0.2s' }}
+            >
+              {course.instructor && (
+                <StatCard icon="🧑‍🏫" label="المدرب" value={course.instructor} />
+              )}
+              {course.lecture_count ? (
+                <StatCard icon="📚" label="المحاضرات" value={`${course.lecture_count} محاضرة`} />
+              ) : null}
+              {course.lecture_duration ? (
+                <StatCard icon="⏱" label="المدة" value={`${course.lecture_duration} ساعة`} />
+              ) : null}
+              {course.course_mode && (
+                <StatCard
+                  icon={course.course_mode === 'offline' ? '📍' : '💻'}
+                  label="النوع"
+                  value={course.course_mode === 'offline' ? 'حضور مباشر' : 'أونلاين'}
+                />
+              )}
+            </div>
+
+            {/* Available Seats */}
+            {hasSeats !== null && (
+              <div
+                className="flex items-center gap-4 p-4 rounded-2xl border animate-fade-up"
+                style={{
+                  backgroundColor: 'var(--card)',
+                  borderColor: hasSeats > 5 ? primaryColor + '20' : '#ef444440',
                 }}
-                onAddToCart={handleAddToCart}
-                onBuyNow={handleBuyNow}
-                isAddingToCart={addingToCart}
-                showRePurchaseWarning={rePurchaseWarn.show}
-                onConfirmRePurchase={confirmRePurchase}
-                onCancelRePurchase={() => setRePurchaseWarn({ show: false, hasCertificate: false })}
-                hasCertificate={rePurchaseWarn.hasCertificate}
-              />
+              >
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl"
+                  style={{ backgroundColor: `${hasSeats > 5 ? primaryColor : '#ef4444'}12` }}
+                >
+                  👥
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
+                    المقاعد المتاحة
+                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <div
+                      className="flex-1 h-2 rounded-full overflow-hidden"
+                      style={{ backgroundColor: 'var(--border)' }}
+                    >
+                      <div
+                        className="h-full rounded-full transition-all duration-700"
+                        style={{
+                          width: `${Math.min(100, ((course.group_current || 0) / (course.group_max || 1)) * 100)}%`,
+                          background: heroGradient,
+                        }}
+                      />
+                    </div>
+                    <span
+                      className="text-xs font-bold"
+                      style={{
+                        color: hasSeats > 0 ? 'var(--text)' : '#ef4444',
+                      }}
+                    >
+                      {hasSeats > 0
+                        ? `${hasSeats} مقعد`
+                        : 'ممتلئ'}
+                    </span>
+                  </div>
+                  <p
+                    className="text-[10px] mt-0.5"
+                    style={{ color: 'var(--text-light)' }}
+                  >
+                    {course.group_current} / {course.group_max} مسجل
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            {course.description && (
+              <div className="animate-fade-up" style={{ animationDelay: '0.25s' }}>
+                <h2 className="text-xl font-black mb-4" style={{ color: 'var(--text)' }}>
+                  📖 وصف الكورس
+                </h2>
+                <div
+                  className="prose prose-sm max-w-none leading-relaxed whitespace-pre-line"
+                  style={{ color: 'var(--text-muted)' }}
+                >
+                  {course.description}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* ── Sidebar CTA ── */}
+          <div className="lg:col-span-1">
+            <div
+              className="sticky top-24 rounded-3xl border p-6 space-y-5 animate-fade-up shadow-lg"
+              style={{
+                backgroundColor: 'var(--card)',
+                borderColor: 'var(--border)',
+              }}
+            >
+              {/* Price display */}
+              <div className="text-center pb-4 border-b" style={{ borderColor: 'var(--border)' }}>
+                <p className="text-xs font-medium mb-1" style={{ color: 'var(--text-light)' }}>
+                  سعر الكورس
+                </p>
+                {course.price > 0 ? (
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span
+                      className="text-4xl font-black"
+                      style={{ color: primaryColor }}
+                    >
+                      {course.price.toLocaleString()}
+                    </span>
+                    <span className="text-sm font-bold" style={{ color: 'var(--text-muted)' }}>
+                      ج.م
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-3xl font-black gradient-text">🎯 مجاني</span>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                {!token ? (
+                  <>
+                    <button
+                      onClick={() => router.push('/login')}
+                      className="w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ripple-btn"
+                      style={{ background: heroGradient }}
+                    >
+                      تسجيل الدخول للشراء
+                    </button>
+                    <Link
+                      href="/register"
+                      className="block w-full text-center py-3.5 rounded-2xl font-bold text-sm border-2 transition-all duration-300 hover:-translate-y-0.5"
+                      style={{ borderColor: primaryColor, color: primaryColor }}
+                    >
+                      إنشاء حساب جديد
+                    </Link>
+                  </>
+                ) : purchased === true ? (
+                  <div className="text-center space-y-3">
+                    <div
+                      className="w-14 h-14 mx-auto rounded-full flex items-center justify-center text-2xl"
+                      style={{ backgroundColor: `${primaryColor}12` }}
+                    >
+                      ✅
+                    </div>
+                    <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
+                      أنت مسجل في هذا الكورس
+                    </p>
+                    <Link
+                      href="/dashboard"
+                      className="block w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                      style={{ background: heroGradient }}
+                    >
+                      الذهاب للوحة التحكم
+                    </Link>
+                  </div>
+                ) : (
+                  <>
+                    {showBuyButton && (
+                      <Link
+                        href={`/checkout?course_id=${courseId}&amount=${course.price}`}
+                        className="block w-full text-center py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl animate-glow-pulse ripple-btn"
+                        style={{ background: heroGradient }}
+                      >
+                        اشتري الآن
+                      </Link>
+                    )}
+                    {showCartButton && (
+                      <button
+                        onClick={handleAddToCart}
+                        disabled={cartLoading}
+                        className="w-full py-3.5 rounded-2xl font-bold text-sm border-2 transition-all duration-300 hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed ripple-btn"
+                        style={{
+                          borderColor: primaryColor,
+                          color: primaryColor,
+                          backgroundColor: `${primaryColor}06`,
+                        }}
+                      >
+                        {cartLoading ? '🔄 جاري الإضافة...' : '🛒 أضف إلى السلة'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Trust */}
+              <div
+                className="pt-4 border-t text-center"
+                style={{ borderColor: 'var(--border)' }}
+              >
+                <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-light)' }}>
+                  {sloganAr || 'جودة . ثقة . امان'}
+                  <br />
+                  <span className="text-[9px]">{sloganEn || 'Make Your Power'}</span>
+                </p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Re-purchase Warning Modal */}
-      {rePurchaseWarn.show && (
-        <div className="fixed inset-0 z-[var(--z-modal-backdrop)] flex items-center justify-center p-4 animate-fade-in" role="dialog" aria-modal="true" aria-labelledby="repurchase-title">
-          <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setRePurchaseWarn({ show: false, hasCertificate: false })} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl p-6 glass-card animate-bounce-in" style={{ boxShadow: 'var(--shadow-xl)' }}>
-            <div className="text-6xl mb-4 text-center">🛒</div>
-            <h3 id="repurchase-title" className="text-xl font-bold text-center mb-3" style={{ color: 'var(--text)' }}>هل أنت متأكد؟</h3>
-            <p className="text-center mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              {rePurchaseWarn.hasCertificate
-                ? 'لقد سبق لك شراء هذا الكورس وتم إصدار شهادة لك به. يمكنك شراؤه مرة أخرى إذا كنت ترغب في مراجعة المحتوى.'
-                : 'يبدو أن لديك طلب سابق لهذا الكورس. يمكنك شراؤه مرة أخرى إذا كنت ترغب.'}
-            </p>
-            <div className="flex gap-3">
-              <button onClick={() => setRePurchaseWarn({ show: false, hasCertificate: false })} className="flex-1 py-3 rounded-xl font-bold text-sm border-2 transition-all" style={{ borderColor: 'var(--border)', color: 'var(--text)', backgroundColor: 'var(--bg)' }}>إلغاء</button>
-              <button onClick={confirmRePurchase} className="flex-1 py-3 rounded-xl text-white font-bold text-sm shadow-lg transition-all" style={{ backgroundColor: primaryColor, boxShadow: `0 4px 20px ${primaryColor}40` }}>تأكيد الشراء</button>
+      {/* ==================== FOOTER CTA ==================== */}
+      <section
+        className="border-t"
+        style={{
+          borderColor: 'var(--border)',
+          backgroundColor: 'var(--surface)',
+        }}
+      >
+        <div className="max-w-6xl mx-auto px-4 py-10 text-center">
+          <h2 className="text-lg md:text-xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+            لديك استفسار عن هذا الكورس؟
+          </h2>
+          <p className="text-xs md:text-sm mb-5 max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
+            فريق {systemName || 'نادي ريادة الاعمال'} جاهز للإجابة على جميع أسئلتك
+          </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <a
+              href="tel:+201234567890"
+              className="px-5 py-2.5 rounded-xl text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
+              style={{ backgroundColor: primaryColor }}
+            >
+              📞 اتصل بنا
+            </a>
+            <Link
+              href="/courses"
+              className="px-5 py-2.5 rounded-xl font-bold text-sm border-2 transition-all hover:-translate-y-0.5"
+              style={{ borderColor: primaryColor, color: primaryColor }}
+            >
+              تصفح الكورسات
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      {/* Disclaimer */}
+      <div
+        className="border-t text-center px-4 py-5"
+        style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
+      >
+        <p className="text-[10px] md:text-xs leading-relaxed" style={{ color: 'var(--text-light)' }}>
+          هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
+        </p>
+      </div>
+
+      {/* ==================== MOBILE STICKY CTA BAR ==================== */}
+      {enableMobileStickyCta && (
+        <div
+          className="fixed bottom-4 left-3 right-3 z-40 md:hidden animate-fade-up shadow-2xl rounded-2xl"
+          style={{
+            backgroundColor: 'var(--surface)',
+          }}
+        >
+          <div className="flex items-center justify-between px-4 py-3">
+            {/* Price */}
+            <div className="flex flex-col">
+              <span className="text-[10px] font-medium" style={{ color: 'var(--text-light)' }}>
+                سعر الكورس
+              </span>
+              {course.price > 0 ? (
+                <span className="text-xl font-black" style={{ color: primaryColor }}>
+                  {course.price.toLocaleString()} <span className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>ج.م</span>
+                </span>
+              ) : (
+                <span className="text-xl font-black gradient-text">🎯 مجاني</span>
+              )}
             </div>
+
+            {/* CTA Button */}
+            {!token ? (
+              <button
+                onClick={() => router.push('/login')}
+                className="px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-300 active:scale-95 ripple-btn"
+                style={{ background: heroGradient }}
+              >
+                سجل الآن للشراء
+              </button>
+            ) : purchased ? null : (
+              (course.enable_direct_purchase !== 0) && (
+                <Link
+                  href={`/checkout?course_id=${courseId}&amount=${course.price}`}
+                  className="px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-300 active:scale-95 animate-glow-pulse ripple-btn"
+                  style={{ background: heroGradient }}
+                >
+                  اشتر الآن
+                </Link>
+              )
+            )}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+/* ─── Stat Card Subcomponent ─── */
+function StatCard({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div
+      className="flex items-center gap-3 p-4 rounded-2xl border transition-all duration-300 hover:shadow-md"
+      style={{
+        backgroundColor: 'var(--card)',
+        borderColor: 'var(--border)',
+      }}
+    >
+      <span className="text-2xl">{icon}</span>
+      <div>
+        <p
+          className="text-[10px] font-bold uppercase tracking-wider"
+          style={{ color: 'var(--text-light)' }}
+        >
+          {label}
+        </p>
+        <p
+          className="text-sm font-bold mt-0.5 leading-tight"
+          style={{ color: 'var(--text)' }}
+        >
+          {value}
+        </p>
+      </div>
     </div>
   );
 }

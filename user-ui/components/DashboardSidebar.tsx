@@ -33,7 +33,9 @@ export default function DashboardSidebar() {
         <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 min-w-0">
             {logoHeader ? (
-              <img src={logoHeader} alt={systemName} className="h-8 shrink-0" />
+              <div className="rounded-xl p-0.5 shadow-sm border shrink-0" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                <img src={logoHeader} alt={systemName} className="h-10 sm:h-12" />
+              </div>
             ) : (
               <h1 className="font-bold text-lg truncate" style={{ color: primaryColor }}>{systemName}</h1>
             )}

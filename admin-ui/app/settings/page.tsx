@@ -694,7 +694,7 @@ function ImageUploadField({ label, value, onChange }: { label: string; value: st
     if (!file) return;
     setUploading(true);
     try {
-      const dataUrl = await compressAndEncode(file);
+      const dataUrl = await compressAndEncode(file, 800, 0.7, 'image/png');
       onChange(dataUrl);
     } catch { alert('فشل تحميل الصورة'); }
     setUploading(false);

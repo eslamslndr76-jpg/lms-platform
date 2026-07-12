@@ -82,7 +82,9 @@ export default function Header({ hideNav = false }: { hideNav?: boolean }) {
           {/* Logo */}
           <Link href={user ? '/dashboard' : '/'} className="flex items-center gap-3 group relative">
             {logoHeader ? (
-              <img src={logoHeader} alt={systemName} className="h-8 sm:h-9 transition-all duration-300 group-hover:scale-105 group-hover:brightness-110" />
+              <div className="rounded-xl p-0.5 shadow-sm border transition-all duration-300 group-hover:scale-105" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+                <img src={logoHeader} alt={systemName} className="h-10 sm:h-12" />
+              </div>
             ) : (
               <h1
                 className="text-lg sm:text-xl font-black tracking-tight bg-clip-text text-transparent transition-all duration-300"

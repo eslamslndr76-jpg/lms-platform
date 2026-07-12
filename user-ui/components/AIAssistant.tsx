@@ -40,6 +40,7 @@ const PUBLIC_PATHS = ['/', '/login', '/register', '/register/success'];
 export default function AIAssistant() {
   const pathname = usePathname();
   const isPublic = PUBLIC_PATHS.includes(pathname);
+  const isCoursePage = pathname.startsWith('/courses/') && pathname !== '/courses';
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     { role: 'assistant', text: 'مرحباً! كيف يمكنني مساعدتك؟' },
@@ -75,12 +76,12 @@ export default function AIAssistant() {
     <>
     {isPublic ? null : (<>
       <button onClick={() => setOpen(!open)}
-        className="fixed bottom-5 left-5 z-50 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 transition">
+        className={`fixed ${isCoursePage ? 'bottom-24' : 'bottom-5'} left-5 z-50 w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg flex items-center justify-center text-2xl hover:bg-blue-700 transition`}>
         {open ? '✕' : '🧠'}
       </button>
 
       {open && (
-        <div className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border overflow-hidden flex flex-col" style={{ maxHeight: '70vh' }}>
+        <div className={`fixed ${isCoursePage ? 'bottom-28' : 'bottom-20'} left-5 z-50 w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border overflow-hidden flex flex-col`} style={{ maxHeight: '70vh' }}>
           <div className="bg-blue-600 text-white px-4 py-3 font-bold text-sm flex items-center gap-2">
             <span>🧠</span> المساعد الذكي
           </div>
