@@ -2,12 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   useMultiFileAuthState,
   WASocket,
-  proto,
-  jidNormalizedUser,
-  isJidGroup,
   makeCacheableSignalKeyStore,
-  AnyMessageContent,
-  isJidUser,
 } from '@whiskeysockets/baileys';
 import qrcode from 'qrcode-terminal';
 import express, { Request, Response } from 'express';
@@ -60,14 +55,14 @@ let isConnected = false;
 let phoneNumber: string | null = null;
 let retryCount = 0;
 let messagesSent = 0;
-let startTime = Date.now();
+const startTime = Date.now();
 
 // ═══════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════
 
 function formatEgyptPhone(phone: string): string {
-  let cleaned = phone.replace(/[\s\-\(\)]/g, '');
+  let cleaned = phone.replace(/[\s\-()]/g, '');
 
   if (cleaned.startsWith('01')) {
     cleaned = '20' + cleaned;
@@ -171,7 +166,7 @@ async function connectWhatsApp(): Promise<void> {
     }
   });
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
+  sock.ev.on('messages.upsert', async ({ type }) => {
     if (type !== 'notify') return;
   });
 }
@@ -230,7 +225,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-function requireAuth(req: Request, res: Response, next: Function) {
+function requireAuth(req: Request, res: Response, next: () => void) {
   const secret = req.headers['x-bot-secret'];
   if (secret !== API_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });

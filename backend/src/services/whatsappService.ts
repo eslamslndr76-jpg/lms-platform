@@ -191,7 +191,7 @@ function generateOTP(): string {
   return otp;
 }
 
-async function storeOTP(phone: string, otp: string, purpose: string): Promise<void> {
+async function storeOTP(phone: string, otp: string, _purpose: string): Promise<void> {
   const expiresAt = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000).toISOString();
   
   await sql(
