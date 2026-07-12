@@ -6,11 +6,13 @@ npm workspace (`name: lms-erp-monorepo`) with three independent pillars + a root
 - `admin-ui/` — Next.js 14 (App Router) admin dashboard. Client-rendered, role-gated.
 - `user-ui/` — Next.js 14 (App Router) student-facing site. RTL Arabic marketing + authed `app/(dashboard)/` area.
 - `tests/` — Playwright E2E (config at root `playwright.config.ts`; starts backend + user-ui as webServers, baseURL `localhost:3001`). 4 spec files: `admin-api.spec.ts`, `settings-test.spec.ts`, `backend-api.spec.ts`, `user-ui.spec.ts`.
+- `whatsapp-bot/` — Baileys (WhatsApp Web library) service for OTP delivery. Runs as a standalone Node/Express process on port 3002. NOT deployed on Vercel (requires persistent WebSocket). Deployed separately on Render.com.
 - Root `tsconfig.base.json` exists but **none of the pillars extend it** — each pillar ships its own `tsconfig.json`.
 
 ## Commands
 Root (run from repo root):
 - `npm run dev:backend` / `dev:admin` / `dev:user` — start each pillar independently.
+- `npm run dev:whatsapp` — start WhatsApp bot locally (port 3002).
 - `npm run build:backend` / `build:admin` / `build:user`
 - `npm run lint` — `eslint . --ext .ts,.tsx` across the workspace (config: `@typescript-eslint`, no-unused-vars as warn, no-explicit-any as warn).
 - `npm run format` — `prettier --write .` (config: single quotes, trailing commas, 100 print width, 2 tab width).
