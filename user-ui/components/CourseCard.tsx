@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useBranding } from './BrandingProvider';
+import { GlareCard } from './ui/glare-card';
 
 interface Course {
   id: number;
@@ -125,246 +126,237 @@ export function CourseCard({ course, index = 0 }: { course: Course; index?: numb
       className="group block"
       style={{ animationDelay: `${index * 0.06}s` }}
     >
-      <div
-        className="relative rounded-2xl overflow-hidden transition-all duration-500 border h-full flex flex-col"
-        style={{
-          backgroundColor: 'var(--card)',
-          borderColor: 'var(--border)',
-          boxShadow: 'var(--shadow-sm)',
-        }}
+      <GlareCard
+        radius="16px"
+        aspectRatio="340/480"
+        className="w-full"
       >
-        {/* Image / Gradient Fallback */}
-        <div className="relative h-48 overflow-hidden">
-          {course.image_url ? (
-            <>
-              <img
-                src={course.image_url}
-                alt={course.title_ar}
-                className="w-full h-full object-cover transition-all duration-700 ease-out group-hover:scale-110"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-            </>
-          ) : (
-            <div
-              className="w-full h-full relative overflow-hidden transition-all duration-500"
-              style={{
-                background: `linear-gradient(145deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
-              }}
-            >
-              {/* Decorative floating shapes */}
+        <div className="relative flex flex-col h-full">
+          {/* Image / Gradient Fallback */}
+          <div className="relative h-48 overflow-hidden flex-shrink-0">
+            {course.image_url ? (
+              <>
+                <img
+                  src={course.image_url}
+                  alt={course.title_ar}
+                  className="w-full h-full object-cover transition-all duration-700 ease-out group-hover:scale-110"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+              </>
+            ) : (
               <div
-                className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-[0.12] animate-float"
-                style={{ backgroundColor: '#ffffff', animationDelay: '0s' }}
-              />
-              <div
-                className="absolute -bottom-3 -left-3 w-14 h-14 rounded-full opacity-[0.10] animate-float"
-                style={{ backgroundColor: '#ffffff', animationDelay: '2s' }}
-              />
-              <div
-                className="absolute top-1/4 left-1/5 w-2.5 h-2.5 rounded-full opacity-[0.18]"
-                style={{ backgroundColor: '#ffffff' }}
-              />
-              <div
-                className="absolute bottom-1/3 right-1/5 w-2 h-2 rounded-full opacity-[0.15]"
-                style={{ backgroundColor: '#ffffff' }}
-              />
-              <div
-                className="absolute top-1/3 right-1/4 w-1.5 h-1.5 rounded-full opacity-[0.20]"
-                style={{ backgroundColor: '#ffffff' }}
-              />
-
-              {/* Subtle dot grid pattern */}
-              <div className="absolute inset-0 opacity-[0.06]"
+                className="w-full h-full relative overflow-hidden transition-all duration-500"
                 style={{
-                  backgroundImage: `radial-gradient(circle, #fff 0.5px, transparent 0.5px)`,
-                  backgroundSize: '16px 16px',
+                  background: `linear-gradient(145deg, ${primaryColor} 0%, ${secondaryColor} 100%)`,
                 }}
-              />
+              >
+                {/* Decorative floating shapes */}
+                <div
+                  className="absolute -top-4 -right-4 w-20 h-20 rounded-full opacity-[0.12] animate-float"
+                  style={{ backgroundColor: '#ffffff', animationDelay: '0s' }}
+                />
+                <div
+                  className="absolute -bottom-3 -left-3 w-14 h-14 rounded-full opacity-[0.10] animate-float"
+                  style={{ backgroundColor: '#ffffff', animationDelay: '2s' }}
+                />
+                <div
+                  className="absolute top-1/4 left-1/5 w-2.5 h-2.5 rounded-full opacity-[0.18]"
+                  style={{ backgroundColor: '#ffffff' }}
+                />
+                <div
+                  className="absolute bottom-1/3 right-1/5 w-2 h-2 rounded-full opacity-[0.15]"
+                  style={{ backgroundColor: '#ffffff' }}
+                />
+                <div
+                  className="absolute top-1/3 right-1/4 w-1.5 h-1.5 rounded-full opacity-[0.20]"
+                  style={{ backgroundColor: '#ffffff' }}
+                />
 
-              {/* Glowing aura */}
-              <div
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 rounded-full opacity-[0.12]"
-                style={{
-                  background: `radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 65%)`,
-                }}
-              />
+                {/* Subtle dot grid pattern */}
+                <div className="absolute inset-0 opacity-[0.06]"
+                  style={{
+                    backgroundImage: `radial-gradient(circle, #fff 0.5px, transparent 0.5px)`,
+                    backgroundSize: '16px 16px',
+                  }}
+                />
 
-              {/* SVG Illustration */}
-              <CourseFallbackIllustration
-                seed={course.id}
-                courseMode={course.course_mode}
-              />
+                {/* Glowing aura */}
+                <div
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 h-36 rounded-full opacity-[0.12]"
+                  style={{
+                    background: `radial-gradient(circle, rgba(255,255,255,0.4) 0%, transparent 65%)`,
+                  }}
+                />
 
-              {/* Subtle inner border */}
-              <div
-                className="absolute inset-[2px] rounded-2xl pointer-events-none"
-                style={{ border: '1px solid rgba(255,255,255,0.08)' }}
-              />
-            </div>
-          )}
+                {/* SVG Illustration */}
+                <CourseFallbackIllustration
+                  seed={course.id}
+                  courseMode={course.course_mode}
+                />
 
-          {/* Price Badge */}
-          <div className="absolute top-3 left-3 z-10">
-            <span
-              className="inline-block px-3.5 py-1.5 rounded-xl text-xs font-extrabold tracking-wide shadow-lg backdrop-blur-md"
-              style={{
-                backgroundColor: course.price > 0 ? 'rgba(0,0,0,0.7)' : `${primaryColor}CC`,
-                color: '#fff',
-                backdropFilter: 'blur(8px)',
-              }}
-            >
-              {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : '🎯 مجاني'}
-            </span>
-          </div>
+                {/* Subtle inner border */}
+                <div
+                  className="absolute inset-[2px] rounded-2xl pointer-events-none"
+                  style={{ border: '1px solid rgba(255,255,255,0.08)' }}
+                />
+              </div>
+            )}
 
-          {/* Course Mode Badge */}
-          {course.course_mode && (
-            <div className="absolute top-3 right-3 z-10">
+            {/* Price Badge */}
+            <div className="absolute top-3 left-3 z-10">
               <span
-                className="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide shadow-lg backdrop-blur-md"
+                className="inline-block px-3.5 py-1.5 rounded-xl text-xs font-extrabold tracking-wide shadow-lg backdrop-blur-md"
                 style={{
-                  backgroundColor: 'rgba(0,0,0,0.6)',
+                  backgroundColor: course.price > 0 ? 'rgba(0,0,0,0.7)' : `${primaryColor}CC`,
                   color: '#fff',
                   backdropFilter: 'blur(8px)',
                 }}
               >
-                {course.course_mode === 'offline' ? '🏫 حضوري' : '💻 أونلاين'}
+                {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : '🎯 مجاني'}
               </span>
             </div>
-          )}
 
-          {/* Hover Info Overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 z-10">
-            <span
-              className="px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500"
-              style={{ backgroundColor: primaryColor }}
-            >
-              عرض التفاصيل
-            </span>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="p-4 flex flex-col flex-1 gap-2">
-          {/* Category Tag */}
-          {course.category_name_ar && (
-            <span
-              className="self-start text-[10px] px-2.5 py-1 rounded-lg font-bold tracking-wide"
-              style={{
-                backgroundColor: `${secondaryColor}15`,
-                color: secondaryColor,
-              }}
-            >
-              {course.category_name_ar}
-            </span>
-          )}
-
-          {/* Title */}
-          <h3
-            className="font-bold text-base leading-snug transition-colors duration-300 line-clamp-2"
-            style={{ color: 'var(--text)' }}
-          >
-            {course.title_ar}
-          </h3>
-
-          {/* Brief Description */}
-          {course.description && (
-            <p
-              className="text-xs leading-relaxed line-clamp-2"
-              style={{ color: 'var(--text-muted)' }}
-            >
-              {course.description.replace(/<[^>]*>/g, '').substring(0, 100)}
-            </p>
-          )}
-
-          {/* Instructor */}
-          {course.instructor && (
-            <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-light)' }}>
-              <span>🧑‍🏫</span>
-              <span>{course.instructor}</span>
-            </div>
-          )}
-
-          {/* Meta Row */}
-          <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-light)' }}>
-            {course.lecture_count != null && course.lecture_count > 0 && (
-              <span className="flex items-center gap-1">
-                <span>📚</span>
-                <span>{course.lecture_count} محاضرة</span>
-              </span>
-            )}
-            {course.lecture_duration != null && course.lecture_duration > 0 && (
-              <span className="flex items-center gap-1">
-                <span>⏱</span>
-                <span>{course.lecture_duration} ساعة</span>
-              </span>
-            )}
-          </div>
-
-          {/* Spacer */}
-          <div className="flex-1" />
-
-          {/* Group Fill Bar */}
-          {hasGroup && (
-            <div className="mt-1">
-              <div className="flex items-center justify-between text-[10px] mb-1">
-                <span style={{ color: 'var(--text-light)' }}>المقاعد المتبقية</span>
+            {/* Course Mode Badge */}
+            {course.course_mode && (
+              <div className="absolute top-3 right-3 z-10">
                 <span
-                  className="font-extrabold"
+                  className="inline-block px-2.5 py-1 rounded-lg text-[10px] font-bold tracking-wide shadow-lg backdrop-blur-md"
                   style={{
-                    color: isFull ? '#dc2626' : isAlmostFull ? '#d97706' : '#16a34a',
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    color: '#fff',
+                    backdropFilter: 'blur(8px)',
                   }}
                 >
-                  {isFull ? 'مكتمل' : `${gMax! - gCur!} مقعد`}
+                  {course.course_mode === 'offline' ? '🏫 حضوري' : '💻 أونلاين'}
                 </span>
               </div>
-              <div
-                className="w-full h-2 rounded-full overflow-hidden"
-                style={{ backgroundColor: `${isFull ? '#dc2626' : isAlmostFull ? '#d97706' : '#16a34a'}15` }}
-              >
-                <div
-                  className="h-full rounded-full transition-all duration-700 ease-out"
-                  style={{
-                    width: `${pct}%`,
-                    background: isFull
-                      ? 'linear-gradient(90deg, #dc2626, #ef4444)'
-                      : isAlmostFull
-                      ? 'linear-gradient(90deg, #d97706, #f59e0b)'
-                      : 'linear-gradient(90deg, #16a34a, #22c55e)',
-                  }}
-                />
-              </div>
-            </div>
-          )}
+            )}
 
-          {/* CTA Row */}
-          <div
-            className="flex items-center justify-between pt-2 border-t mt-1"
-            style={{ borderColor: 'var(--border)' }}
-          >
-            <span
-              className="text-sm font-extrabold tracking-tight"
-              style={{ color: primaryColor }}
+            {/* Hover Info Overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500 z-10">
+              <span
+                className="px-5 py-2.5 rounded-xl text-sm font-bold text-white shadow-2xl transform translate-y-4 group-hover:translate-y-0 transition-all duration-500"
+                style={{ backgroundColor: primaryColor }}
+              >
+                عرض التفاصيل
+              </span>
+            </div>
+          </div>
+
+          {/* Content */}
+          <div className="p-4 flex flex-col flex-1 gap-2">
+            {/* Category Tag */}
+            {course.category_name_ar && (
+              <span
+                className="self-start text-[10px] px-2.5 py-1 rounded-lg font-bold tracking-wide"
+                style={{
+                  backgroundColor: `${secondaryColor}15`,
+                  color: secondaryColor,
+                }}
+              >
+                {course.category_name_ar}
+              </span>
+            )}
+
+            {/* Title */}
+            <h3
+              className="font-bold text-base leading-snug transition-colors duration-300 line-clamp-2"
+              style={{ color: 'var(--text)' }}
             >
-              {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : 'مجاناً'}
-            </span>
-            <span
-              className="text-xs font-medium transition-all duration-300 group-hover:translate-x-1"
-              style={{ color: 'var(--text-muted)' }}
+              {course.title_ar}
+            </h3>
+
+            {/* Brief Description */}
+            {course.description && (
+              <p
+                className="text-xs leading-relaxed line-clamp-2"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                {course.description.replace(/<[^>]*>/g, '').substring(0, 100)}
+              </p>
+            )}
+
+            {/* Instructor */}
+            {course.instructor && (
+              <div className="flex items-center gap-1.5 text-xs" style={{ color: 'var(--text-light)' }}>
+                <span>🧑‍🏫</span>
+                <span>{course.instructor}</span>
+              </div>
+            )}
+
+            {/* Meta Row */}
+            <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-light)' }}>
+              {course.lecture_count != null && course.lecture_count > 0 && (
+                <span className="flex items-center gap-1">
+                  <span>📚</span>
+                  <span>{course.lecture_count} محاضرة</span>
+                </span>
+              )}
+              {course.lecture_duration != null && course.lecture_duration > 0 && (
+                <span className="flex items-center gap-1">
+                  <span>⏱</span>
+                  <span>{course.lecture_duration} ساعة</span>
+                </span>
+              )}
+            </div>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Group Fill Bar */}
+            {hasGroup && (
+              <div className="mt-1">
+                <div className="flex items-center justify-between text-[10px] mb-1">
+                  <span style={{ color: 'var(--text-light)' }}>المقاعد المتبقية</span>
+                  <span
+                    className="font-extrabold"
+                    style={{
+                      color: isFull ? '#dc2626' : isAlmostFull ? '#d97706' : '#16a34a',
+                    }}
+                  >
+                    {isFull ? 'مكتمل' : `${gMax! - gCur!} مقعد`}
+                  </span>
+                </div>
+                <div
+                  className="w-full h-2 rounded-full overflow-hidden"
+                  style={{ backgroundColor: `${isFull ? '#dc2626' : isAlmostFull ? '#d97706' : '#16a34a'}15` }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-700 ease-out"
+                    style={{
+                      width: `${pct}%`,
+                      background: isFull
+                        ? 'linear-gradient(90deg, #dc2626, #ef4444)'
+                        : isAlmostFull
+                        ? 'linear-gradient(90deg, #d97706, #f59e0b)'
+                        : 'linear-gradient(90deg, #16a34a, #22c55e)',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* CTA Row */}
+            <div
+              className="flex items-center justify-between pt-2 border-t mt-1"
+              style={{ borderColor: 'var(--border)' }}
             >
-              سجل الآن ←
-            </span>
+              <span
+                className="text-sm font-extrabold tracking-tight"
+                style={{ color: primaryColor }}
+              >
+                {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : 'مجاناً'}
+              </span>
+              <span
+                className="text-xs font-medium transition-all duration-300 group-hover:translate-x-1"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                سجل الآن ←
+              </span>
+            </div>
           </div>
         </div>
-
-        {/* Hover Border Glow */}
-        <div
-          className="absolute inset-0 rounded-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-500"
-          style={{
-            boxShadow: `0 0 30px ${primaryColor}25, inset 0 0 30px ${primaryColor}10`,
-          }}
-        />
-      </div>
+      </GlareCard>
     </Link>
   );
 }
