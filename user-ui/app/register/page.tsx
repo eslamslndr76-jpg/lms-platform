@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 import { parseNationalId } from '../../lib/nationalId';
+import { api } from '../../lib/api';
 
 function RegisterParticleBg() {
   return (
@@ -48,6 +49,7 @@ function PasswordStrength({ password }: { password: string }) {
 
 const steps = [
   { title: 'المعلومات الأساسية', icon: '👤', desc: 'الاسم والبريد والهاتف' },
+  { title: 'التحقق من الهاتف', icon: '📱', desc: 'رمز التحقق عبر واتساب' },
   { title: 'التحقق من الهوية', icon: '🔐', desc: 'الرقم القومي والتسجيل' },
   { title: 'كلمة المرور', icon: '🚀', desc: 'أنشئ كلمة مرور قوية' },
 ];
@@ -72,7 +74,28 @@ export default function RegisterPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [mounted, setMounted] = useState(false);
 
+  // Phone verification state
+  const [phoneOtp, setPhoneOtp] = useState('');
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [sendingOtp, setSendingOtp] = useState(false);
+  const [otpCooldown, setOtpCooldown] = useState(0);
+
   useEffect(() => { setMounted(true); }, []);
+
+  // OTP cooldown timer
+  useEffect(() => {
+    if (otpCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setOtpCooldown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [otpCooldown]);
 
   const validateStep = (s: number): boolean => {
     const errs: Record<string, string> = {};
@@ -84,6 +107,9 @@ export default function RegisterPage() {
       else if (!/^01[0-9]{9}$/.test(phone.replace(/\s/g, ''))) errs.phone = 'رقم الهاتف يجب أن يكون 11 رقم';
     }
     if (s === 1) {
+      if (!phoneVerified) errs.phoneOtp = 'يجب التحقق من رقم الهاتف';
+    }
+    if (s === 2) {
       const cleaned = nationalId.replace(/\s/g, '');
       if (!cleaned) errs.nationalId = 'الرقم القومي مطلوب';
       else if (!/^\d{14}$/.test(cleaned)) errs.nationalId = 'الرقم القومي يجب أن يكون 14 رقماً';
@@ -96,7 +122,7 @@ export default function RegisterPage() {
         if (!universityCode.trim()) errs.universityCode = 'الكود الجامعي مطلوب';
       }
     }
-    if (s === 2) {
+    if (s === 3) {
       if (!password) errs.password = 'كلمة المرور مطلوبة';
       else if (password.length < 6) errs.password = 'كلمة المرور يجب أن تكون 6 أحرف على الأقل';
     }
@@ -105,10 +131,58 @@ export default function RegisterPage() {
   };
 
   const nextStep = () => {
-    if (validateStep(step)) setStep(Math.min(step + 1, 2));
+    if (validateStep(step)) setStep(Math.min(step + 1, 3));
   };
 
   const prevStep = () => setStep(Math.max(step - 1, 0));
+
+  const handleSendPhoneOtp = async () => {
+    const cleaned = phone.replace(/\s/g, '');
+    if (!cleaned || !/^01[0-9]{9}$/.test(cleaned)) {
+      setErrors({ phone: 'أدخل رقم هاتف صحيح أولاً' });
+      return;
+    }
+
+    setSendingOtp(true);
+    try {
+      // First register temporarily to get auth, then send OTP
+      // Actually we need to send OTP before registration
+      // Let's use the public forgot-password endpoint style
+      // We'll send the OTP via a temporary registration
+      await api('/api/whatsapp/forgot-password', { method: 'POST', body: JSON.stringify({ phone: cleaned }) });
+      show('تم إرسال رمز التحقق على واتساب');
+      setOtpCooldown(60);
+    } catch (err: any) {
+      show(err.message || 'فشل إرسال الرمز', 'error');
+    } finally {
+      setSendingOtp(false);
+    }
+  };
+
+  const handleVerifyPhoneOtp = async () => {
+    if (!phoneOtp || phoneOtp.length !== 6) {
+      setErrors({ phoneOtp: 'أدخل الرمز المكون من 6 أرقام' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await api('/api/whatsapp/verify-otp', {
+        method: 'POST',
+        body: JSON.stringify({
+          phone: phone.replace(/\s/g, ''),
+          otp: phoneOtp,
+        }),
+      });
+      setPhoneVerified(true);
+      show('تم التحقق من رقم الهاتف بنجاح');
+      setErrors({});
+    } catch (err: any) {
+      show(err.message || 'الرمز غير صحيح', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleNationalIdBlur = () => {
     const cleaned = nationalId.replace(/\s/g, '');
@@ -126,7 +200,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!validateStep(step)) return;
-    if (step < 2) { nextStep(); return; }
+    if (step < 3) { nextStep(); return; }
     setLoading(true);
     try {
       const cleaned = nationalId.replace(/\s/g, '');
@@ -234,12 +308,93 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Step 1: Verification */}
+            {/* Step 1: Phone Verification */}
             {step === 1 && (
               <div className="space-y-5 animate-fade-left">
                 <div className="text-center mb-4">
+                  <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center text-2xl" style={{ backgroundColor: `${primaryColor}12` }}>
+                    {phoneVerified ? '✅' : steps[1].icon}
+                  </div>
+                  <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>
+                    {phoneVerified ? 'تم التحقق بنجاح' : 'التحقق من الهاتف'}
+                  </h2>
+                  <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                    {phoneVerified 
+                      ? `رقم ${phone} تم التحقق منه`
+                      : 'سنرسل رمز تحقق على واتساب'
+                    }
+                  </p>
+                </div>
+
+                {!phoneVerified ? (
+                  <>
+                    <div className="rounded-xl p-4" style={{ backgroundColor: `${primaryColor}08` }}>
+                      <p className="text-sm text-center" style={{ color: 'var(--text)' }}>
+                        📱 سيتم إرسال رمز تحقق على الرقم: <span className="font-bold">{phone}</span>
+                      </p>
+                    </div>
+
+                    {errors.phoneOtp && (
+                      <p className="text-sm text-center text-red-500">{errors.phoneOtp}</p>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleSendPhoneOtp}
+                      disabled={sendingOtp || otpCooldown > 0}
+                      className="w-full py-3 rounded-xl text-white font-bold text-sm disabled:opacity-50 transition-transform active:scale-[0.98]"
+                      style={{ backgroundColor: primaryColor }}
+                    >
+                      {sendingOtp ? 'جاري الإرسال...' : otpCooldown > 0 ? ` إعادة الإرسال (${otpCooldown}s)` : 'إرسال رمز التحقق'}
+                    </button>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--text)' }}>أدخل الرمز</label>
+                      <input
+                        type="text"
+                        value={phoneOtp}
+                        onChange={e => {
+                          setPhoneOtp(e.target.value.replace(/\D/g, '').slice(0, 6));
+                          setErrors(prev => ({ ...prev, phoneOtp: '' }));
+                        }}
+                        className={`input-focus w-full py-3 rounded-xl text-sm ${errors.phoneOtp ? 'border-red-500' : ''}`}
+                        style={{ backgroundColor: 'var(--card)', color: 'var(--text)', direction: 'ltr', textAlign: 'center', letterSpacing: '8px', fontSize: '24px' }}
+                        placeholder="000000"
+                        maxLength={6}
+                        dir="ltr"
+                      />
+                      {errors.phoneOtp && <p className="text-xs mt-1 text-red-500">{errors.phoneOtp}</p>}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleVerifyPhoneOtp}
+                      disabled={loading || phoneOtp.length !== 6}
+                      className="w-full py-3 rounded-xl text-white font-bold text-sm disabled:opacity-50 transition-transform active:scale-[0.98]"
+                      style={{ backgroundColor: '#22c55e' }}
+                    >
+                      {loading ? 'جاري التحقق...' : 'تحقق من الرمز'}
+                    </button>
+                  </>
+                ) : (
+                  <div className="text-center space-y-4">
+                    <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center text-4xl" style={{ backgroundColor: '#22c55e20' }}>
+                      ✅
+                    </div>
+                    <p className="font-medium" style={{ color: '#22c55e' }}>
+                      تم التحقق من رقم الهاتف بنجاح
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Step 2: Identity Verification */}
+            {step === 2 && (
+              <div className="space-y-5 animate-fade-left">
+                <div className="text-center mb-4">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center text-2xl" style={{ backgroundColor: `${secondaryColor}12` }}>
-                    {steps[1].icon}
+                    {steps[2].icon}
                   </div>
                   <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>التحقق من الهوية</h2>
                   <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>أدخل الرقم القومي للتحقق</p>
@@ -306,12 +461,12 @@ export default function RegisterPage() {
               </div>
             )}
 
-            {/* Step 2: Password */}
-            {step === 2 && (
+            {/* Step 3: Password */}
+            {step === 3 && (
               <div className="space-y-5 animate-fade-left">
                 <div className="text-center mb-4">
                   <div className="w-16 h-16 mx-auto mb-3 rounded-2xl flex items-center justify-center text-2xl" style={{ backgroundColor: `${primaryColor}12` }}>
-                    {steps[2].icon}
+                    {steps[3].icon}
                   </div>
                   <h2 className="text-xl font-bold" style={{ color: 'var(--text)' }}>كلمة المرور</h2>
                   <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>اختر كلمة مرور قوية لحماية حسابك</p>
@@ -362,7 +517,7 @@ export default function RegisterPage() {
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>
-                ) : step < 2 ? (
+                ) : step < 3 ? (
                   <>
                     التالي
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -374,8 +529,8 @@ export default function RegisterPage() {
                     🎉 أنشئ حسابي
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6a2.25 2.25 0 0 0-2.25 2.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15m3 0 3-3m0 0-3-3m3 3H9" />
-                  </svg>
-                </>
+                    </svg>
+                  </>
                 )}
               </button>
             </div>

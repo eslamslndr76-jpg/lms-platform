@@ -21,3 +21,5 @@ backend/scripts/
 /*.yaml
 dev-server.log
 .opencode/
+.vercel
+.env*

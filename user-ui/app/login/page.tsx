@@ -48,6 +48,11 @@ export default function LoginPage() {
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>كلمة المرور</label>
             <PasswordInput value={password} onChange={setPassword} />
           </div>
+          <div className="flex justify-end">
+            <Link href="/forgot-password" className="text-sm font-medium" style={{ color: primaryColor }}>
+              نسيت كلمة المرور؟
+            </Link>
+          </div>
           <button type="submit" disabled={loading}
             className="w-full py-3 rounded-xl text-white font-bold text-lg disabled:opacity-50 transition-transform active:scale-[0.98]"
             style={{ backgroundColor: primaryColor }}>

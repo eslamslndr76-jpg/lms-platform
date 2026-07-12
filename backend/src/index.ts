@@ -23,6 +23,7 @@ import adminOrdersRouter from './routes/admin/orders';
 import adminUsersRouter from './routes/admin/users';
 import adminCertificatesRouter from './routes/admin/certificates';
 import adminUnassignedRouter from './routes/admin/unassigned';
+import whatsappRouter from './routes/whatsapp';
 
 const app = express();
 
@@ -81,6 +82,7 @@ app.use('/api/admin/orders', adminOrdersRouter);
 app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/certificates', adminCertificatesRouter);
 app.use('/api/admin/unassigned', adminUnassignedRouter);
+app.use('/api/whatsapp', whatsappRouter);
 
 const PORT = process.env.PORT || 3001;
 

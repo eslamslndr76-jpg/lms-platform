@@ -47,6 +47,10 @@ export async function initializeDatabase() {
     "ALTER TABLE lecture_attendance ADD COLUMN code_used TEXT",
     "ALTER TABLE lecture_attendance ADD COLUMN ip_address TEXT",
     "CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, title TEXT NOT NULL, message TEXT, type TEXT NOT NULL DEFAULT 'info', link TEXT, is_read INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "ALTER TABLE courses ADD COLUMN enable_mobile_sticky_cta INTEGER DEFAULT 1",
+    "ALTER TABLE users ADD COLUMN phone_verified INTEGER DEFAULT 0",
+    "ALTER TABLE users ADD COLUMN otp TEXT",
+    "ALTER TABLE users ADD COLUMN otp_expires DATETIME",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

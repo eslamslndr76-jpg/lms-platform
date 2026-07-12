@@ -5,15 +5,18 @@
   "workspaces": [
     "backend",
     "admin-ui",
-    "user-ui"
+    "user-ui",
+    "whatsapp-bot"
   ],
   "scripts": {
     "dev:backend": "npm run dev -w backend",
     "dev:admin": "npm run dev -w admin-ui",
     "dev:user": "npm run dev -w user-ui",
+    "dev:whatsapp": "npm run dev -w whatsapp-bot",
     "build:backend": "npm run build -w backend",
     "build:admin": "npm run build -w admin-ui",
     "build:user": "npm run build -w user-ui",
+    "build:whatsapp": "npm run build -w whatsapp-bot",
     "lint": "eslint . --ext .ts,.tsx",
     "format": "prettier --write ."
   },
@@ -27,3 +30,5 @@
     "typescript": "^5.4.0"
   }
 }
+
+
