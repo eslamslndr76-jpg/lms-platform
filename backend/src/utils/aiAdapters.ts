@@ -121,7 +121,7 @@ const geminiAdapter: AIAdapter = {
     try {
       const base = config.apiUrl.replace(/\/+$/, '');
       const res = await fetch(`${base}/models?key=${config.apiKey}`, { signal: AbortSignal.timeout(5000) });
-      const data = await res.json();
+      const data: any = await res.json();
       const models: string[] = (data.models || []).map((m: any) => m.name.replace(/^models\//, ''));
       return models.filter((n: string) => n.includes('gemini'));
     } catch { return this.defaultModels; }
@@ -133,7 +133,7 @@ const geminiAdapter: AIAdapter = {
 function convertToOpenAI(messages: ChatMessage[]) {
   return messages.map(m => {
     if (m.role === 'tool') {
-      return { role: 'tool', tool_call_id: m.toolCallId || m.name || 'call_1', content: m.content };
+      return { role: 'tool', tool_call_id: m.toolCallId || 'call_1', content: m.content };
     }
     if (m.toolCalls && m.toolCalls.length > 0) {
       return {
@@ -199,7 +199,7 @@ const openaiAdapter: AIAdapter = {
         headers: { 'Authorization': `Bearer ${config.apiKey}` },
         signal: AbortSignal.timeout(5000),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       return (data.data || []).map((m: any) => m.id);
     } catch { return this.defaultModels; }
   },
@@ -289,7 +289,7 @@ const claudeAdapter: AIAdapter = {
         headers: { 'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01' },
         signal: AbortSignal.timeout(5000),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       return (data.data || []).map((m: any) => m.id);
     } catch { return this.defaultModels; }
   },
@@ -307,7 +307,8 @@ const openaiCompatAdapter: AIAdapter = {
   },
 
   buildHeaders(config) {
-    return config.apiKey ? { 'Authorization': `Bearer ${config.apiKey}` } : {};
+    if (config.apiKey) return { 'Authorization': `Bearer ${config.apiKey}` } as Record<string, string>;
+    return {} as Record<string, string>;
   },
 
   buildUrl(config) {
@@ -324,7 +325,7 @@ const openaiCompatAdapter: AIAdapter = {
       const headers: Record<string, string> = {};
       if (config.apiKey) headers['Authorization'] = `Bearer ${config.apiKey}`;
       const res = await fetch(`${base}/models`, { headers, signal: AbortSignal.timeout(5000) });
-      const data = await res.json();
+      const data: any = await res.json();
       return (data.data || []).map((m: any) => m.id);
     } catch { return this.defaultModels; }
   },

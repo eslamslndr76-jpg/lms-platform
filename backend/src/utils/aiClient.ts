@@ -59,13 +59,13 @@ export async function chatCompletion(req: ChatRequest): Promise<ChatResponse> {
 
   let messages: ChatMessage[] = req.messages.map(m => ({
     role: (m.role === 'assistant' || m.role === 'model' ? 'assistant' : 'user') as 'user' | 'assistant',
-    content: m.text || m.content || '',
+    content: m.text || '',
   }));
 
   let stickyProvider: string | null = null;
 
   for (let iter = 0; iter < MAX_TOOL_ITERATIONS; iter++) {
-    const candidates = stickyProvider
+    const candidates: ProviderConfig[] = stickyProvider
       ? enabledProviders.filter(p => p.id === stickyProvider)
       : enabledProviders;
 

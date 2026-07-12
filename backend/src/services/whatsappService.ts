@@ -46,7 +46,7 @@ async function callBotAPI(endpoint: string, body?: any): Promise<any> {
   }
 
   const response = await fetch(url, options);
-  const data = await response.json();
+  const data: any = await response.json();
 
   if (!response.ok) {
     throw new Error(data.error || 'WhatsApp bot API error');
