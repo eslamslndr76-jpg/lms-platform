@@ -13,13 +13,13 @@ test.describe('User-UI Mobile-First', () => {
 
   test('navigate to register page', async ({ page }) => {
     await page.goto('http://localhost:3000/register');
-    await expect(page.locator('button:has-text("إنشاء حساب")')).toBeVisible();
+    await expect(page.locator('button:has-text("التالي")')).toBeVisible();
   });
 
   test('login form works', async ({ page, request }) => {
     const email = `test-${Date.now()}@test.com`;
     const reg = await request.post('http://localhost:3001/api/auth/register', {
-      data: { name: 'Test', email, password: 'test123' },
+      data: { name: 'Test', email, password: 'test123', phone: '01000000099', nationalId: '12345678901235' },
     });
     expect(reg.ok()).toBeTruthy();
     await page.goto('http://localhost:3000/login');

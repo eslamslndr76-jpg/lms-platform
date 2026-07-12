@@ -21,7 +21,7 @@ test.describe('Backend API', () => {
 
   test('register student', async ({ request }) => {
     const res = await request.post('/api/auth/register', {
-      data: { name: 'Test Student', email: 'test@test.com', password: 'test123', phone: '01000000000' },
+      data: { name: 'Test Student', email: 'test@test.com', password: 'test123', phone: '01000000000', nationalId: '12345678901234' },
     });
     // May already exist from previous runs
     if (res.status() === 409) return;
