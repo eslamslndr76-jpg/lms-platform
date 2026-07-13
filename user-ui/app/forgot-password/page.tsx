@@ -21,6 +21,8 @@ export default function ForgotPasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   const validatePhone = (): boolean => {
     const cleaned = phone.replace(/\s/g, '');
@@ -211,18 +213,25 @@ export default function ForgotPasswordPage() {
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
               كلمة المرور الجديدة
             </label>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={e => {
-                setNewPassword(e.target.value);
-                setErrors(prev => ({ ...prev, newPassword: '' }));
-              }}
-              className={inputClass('newPassword')}
-              style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}
-              placeholder="••••••••"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showNewPass ? 'text' : 'password'}
+                value={newPassword}
+                onChange={e => {
+                  setNewPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, newPassword: '' }));
+                }}
+                className={inputClass('newPassword')}
+                style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}
+                placeholder="••••••••"
+                required
+              />
+              <button type="button" onClick={() => setShowNewPass(!showNewPass)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+                style={{ color: 'var(--text-muted)' }}>
+                {showNewPass ? '🙈' : '👁'}
+              </button>
+            </div>
             {errors.newPassword && <p className="text-xs mt-1 text-red-500">{errors.newPassword}</p>}
           </div>
           
@@ -230,18 +239,25 @@ export default function ForgotPasswordPage() {
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
               تأكيد كلمة المرور
             </label>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={e => {
-                setConfirmPassword(e.target.value);
-                setErrors(prev => ({ ...prev, confirmPassword: '' }));
-              }}
-              className={inputClass('confirmPassword')}
-              style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}
-              placeholder="••••••••"
-              required
-            />
+            <div className="relative">
+              <input
+                type={showConfirmPass ? 'text' : 'password'}
+                value={confirmPassword}
+                onChange={e => {
+                  setConfirmPassword(e.target.value);
+                  setErrors(prev => ({ ...prev, confirmPassword: '' }));
+                }}
+                className={inputClass('confirmPassword')}
+                style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}
+                placeholder="••••••••"
+                required
+              />
+              <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+                style={{ color: 'var(--text-muted)' }}>
+                {showConfirmPass ? '🙈' : '👁'}
+              </button>
+            </div>
             {errors.confirmPassword && <p className="text-xs mt-1 text-red-500">{errors.confirmPassword}</p>}
           </div>
           

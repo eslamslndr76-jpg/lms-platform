@@ -135,8 +135,7 @@ export async function verifyOTP(phone: string, otp: string): Promise<{ valid: bo
       return { valid: false, error: 'الرمز غير صحيح' };
     }
     
-    // Clear OTP after successful verification
-    await clearOTP(phone);
+    // Note: OTP is NOT cleared here. It's cleared in resetPassword() after successful password reset.
     
     return { valid: true };
   } catch (error: any) {

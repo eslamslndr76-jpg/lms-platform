@@ -31,6 +31,7 @@ const allowedOrigins = [
   process.env.FRONTEND_URL || 'http://localhost:3000',
   'https://lms-admin-xi-seven.vercel.app',
   'https://lms-admin-x2-hims.vercel.app',
+  'https://lms-admin-drk2id8pb-x2-hims.vercel.app',
   'https://lms-user-psi.vercel.app',
   'https://lms-user-x2-hims.vercel.app',
   'https://lms-user.vercel.app',

@@ -63,6 +63,7 @@ let retryCount = 0;
 let messagesSent = 0;
 let messagesFailed = 0;
 let qrData: string | null = null;
+let qrGeneratedAt: number = 0;
 const startTime = Date.now();
 
 // ═══════════════════════════════════════════════
@@ -131,6 +132,8 @@ async function connectWhatsApp(): Promise<void> {
     if (connection === 'open') {
       isConnected = true;
       retryCount = 0;
+      qrData = null;
+      qrGeneratedAt = 0;
 
       if (sock && sock.user) {
         phoneNumber = sock.user.id?.split(':')[0] || null;
@@ -150,6 +153,8 @@ async function connectWhatsApp(): Promise<void> {
       isConnected = false;
       isReady = false;
       phoneNumber = null;
+      qrData = null;
+      qrGeneratedAt = 0;
 
       const statusCode = (lastDisconnect?.error as any)?.output?.statusCode;
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
@@ -173,6 +178,7 @@ async function connectWhatsApp(): Promise<void> {
 
     if (qr && !pairingRequested) {
       qrData = qr;
+      qrGeneratedAt = Date.now();
       if (PHONE_NUMBER) {
         pairingRequested = true;
         console.log(`\n📱 pairing code for ${PHONE_NUMBER}...`);
@@ -345,7 +351,8 @@ app.get('/qr-json', requireAuth, async (_req: Request, res: Response) => {
   }
   try {
     const qrDataUrl = await QRCode.toDataURL(qrData, { width: 400, margin: 2 });
-    res.json({ available: true, qr: qrDataUrl });
+    const ageSeconds = Math.floor((Date.now() - qrGeneratedAt) / 1000);
+    res.json({ available: true, qr: qrDataUrl, age: ageSeconds, generatedAt: qrGeneratedAt });
   } catch {
     res.status(500).json({ error: 'Error generating QR' });
   }
@@ -361,6 +368,7 @@ app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
     isReady = false;
     phoneNumber = null;
     qrData = null;
+    qrGeneratedAt = 0;
 
     if (fs.existsSync(AUTH_DIR)) {
       fs.rmSync(AUTH_DIR, { recursive: true, force: true });

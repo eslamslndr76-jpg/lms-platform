@@ -39,6 +39,7 @@ export default function SettingsPage() {
   const [waStatus, setWaStatus] = useState<{ connected: boolean; ready: boolean; phone: string | null; uptime: number; messagesSent: number; messagesFailed: number } | null>(null);
   const [waQR, setWaQR] = useState<string | null>(null);
   const [waQRAvailable, setWaQRAvailable] = useState(false);
+  const [waQRAge, setWaQRAge] = useState<number>(0);
   const [waLoading, setWaLoading] = useState(false);
   const [waAction, setWaAction] = useState('');
 
@@ -86,9 +87,11 @@ export default function SettingsPage() {
       const data = await api('/api/whatsapp/bot/qr');
       setWaQRAvailable(data.available);
       setWaQR(data.qr || null);
+      setWaQRAge(data.age || 0);
     } catch {
       setWaQRAvailable(false);
       setWaQR(null);
+      setWaQRAge(0);
     }
   };
 
@@ -97,6 +100,16 @@ export default function SettingsPage() {
     await Promise.all([fetchWAStatus(), fetchWAQR()]);
     setWaLoading(false);
   };
+
+  useEffect(() => {
+    if (tab !== 'whatsapp') return;
+    const interval = setInterval(async () => {
+      if (waStatus?.connected) return;
+      await fetchWAStatus();
+      await fetchWAQR();
+    }, 8000);
+    return () => clearInterval(interval);
+  }, [tab, waStatus?.connected]);
 
   const handleWALogout = async () => {
     if (!confirm('هل أنت متأكد من فصل الاتصال؟ سيظهر QR جديد لإعادة الاتصال.')) return;
@@ -582,7 +595,7 @@ export default function SettingsPage() {
                 <div className="p-3 bg-white rounded-xl" style={{ border: '4px solid #25D366' }}>
                   <img src={waQR} alt="WhatsApp QR" className="w-64 h-64" />
                 </div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>⏰ يتحدث تلقائياً كل 10 ثواني</p>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>🔄 يتحدث تلقائياً كل 8 ثوانٍ{waQRAge > 0 ? ` • عمر الكود: ${waQRAge}ث` : ''}</p>
               </div>
             ) : (
               <div className="text-center py-6">
