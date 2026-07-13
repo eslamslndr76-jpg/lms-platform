@@ -339,6 +339,43 @@ h2{color:#25D366}p{color:#aaa}
   }
 });
 
+app.get('/qr-json', requireAuth, async (_req: Request, res: Response) => {
+  if (!qrData) {
+    return res.json({ available: false });
+  }
+  try {
+    const qrDataUrl = await QRCode.toDataURL(qrData, { width: 400, margin: 2 });
+    res.json({ available: true, qr: qrDataUrl });
+  } catch {
+    res.status(500).json({ error: 'Error generating QR' });
+  }
+});
+
+app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    if (sock) {
+      try { await sock.logout(); } catch { /* ignore */ }
+      sock = null;
+    }
+    isConnected = false;
+    isReady = false;
+    phoneNumber = null;
+    qrData = null;
+
+    if (fs.existsSync(AUTH_DIR)) {
+      fs.rmSync(AUTH_DIR, { recursive: true, force: true });
+    }
+
+    console.log('👋 تم تسجيل الخروج. إعادة الاتصال...');
+    res.json({ success: true, message: 'تم فصل الاتصال. جاري إعادة الاتصال...' });
+
+    setTimeout(() => { connectWhatsApp().catch(console.error); }, 2000);
+  } catch (error: any) {
+    console.error('Logout error:', error.message);
+    res.status(500).json({ error: error.message || 'Failed to logout' });
+  }
+});
+
 app.get('/status', requireAuth, (_req: Request, res: Response) => {
   const status: BotStatus = {
     connected: isConnected,

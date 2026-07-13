@@ -7,7 +7,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'ai' | 'autogroup'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'ai' | 'autogroup' | 'whatsapp'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -35,6 +35,12 @@ export default function SettingsPage() {
     models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], selectedModel: 'gemini-2.5-flash',
     curlInput: '',
   });
+
+  const [waStatus, setWaStatus] = useState<{ connected: boolean; ready: boolean; phone: string | null; uptime: number; messagesSent: number; messagesFailed: number } | null>(null);
+  const [waQR, setWaQR] = useState<string | null>(null);
+  const [waQRAvailable, setWaQRAvailable] = useState(false);
+  const [waLoading, setWaLoading] = useState(false);
+  const [waAction, setWaAction] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -65,6 +71,48 @@ export default function SettingsPage() {
       setLoading(false);
     })();
   }, []);
+
+  const fetchWAStatus = async () => {
+    try {
+      const status = await api('/api/whatsapp/status');
+      setWaStatus(status);
+    } catch {
+      setWaStatus(null);
+    }
+  };
+
+  const fetchWAQR = async () => {
+    try {
+      const data = await api('/api/whatsapp/bot/qr');
+      setWaQRAvailable(data.available);
+      setWaQR(data.qr || null);
+    } catch {
+      setWaQRAvailable(false);
+      setWaQR(null);
+    }
+  };
+
+  const loadWhatsApp = async () => {
+    setWaLoading(true);
+    await Promise.all([fetchWAStatus(), fetchWAQR()]);
+    setWaLoading(false);
+  };
+
+  const handleWALogout = async () => {
+    if (!confirm('هل أنت متأكد من فصل الاتصال؟ سيظهر QR جديد لإعادة الاتصال.')) return;
+    setWaAction('جاري فصل الاتصال...');
+    try {
+      await api('/api/whatsapp/bot/logout', { method: 'POST', body: JSON.stringify({}) });
+      setWaAction('تم الفصل. جاري إعادة الاتصال...');
+      setTimeout(async () => {
+        await loadWhatsApp();
+        setWaAction('');
+      }, 5000);
+    } catch {
+      setWaAction('فشل فصل الاتصال');
+      setTimeout(() => setWaAction(''), 3000);
+    }
+  };
 
   const retry = () => {
     setError('');
@@ -326,11 +374,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'ai', 'autogroup'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
+        {(['branding', 'categories', 'ai', 'autogroup', 'whatsapp'] as const).map(t => (
+          <button key={t} onClick={() => { setTab(t); if (t === 'whatsapp') loadWhatsApp(); }}
             className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'ai' ? 'الذكاء الاصطناعي' : 'التجميع التلقائي'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : 'الواتساب'}
           </button>
         ))}
       </div>
@@ -469,6 +517,114 @@ export default function SettingsPage() {
             className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
             {thresholdSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
           </button>
+        </div>
+      )}
+
+      {/* WhatsApp Bot */}
+      {tab === 'whatsapp' && (
+        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <h2 className="font-bold" style={{ color: 'var(--text)' }}>إدارة الـ WhatsApp Bot</h2>
+
+          {/* Status Card */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm" style={{ color: 'var(--text)' }}>حالة الاتصال</h3>
+              <button onClick={loadWhatsApp} disabled={waLoading}
+                className="px-3 py-1.5 rounded-lg text-xs border"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                {waLoading ? 'جاري...' : '🔄 تحديث'}
+              </button>
+            </div>
+
+            {waStatus ? (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className={`w-3 h-3 rounded-full ${waStatus.connected ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
+                    {waStatus.connected ? 'متصل' : 'غير متصل'}
+                  </span>
+                  {waStatus.ready && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">جاهز</span>
+                  )}
+                </div>
+                {waStatus.phone && (
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    📱 رقم الاتصال: <span className="font-mono font-bold" style={{ color: 'var(--text)' }}>{waStatus.phone}</span>
+                  </p>
+                )}
+                <div className="flex gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <span>⏱ التشغيل: {Math.floor(waStatus.uptime / 3600)}h {Math.floor((waStatus.uptime % 3600) / 60)}m</span>
+                  <span>📤 مرسل: {waStatus.messagesSent}</span>
+                  <span>❌ فاشل: {waStatus.messagesFailed}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>جاري التحقق من الحالة...</p>
+            )}
+          </div>
+
+          {/* QR Code Section */}
+          <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-sm" style={{ color: 'var(--text)' }}>كود الاتصال (QR)</h3>
+              <button onClick={fetchWAQR} disabled={waLoading}
+                className="px-3 py-1.5 rounded-lg text-xs border"
+                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                🔄 تحديث QR
+              </button>
+            </div>
+
+            {waQRAvailable && waQR ? (
+              <div className="flex flex-col items-center gap-3">
+                <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
+                  افتح واتساب → الأجهزة المرتبطة → ربط برقم الهاتف → امسح الكود
+                </p>
+                <div className="p-3 bg-white rounded-xl" style={{ border: '4px solid #25D366' }}>
+                  <img src={waQR} alt="WhatsApp QR" className="w-64 h-64" />
+                </div>
+                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>⏰ يتحدث تلقائياً كل 10 ثواني</p>
+              </div>
+            ) : (
+              <div className="text-center py-6">
+                {waStatus?.connected ? (
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    ✅ البوت متصل — لا حاجة لـ QR<br />
+                    <span className="text-xs">لفصل الاتصال والاتصال برقم جديد، اضغط "فصل الاتصال"</span>
+                  </p>
+                ) : (
+                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                    لا يوجد QR متاح<br />
+                    <span className="text-xs">جاري محاولة إنشاء كود جديد...</span>
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex gap-3">
+            {waStatus?.connected && (
+              <button onClick={handleWALogout}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors">
+                ⏏ فصل الاتصال
+              </button>
+            )}
+          </div>
+
+          {waAction && (
+            <div className="px-4 py-3 rounded-xl text-sm animate-slide-up" style={{ backgroundColor: '#dbeafe', color: '#1e40af' }}>
+              {waAction}
+            </div>
+          )}
+
+          <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            <p><strong>ملاحظات:</strong></p>
+            <ul className="mt-1 space-y-1 list-disc list-inside">
+              <li>الـ QR يظهر فقط عند عدم وجود اتصال أو بعد فصل الاتصال</li>
+              <li>لحماية الاتصال، لا تشارك صورة الـ QR مع أي شخص</li>
+              <li>يمكن تجديد الاتصال بالضغط على "فصل الاتصال" ثم مسح الـ QR الجديد</li>
+            </ul>
+          </div>
         </div>
       )}
 

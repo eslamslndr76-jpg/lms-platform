@@ -207,6 +207,25 @@ async function clearOTP(phone: string): Promise<void> {
   );
 }
 
+export async function getBotQR(): Promise<{ available: boolean; qr?: string }> {
+  try {
+    return await callBotAPI('/qr-json');
+  } catch (error) {
+    console.error('Failed to get QR from bot:', error);
+    return { available: false };
+  }
+}
+
+export async function logoutBot(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const data = await callBotAPI('/logout', {});
+    return { success: data.success || false, message: data.message };
+  } catch (error: any) {
+    console.error('Failed to logout bot:', error);
+    return { success: false, message: error.message };
+  }
+}
+
 export async function sendWhatsAppMessage(phone: string, message: string): Promise<boolean> {
   try {
     await callBotAPI('/send-message', { phone, message });

@@ -200,4 +200,30 @@ router.get('/status', authMiddleware, async (_req: Request, res: Response) => {
   }
 });
 
+// Get QR code from bot (for admin pairing)
+router.get('/bot/qr', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const qr = await whatsappService.getBotQR();
+    res.json(qr);
+  } catch (error: any) {
+    console.error('Get bot QR error:', error.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Logout bot (for admin re-pairing)
+router.post('/bot/logout', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const result = await whatsappService.logoutBot();
+    if (result.success) {
+      res.json({ success: true, message: 'تم فصل الاتصال بنجاح' });
+    } else {
+      res.status(500).json({ error: result.message || 'فشل فصل الاتصال' });
+    }
+  } catch (error: any) {
+    console.error('Bot logout error:', error.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
 export default router;
