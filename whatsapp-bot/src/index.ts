@@ -79,6 +79,9 @@ function formatEgyptPhone(phone: string): string {
     cleaned = cleaned.substring(1);
   } else if (cleaned.startsWith('20')) {
     // Already correct
+  } else if (/^1[0-9]{9}$/.test(cleaned)) {
+    // 10 digits starting with 1 (missing leading 0) — add country code
+    cleaned = '20' + cleaned;
   }
 
   return cleaned + '@s.whatsapp.net';
