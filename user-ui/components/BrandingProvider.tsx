@@ -22,8 +22,8 @@ const defaultBranding: Branding = {
   favicon: '',
   primaryColor: '#2563eb',
   secondaryColor: '#7c3aed',
-  sloganAr: 'جودة . ثقة . امان',
-  sloganEn: 'Make Your Power',
+  sloganAr: 'نحو تعليم أفضل',
+  sloganEn: 'Towards Better Learning',
   messageFooter: 'هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
 };
 

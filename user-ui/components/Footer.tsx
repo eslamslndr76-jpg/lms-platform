@@ -83,9 +83,9 @@ export default function Footer() {
                 className="text-sm leading-relaxed mb-3"
                 style={{ color: 'var(--text-muted)' }}
               >
-                {sloganAr || 'جودة . ثقة . امان'}
+                {sloganAr || 'نحو تعليم أفضل'}
                 <span className="mx-1.5">—</span>
-                <span className="text-xs">{sloganEn || 'Make Your Power'}</span>
+                <span className="text-xs">{sloganEn || 'Towards Better Learning'}</span>
               </p>
               <p
                 className="text-xs leading-relaxed"
@@ -248,9 +248,9 @@ export default function Footer() {
               © {currentYear} نادي ريادة الاعمال. جميع الحقوق محفوظة.
             </p>
             <div className="flex items-center gap-4 text-xs" style={{ color: 'var(--text-light)' }}>
-              <span>جودة . ثقة . امان</span>
+              <span>نحو تعليم أفضل</span>
               <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--text-light)' }} />
-              <span>Make Your Power</span>
+              <span>Towards Better Learning</span>
             </div>
           </div>
         </div>

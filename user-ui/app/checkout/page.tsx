@@ -464,7 +464,7 @@ function CheckoutContent() {
                 هذه المنصة مقدمة من {systemName || 'نادي ريادة الاعمال'} بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
               </p>
               <p className="text-xs" style={{ color: 'var(--text-light)' }}>
-                {sloganAr || 'جودة . ثقة . امان'} — <span dir="ltr">{sloganEn || 'Make Your Power'}</span>
+                {sloganAr || 'نحو تعليم أفضل'} — <span dir="ltr">{sloganEn || 'Towards Better Learning'}</span>
               </p>
 
               {/* CTA Button */}

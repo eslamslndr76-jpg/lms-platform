@@ -68,8 +68,8 @@ Frontends (both): `NEXT_PUBLIC_API_URL` — backend base URL; falls back to `htt
 - **Branding (always use for mock data, headers, footers):**
   - Platform Name: "نادي ريادة الاعمال" (formerly "فريق تدريب X2")
   - Disclaimer: "هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)"
-  - Slogan (Arabic): "جودة . ثقة . امان"
-  - Slogan (English): "Make Your Power"
+  - Slogan (Arabic): "نحو تعليم أفضل"
+  - Slogan (English): "Towards Better Learning"
 - **UI/UX:** Premium polished interfaces with loading/success/error states on all components. Backend routes must have try/catch with descriptive HTTP status codes.
 - **API contracts:** Define JSON request/response before connecting frontend to backend. Use matching variable names across DB schema, API, and frontend.
 - **No placeholders or TODOs** in code — always deliver complete, functioning implementations.

@@ -176,9 +176,9 @@ export default function HomePage() {
 
               {/* Description */}
               <p className="text-base md:text-lg max-w-lg mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                {sloganAr || 'جودة . ثقة . امان'}
+                {sloganAr || 'نحو تعليم أفضل'}
                 <span className="mx-2">—</span>
-                <span className="text-sm">{sloganEn || 'Make Your Power'}</span>
+                <span className="text-sm">{sloganEn || 'Towards Better Learning'}</span>
               </p>
               <p className="text-xs mb-8 leading-relaxed" style={{ color: 'var(--text-light)' }}>
                 هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)

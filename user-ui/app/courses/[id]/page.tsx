@@ -627,9 +627,9 @@ export default function CourseDetailPage() {
                 style={{ borderColor: 'var(--border)' }}
               >
                 <p className="text-[10px] leading-relaxed" style={{ color: 'var(--text-light)' }}>
-                  {sloganAr || 'جودة . ثقة . امان'}
+                  {sloganAr || 'نحو تعليم أفضل'}
                   <br />
-                  <span className="text-[9px]">{sloganEn || 'Make Your Power'}</span>
+                  <span className="text-[9px]">{sloganEn || 'Towards Better Learning'}</span>
                 </p>
               </div>
             </div>

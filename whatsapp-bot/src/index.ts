@@ -291,7 +291,7 @@ async function sendOTPMessage(phone: string, otp: string, purpose: string = 'ver
 ⚠️ لا تشارك هذا الرمز مع أي شخص
 
 نادي ريادة الأعمال
-جودة . ثقة . أمان`;
+نحو تعليم أفضل`;
 
   return sendMessage(phone, message);
 }

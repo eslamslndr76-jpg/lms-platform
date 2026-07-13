@@ -7,7 +7,7 @@ import AIAssistant from '../components/AIAssistant';
 
 export const metadata: Metadata = {
   title: 'منصة نادي ريادة الاعمال | Training Center',
-  description: 'هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS) - جودة . ثقة . امان',
+  description: 'هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS) - نحو تعليم أفضل',
   icons: { icon: '/favicon.svg' },
 };
 

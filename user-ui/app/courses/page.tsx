@@ -299,9 +299,9 @@ export default function CoursesPage() {
               className="text-base md:text-lg max-w-xl mb-6 animate-fade-up"
               style={{ animationDelay: '0.1s', color: 'var(--text-muted)' }}
             >
-              {sloganAr || 'جودة . ثقة . امان'}
+              {sloganAr || 'نحو تعليم أفضل'}
               <span className="mx-2">—</span>
-              <span className="text-sm">{sloganEn || 'Make Your Power'}</span>
+              <span className="text-sm">{sloganEn || 'Towards Better Learning'}</span>
             </p>
 
             {/* Disclaimer */}
