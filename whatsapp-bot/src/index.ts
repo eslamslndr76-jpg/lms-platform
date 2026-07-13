@@ -73,7 +73,7 @@ function formatEgyptPhone(phone: string): string {
   let cleaned = phone.replace(/[\s\-()]/g, '');
 
   if (cleaned.startsWith('01')) {
-    cleaned = '20' + cleaned;
+    cleaned = '20' + cleaned.substring(1);
   } else if (cleaned.startsWith('+20')) {
     cleaned = cleaned.substring(1);
   } else if (cleaned.startsWith('20')) {
