@@ -47,7 +47,12 @@ export default function ForgotPasswordPage() {
       show('تم إرسال رمز التحقق إلى رقم هاتفك');
       setStep('otp');
     } catch (err: any) {
-      show(err.message || 'فشل إرسال رمز التحقق', 'error');
+      const msg = err.message || '';
+      if (msg.includes('not connected') || msg.includes('503') || msg.includes('bot not')) {
+        show('خدمة واتساب غير متصلة حالياً. حاول مرة أخرى بعد دقائق قليلة.', 'error');
+      } else {
+        show(msg || 'فشل إرسال رمز التحقق', 'error');
+      }
     } finally {
       setLoading(false);
     }

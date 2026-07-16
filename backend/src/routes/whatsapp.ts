@@ -2,10 +2,48 @@ import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 import * as whatsappService from '../services/whatsappService';
+import { sendWhatsAppNotification } from '../services/whatsappNotificationService';
+import { getCronSecret, isValidCronRequest } from '../config/whatsapp';
 
 const router = Router();
 
 // ═══════════════════════════════════════════════
+// Keep-alive for Bonto free tier (prevents bot sleep after 30min)
+// ═══════════════════════════════════════════════
+
+router.get('/keep-alive', async (req: Request, res: Response) => {
+  try {
+    // Validate cron secret if configured
+    if (!isValidCronRequest(req)) {
+      return res.status(401).json({ ok: false, error: 'Unauthorized' });
+    }
+    
+    const result = await whatsappService.getWhatsAppStatus();
+    console.log('[WA Keep-Alive]', {
+      timestamp: new Date().toISOString(),
+      connected: result.connected,
+      ready: result.ready,
+      uptime: result.uptime,
+      messagesSent: result.messagesSent
+    });
+    
+    // Alert if disconnected
+    if (!result.connected || !result.ready) {
+      console.warn('[WA ALERT] Bot disconnected!', {
+        connectionState: result.connectionState,
+        reconnecting: result.reconnecting,
+        retryCount: result.retryCount,
+      });
+    }
+    
+    res.json({ ok: true, connected: result.connected, uptime: result.uptime, messagesSent: result.messagesSent });
+  } catch (error: any) {
+    console.error('Keep-alive error:', error.message);
+    res.status(500).json({ ok: false, error: error.message });
+  }
+});
+
+// ══════════════════════════════════════════════
 // Public Routes (no auth required)
 // ═══════════════════════════════════════════════
 
@@ -31,10 +69,9 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
     );
     
     if (user.rows.length === 0) {
-      // Don't reveal if user exists or not (security)
-      return res.json({ 
-        success: true, 
-        message: ' إذا كان الرقم مسجلاً، سيتم إرسال رمز التحقق' 
+      return res.status(404).json({ 
+        success: false, 
+        error: 'الرقم غير مسجل في المنصة، أنشئ حساباً أولاً' 
       });
     }
     
@@ -52,6 +89,55 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Forgot password error:', error.message);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// Send OTP for registration/verification (allows NEW numbers)
+// ══════════════════════════════════════════════
+
+router.post('/send-verification', async (req: Request, res: Response) => {
+  try {
+    const { phone } = req.body;
+    
+    if (!phone) {
+      return res.status(400).json({ error: 'رقم الهاتف مطلوب' });
+    }
+    
+    // Validate phone format
+    const cleanedPhone = phone.replace(/\s/g, '');
+    if (!/^01[0-9]{9}$/.test(cleanedPhone)) {
+      return res.status(400).json({ error: 'رقم الهاتف غير صحيح' });
+    }
+    
+    // Send OTP for registration/verification (allows new numbers)
+    const result = await whatsappService.sendOTP(cleanedPhone, 'verification');
+    
+    if (result.success) {
+      res.json({ 
+        success: true, 
+        message: 'تم إرسال رمز التحقق إلى رقم الهاتف' 
+      });
+    } else {
+      res.status(500).json({ error: 'فشل إرسال رمز التحقق' });
+    }
+  } catch (error: any) {
+    console.error('Send verification error:', error.message);
+    res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// ══════════════════════════════════════════════
+// Smart QR endpoint with retry & fallback
+// ══════════════════════════════════════════════
+
+router.get('/qr-smart', async (req: Request, res: Response) => {
+  try {
+    const result = await whatsappService.getQRCodeSmart();
+    res.json(result);
+  } catch (error: any) {
+    console.error('QR Smart error:', error.message);
+    res.status(500).json({ available: false, message: 'خطأ في الخادم' });
   }
 });
 
@@ -106,6 +192,11 @@ router.post('/reset-password', async (req: Request, res: Response) => {
     const resetResult = await whatsappService.resetPassword(cleanedPhone, newPassword);
     
     if (resetResult.success) {
+      // Send password reset confirmation notification — await with fast-fail (max ~4s)
+      const user = await sql('SELECT id FROM users WHERE phone=?', cleanedPhone);
+      if (user.rows.length > 0) {
+        await sendWhatsAppNotification(Number((user.rows[0] as any).id), 'password_reset_done', {}).catch(e => console.error('[WA Notify] password_reset_done failed:', e.message));
+      }
       res.json({ success: true, message: 'تم إعادة تعيين كلمة المرور بنجاح' });
     } else {
       res.status(500).json({ error: resetResult.error || 'فشل إعادة تعيين كلمة المرور' });
@@ -116,44 +207,9 @@ router.post('/reset-password', async (req: Request, res: Response) => {
   }
 });
 
-// ═══════════════════════════════════════════════
+// ══════════════════════════════════════════════
 // Protected Routes (auth required)
-// ═══════════════════════════════════════════════
-
-// Send OTP for phone verification (during registration)
-router.post('/send-verification', authMiddleware, async (req: Request, res: Response) => {
-  try {
-    const { phone } = req.body;
-    
-    if (!phone) {
-      return res.status(400).json({ error: 'رقم الهاتف مطلوب' });
-    }
-    
-    const cleanedPhone = phone.replace(/\s/g, '');
-    
-    // Check if phone is already verified for another user
-    const existingPhone = await sql(
-      'SELECT id, phone_verified FROM users WHERE phone=? AND id!=?',
-      cleanedPhone, req.user!.userId
-    );
-    
-    if (existingPhone.rows.length > 0) {
-      return res.status(400).json({ error: 'رقم الهاتف مسجل بالفعل بحساب آخر' });
-    }
-    
-    // Send OTP
-    const result = await whatsappService.sendOTP(cleanedPhone, 'verification');
-    
-    if (result.success) {
-      res.json({ success: true, message: 'تم إرسال رمز التحقق' });
-    } else {
-      res.status(500).json({ error: 'فشل إرسال رمز التحقق' });
-    }
-  } catch (error: any) {
-    console.error('Send verification error:', error.message);
-    res.status(500).json({ error: 'خطأ في الخادم' });
-  }
-});
+// ══════════════════════════════════════════════
 
 // Verify phone number
 router.post('/verify-phone', authMiddleware, async (req: Request, res: Response) => {
@@ -197,6 +253,34 @@ router.get('/status', authMiddleware, async (_req: Request, res: Response) => {
   } catch (error: any) {
     console.error('Get WhatsApp status error:', error.message);
     res.status(500).json({ error: 'خطأ في الخادم' });
+  }
+});
+
+// Deep health check — for admin dashboard real-time monitoring
+router.get('/health', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const status = await whatsappService.getWhatsAppStatus();
+    const httpCode = status.connected && status.ready ? 200 : 503;
+    res.status(httpCode).json({
+      connected: status.connected,
+      ready: status.ready,
+      connectionState: status.connectionState,
+      reconnecting: status.reconnecting,
+      retryCount: status.retryCount,
+      lastConnectedAt: status.lastConnectedAt,
+      phone: status.phone,
+    });
+  } catch (error: any) {
+    console.error('WhatsApp health check error:', error.message);
+    res.status(503).json({
+      connected: false,
+      ready: false,
+      connectionState: 'disconnected',
+      reconnecting: false,
+      retryCount: 0,
+      lastConnectedAt: null,
+      phone: null,
+    });
   }
 });
 

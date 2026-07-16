@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '../lib/auth';
 import Sidebar from '../components/Sidebar';
 import AIAssistant from '../components/AIAssistant';
+import WhatsAppBanner from '../components/WhatsAppBanner';
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAdminAuth();
@@ -40,6 +41,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
       <Sidebar />
       <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+        <WhatsAppBanner />
         {children}
       </main>
       <AIAssistant />

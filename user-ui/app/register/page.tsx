@@ -136,24 +136,38 @@ export default function RegisterPage() {
 
   const prevStep = () => setStep(Math.max(step - 1, 0));
 
-  const handleSendPhoneOtp = async () => {
+const handleSendPhoneOtp = async () => {
     const cleaned = phone.replace(/\s/g, '');
     if (!cleaned || !/^01[0-9]{9}$/.test(cleaned)) {
       setErrors({ phone: 'أدخل رقم هاتف صحيح أولاً' });
       return;
     }
 
+    // Check if phone is already registered
     setSendingOtp(true);
     try {
-      // First register temporarily to get auth, then send OTP
-      // Actually we need to send OTP before registration
-      // Let's use the public forgot-password endpoint style
-      // We'll send the OTP via a temporary registration
-      await api('/api/whatsapp/forgot-password', { method: 'POST', body: JSON.stringify({ phone: cleaned }) });
+      const checkResult = await api('/api/auth/check-phone', { method: 'POST', body: JSON.stringify({ phone: cleaned }) }) as { exists: boolean };
+      if (checkResult.exists) {
+        setErrors({ phone: 'الرقم مسجل من قبل، جرب تسجيل الدخول' });
+        setSendingOtp(false);
+        return;
+      }
+    } catch {
+      // If check-phone fails, continue with OTP flow
+    }
+
+    try {
+      await api('/api/whatsapp/send-verification', { method: 'POST', body: JSON.stringify({ phone: cleaned }) });
       show('تم إرسال رمز التحقق على واتساب');
       setOtpCooldown(60);
+      setErrors({});
     } catch (err: any) {
-      show(err.message || 'فشل إرسال الرمز', 'error');
+      const msg = err.message || '';
+      if (msg.includes('not connected') || msg.includes('503') || msg.includes('bot not')) {
+        show('خدمة واتساب غير متصلة حالياً. حاول مرة أخرى بعد دقائق قليلة.', 'error');
+      } else {
+        show(msg || 'فشل إرسال الرمز', 'error');
+      }
     } finally {
       setSendingOtp(false);
     }
@@ -302,6 +316,11 @@ export default function RegisterPage() {
                         maxLength={f.key === 'phone' ? 11 : undefined} required />
                     </div>
                     {errors[f.key] && <p className="text-xs mt-1 text-red-500">{errors[f.key]}</p>}
+                    {f.key === 'phone' && !errors.phone && (
+                      <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                        💬 يُفضل أن يكون هذا الرقم مسجل على واتساب لتلقي الإشعارات
+                      </p>
+                    )}
                   </div>
                   );
                 })}

@@ -88,10 +88,15 @@ export default function SettingsPage() {
       setWaQRAvailable(data.available);
       setWaQR(data.qr || null);
       setWaQRAge(data.age || 0);
-    } catch {
+    } catch (err: any) {
       setWaQRAvailable(false);
       setWaQR(null);
       setWaQRAge(0);
+      const msg = err.message || '';
+      if (msg.includes('503') || msg.includes('failed') || msg.includes('timeout')) {
+        setWaAction('⚠️ البوت غير متصل حالياً. تحقق من تشغيل خدمة الواتساب.');
+        setTimeout(() => setWaAction(''), 6000);
+      }
     }
   };
 
@@ -605,10 +610,21 @@ export default function SettingsPage() {
                     <span className="text-xs">لفصل الاتصال والاتصال برقم جديد، اضغط "فصل الاتصال"</span>
                   </p>
                 ) : (
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    لا يوجد QR متاح<br />
-                    <span className="text-xs">جاري محاولة إنشاء كود جديد...</span>
-                  </p>
+                  <div className="space-y-2">
+                    <p className="text-sm" style={{ color: '#dc2626' }}>
+                      ❌ لا يمكن الاتصال بخدمة الواتساب
+                    </p>
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      تأكد من أن البوت يعمل على الخادم ثم اضغط "تحديث QR"
+                    </p>
+                    <button
+                      onClick={fetchWAQR}
+                      className="mt-2 px-4 py-2 rounded-xl text-xs font-medium text-white"
+                      style={{ backgroundColor: '#25D366' }}
+                    >
+                      🔄 إعادة المحاولة
+                    </button>
+                  </div>
                 )}
               </div>
             )}
