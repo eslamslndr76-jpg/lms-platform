@@ -20,10 +20,16 @@ const PORT = Number(process.env.PORT || process.env.WA_BOT_PORT) || 3002;
 const API_SECRET = process.env.WA_BOT_SECRET || 'dev-secret-change-in-production';
 const AUTH_DIR = process.env.WA_AUTH_DIR || '/tmp/whatsapp-auth';
 const PHONE_NUMBER = process.env.WA_PHONE_NUMBER || '';
-const MAX_RETRIES = 10;
-const RETRY_DELAY_MS = 5000;
 
-// Rate limiting: 1 message per 2.5 seconds (safety)
+// Heartbeat: ping every 30s to detect zombie connections
+const HEARTBEAT_INTERVAL_MS = 30_000;
+const HEARTBEAT_TIMEOUT_MS = 15_000;
+
+// Exponential backoff: 5s → 10s → 20s → … → max 5 minutes, unlimited retries
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 300_000;
+
+// Rate limiting: 1 message per 2.5 seconds
 const RATE_LIMIT_MS = 2500;
 let lastSendTime = 0;
 
@@ -42,6 +48,8 @@ interface SendOTPRequest {
   purpose?: 'registration' | 'password_reset' | 'verification';
 }
 
+type ConnectionState = 'disconnected' | 'connecting' | 'connected' | 'reconnecting';
+
 interface BotStatus {
   connected: boolean;
   ready: boolean;
@@ -49,6 +57,10 @@ interface BotStatus {
   uptime: number;
   messagesSent: number;
   messagesFailed: number;
+  reconnecting: boolean;
+  retryCount: number;
+  lastConnectedAt: number | null;
+  connectionState: ConnectionState;
 }
 
 // ═══════════════════════════════════════════════
@@ -64,6 +76,10 @@ let messagesSent = 0;
 let messagesFailed = 0;
 let qrData: string | null = null;
 let qrGeneratedAt: number = 0;
+let connectionState: ConnectionState = 'disconnected';
+let lastConnectedAt: number | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let isReconnecting = false;
 const startTime = Date.now();
 
 // ═══════════════════════════════════════════════
@@ -80,7 +96,6 @@ function formatEgyptPhone(phone: string): string {
   } else if (cleaned.startsWith('20')) {
     // Already correct
   } else if (/^1[0-9]{9}$/.test(cleaned)) {
-    // 10 digits starting with 1 (missing leading 0) — add country code
     cleaned = '20' + cleaned;
   }
 
@@ -89,6 +104,11 @@ function formatEgyptPhone(phone: string): string {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getRetryDelay(): number {
+  const delay = RETRY_BASE_MS * Math.pow(2, retryCount);
+  return Math.min(delay, RETRY_MAX_MS);
 }
 
 async function waitForRateLimit(): Promise<void> {
@@ -101,10 +121,68 @@ async function waitForRateLimit(): Promise<void> {
 }
 
 // ═══════════════════════════════════════════════
+// Heartbeat — detect zombie connections
+// ═══════════════════════════════════════════════
+
+function startHeartbeat(): void {
+  stopHeartbeat();
+  heartbeatTimer = setInterval(async () => {
+    if (!sock || !isConnected || isReconnecting) return;
+
+    try {
+      const ws = (sock as any).ws;
+      if (!ws || ws.readyState !== 1) {
+        console.log(`⚠️ Heartbeat: WebSocket.readyState=${ws?.readyState ?? 'null'} — zombie detected`);
+        await handleConnectionLoss('heartbeat_ws_closed');
+        return;
+      }
+
+      await Promise.race([
+        sock.query({ tag: 'iq', attrs: { id: sock.generateMessageTag(), to: 's.whatsapp.net', type: 'get', xmlns: 'w:p' } }),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('ping timeout')), HEARTBEAT_TIMEOUT_MS)),
+      ]);
+    } catch {
+      console.log('⚠️ Heartbeat: ping failed — connection may be dead');
+      await handleConnectionLoss('heartbeat_ping_failed');
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
+
+async function handleConnectionLoss(reason: string): Promise<void> {
+  if (isReconnecting) return;
+  console.log(`🔴 Connection loss detected: ${reason}`);
+  stopHeartbeat();
+  isConnected = false;
+  isReady = false;
+  connectionState = 'reconnecting';
+
+  if (sock) {
+    try { sock.end(undefined); } catch { /* ignore */ }
+    sock = null;
+  }
+
+  retryCount++;
+  const delay = getRetryDelay();
+  console.log(`🔄 Reconnecting in ${Math.round(delay / 1000)}s (attempt ${retryCount})...`);
+  await sleep(delay);
+  await connectWhatsApp();
+}
+
+// ═══════════════════════════════════════════════
 // WhatsApp Connection
 // ═══════════════════════════════════════════════
 
 async function connectWhatsApp(): Promise<void> {
+  isReconnecting = true;
+  connectionState = retryCount === 0 ? 'connecting' : 'reconnecting';
+
   if (!fs.existsSync(AUTH_DIR)) {
     fs.mkdirSync(AUTH_DIR, { recursive: true });
   }
@@ -129,12 +207,33 @@ async function connectWhatsApp(): Promise<void> {
 
   sock.ev.on('creds.update', saveCreds);
 
+  // Detect WebSocket-level disconnection (catches zombie connections)
+  const ws = (sock as any).ws;
+  if (ws) {
+    ws.on('close', () => {
+      if (isConnected && !isReconnecting) {
+        console.log('🔴 WebSocket closed unexpectedly');
+        handleConnectionLoss('ws_close_event');
+      }
+    });
+    ws.on('error', (err: Error) => {
+      if (isConnected && !isReconnecting) {
+        console.error('🔴 WebSocket error:', err.message);
+        handleConnectionLoss('ws_error_event');
+      }
+    });
+  }
+
   sock.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (connection === 'open') {
       isConnected = true;
+      isReady = false;
+      isReconnecting = false;
+      connectionState = 'connected';
       retryCount = 0;
+      lastConnectedAt = Date.now();
       qrData = null;
       qrGeneratedAt = 0;
 
@@ -149,6 +248,8 @@ async function connectWhatsApp(): Promise<void> {
       await sleep(5000);
       isReady = true;
       console.log('🚀 الاتصال جاهز لإرسال الرسائل!');
+
+      startHeartbeat();
       return;
     }
 
@@ -164,16 +265,19 @@ async function connectWhatsApp(): Promise<void> {
 
       console.log(`❌ تم قطع الاتصال (كود: ${statusCode})`);
 
+      stopHeartbeat();
+
       if (shouldReconnect) {
-        if (retryCount < MAX_RETRIES) {
-          retryCount++;
-          console.log(`🔄 إعادة الاتصال (${retryCount}/${MAX_RETRIES})...`);
-          await sleep(RETRY_DELAY_MS);
-          await connectWhatsApp();
-        } else {
-          console.log('⛔ تم تجاوز الحد الأقصى للمحاولات. أعد تشغيل الخدمة يدوياً.');
-        }
+        connectionState = 'reconnecting';
+        retryCount++;
+        const delay = getRetryDelay();
+        console.log(`🔄 إعادة الاتصال في ${Math.round(delay / 1000)}ث (محاولة ${retryCount})...`);
+        await sleep(delay);
+        isReconnecting = false;
+        await connectWhatsApp();
       } else {
+        connectionState = 'disconnected';
+        isReconnecting = false;
         console.log('👋 تم تسجيل الخروج. احذف مجلد auth وأعد التشغيل.');
       }
       return;
@@ -218,6 +322,8 @@ async function connectWhatsApp(): Promise<void> {
       }
     }
   });
+
+  isReconnecting = false;
 }
 
 // ═══════════════════════════════════════════════
@@ -268,6 +374,14 @@ async function sendMessage(phone: string, message: string): Promise<boolean> {
       }
     } catch (error: any) {
       console.error(`❌ فشل إرسال رسالة إلى ${phone} (محاولة ${attempt}):`, error.message || error);
+
+      const errMsg = (error.message || '').toLowerCase();
+      if (errMsg.includes('connection') || errMsg.includes('closed') || errMsg.includes('not opened')) {
+        console.log('🔴 Send failed due to connection issue — triggering reconnect');
+        handleConnectionLoss('send_failed_connection');
+        return false;
+      }
+
       if (attempt < maxRetries) {
         await sleep(3000);
       }
@@ -315,8 +429,27 @@ function requireAuth(req: Request, res: Response, next: () => void) {
   next();
 }
 
+// Shallow health: Express server alive?
 app.get('/health', (_req: Request, res: Response) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Deep health: WhatsApp actually connected?
+app.get('/health/deep', (_req: Request, res: Response) => {
+  const status: BotStatus = {
+    connected: isConnected,
+    ready: isReady,
+    phone: phoneNumber,
+    uptime: Math.floor((Date.now() - startTime) / 1000),
+    messagesSent,
+    messagesFailed,
+    reconnecting: isReconnecting || connectionState === 'reconnecting',
+    retryCount,
+    lastConnectedAt,
+    connectionState,
+  };
+  const httpCode = isConnected && isReady ? 200 : 503;
+  res.status(httpCode).json(status);
 });
 
 app.get('/qr-scanner', async (_req: Request, res: Response) => {
@@ -363,6 +496,7 @@ app.get('/qr-json', requireAuth, async (_req: Request, res: Response) => {
 
 app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
   try {
+    stopHeartbeat();
     if (sock) {
       try { await sock.logout(); } catch { /* ignore */ }
       sock = null;
@@ -372,6 +506,7 @@ app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
     phoneNumber = null;
     qrData = null;
     qrGeneratedAt = 0;
+    connectionState = 'disconnected';
 
     if (fs.existsSync(AUTH_DIR)) {
       fs.rmSync(AUTH_DIR, { recursive: true, force: true });
@@ -380,6 +515,8 @@ app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
     console.log('👋 تم تسجيل الخروج. إعادة الاتصال...');
     res.json({ success: true, message: 'تم فصل الاتصال. جاري إعادة الاتصال...' });
 
+    retryCount = 0;
+    isReconnecting = false;
     setTimeout(() => { connectWhatsApp().catch(console.error); }, 2000);
   } catch (error: any) {
     console.error('Logout error:', error.message);
@@ -387,7 +524,8 @@ app.post('/logout', requireAuth, async (_req: Request, res: Response) => {
   }
 });
 
-app.get('/status', requireAuth, (_req: Request, res: Response) => {
+// Status endpoint — no auth for easier monitoring
+app.get('/status', (_req: Request, res: Response) => {
   const status: BotStatus = {
     connected: isConnected,
     ready: isReady,
@@ -395,6 +533,10 @@ app.get('/status', requireAuth, (_req: Request, res: Response) => {
     uptime: Math.floor((Date.now() - startTime) / 1000),
     messagesSent,
     messagesFailed,
+    reconnecting: isReconnecting || connectionState === 'reconnecting',
+    retryCount,
+    lastConnectedAt,
+    connectionState,
   };
   res.json(status);
 });
@@ -419,7 +561,11 @@ app.post('/send-otp', requireAuth, async (req: Request, res: Response) => {
 
     if (!isConnected) {
       console.error('❌ WhatsApp not connected — cannot send OTP');
-      return res.status(503).json({ error: 'WhatsApp bot not connected' });
+      return res.status(503).json({
+        error: 'WhatsApp bot not connected',
+        connectionState,
+        reconnecting: isReconnecting || connectionState === 'reconnecting',
+      });
     }
 
     if (!isReady) {
@@ -433,7 +579,11 @@ app.post('/send-otp', requireAuth, async (req: Request, res: Response) => {
       res.json({ success: true, message: 'OTP sent successfully' });
     } else {
       console.error(`❌ Failed to send OTP to ${phone}`);
-      res.status(500).json({ error: 'Failed to send OTP' });
+      res.status(500).json({
+        error: 'Failed to send OTP',
+        connectionState,
+        reconnecting: isReconnecting || connectionState === 'reconnecting',
+      });
     }
   } catch (error: any) {
     console.error('Send OTP error:', error.message);
@@ -454,7 +604,11 @@ app.post('/send-message', requireAuth, async (req: Request, res: Response) => {
     if (success) {
       res.json({ success: true, message: 'Message sent successfully' });
     } else {
-      res.status(500).json({ error: 'Failed to send message' });
+      res.status(500).json({
+        error: 'Failed to send message',
+        connectionState,
+        reconnecting: isReconnecting || connectionState === 'reconnecting',
+      });
     }
   } catch (error: any) {
     console.error('Send message error:', error.message);
@@ -492,10 +646,12 @@ async function start() {
   console.log('🚀 بدء تشغيل WhatsApp Bot Service...');
   console.log(`📡 Listening on port ${PORT}`);
   console.log(`🔑 API Secret: ${API_SECRET.substring(0, 8)}...`);
+  console.log(`💓 Heartbeat: every ${HEARTBEAT_INTERVAL_MS / 1000}s`);
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🌐 HTTP API: http://localhost:${PORT}`);
     console.log(`📊 Status: http://localhost:${PORT}/status`);
+    console.log(`❤️ Deep Health: http://localhost:${PORT}/health/deep`);
     console.log(`\n═══════════════════════════════════════\n`);
   });
 
