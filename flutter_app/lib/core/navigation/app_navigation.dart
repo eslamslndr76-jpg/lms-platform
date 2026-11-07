@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../attendance/attendance_provider.dart';
 import '../notifications/notifications_provider.dart';
 import '../../features/attendance/qr_scanner_screen.dart';
 import '../../features/cart/cart_screen.dart';
@@ -60,46 +59,21 @@ class AppNavigation {
       return;
     }
 
-    // 2. Attendance links: /attendance/<lectureId>?code=<code>
-    if (cleanLink.contains('/attendance/')) {
+    // 2. Attendance links: /attendance/<lectureId>
+    // NEVER auto-mark attendance from notifications! Student must be in class and scan the lecturer's QR code.
+    if (cleanLink.contains('/attendance')) {
       final segments = uri?.pathSegments ?? cleanLink.split('/');
       final attendanceIdx = segments.indexOf('attendance');
       final lectureIdStr = (attendanceIdx != -1 && attendanceIdx + 1 < segments.length)
           ? segments[attendanceIdx + 1]
           : null;
       final parsedLectureId = int.tryParse(lectureIdStr ?? '') ?? lectureId;
-      final code = uri?.queryParameters['code'];
 
-      if (parsedLectureId != null && code != null && code.isNotEmpty) {
-        // Auto-mark attendance
-        final attendance = context.read<AttendanceProvider>();
-        attendance.markAttendance(lectureId: parsedLectureId, code: code).then((_) {
-          final navState = navigatorKey.currentState;
-          if (navState != null && navState.mounted) {
-            ScaffoldMessenger.of(navState.context).showSnackBar(
-              const SnackBar(
-                content: Text('✅ تم تسجيل حضورك في المحاضرة بنجاح'),
-                backgroundColor: Colors.green,
-                duration: Duration(seconds: 4),
-              ),
-            );
-          }
-        }).catchError((_) {
-          // Open scanner as fallback
-          navigatorKey.currentState?.push(
-            MaterialPageRoute(
-              builder: (_) => QrScannerScreen(targetLectureId: parsedLectureId),
-            ),
-          );
-        });
-      } else {
-        // Open QR scanner directly so student can scan lecturer's QR
-        navigatorKey.currentState?.push(
-          MaterialPageRoute(
-            builder: (_) => QrScannerScreen(targetLectureId: parsedLectureId),
-          ),
-        );
-      }
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => QrScannerScreen(targetLectureId: parsedLectureId),
+        ),
+      );
       return;
     }
 

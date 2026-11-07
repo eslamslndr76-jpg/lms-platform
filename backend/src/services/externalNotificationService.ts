@@ -259,7 +259,7 @@ function getCategoryForType(type: NotificationType): 'info' | 'success' | 'warni
 function getLinkForType(type: NotificationType, data: any): string {
   switch (type) {
     case 'attendance_opened':
-      return `/attendance/${data.lectureId}?code=${data.code || ''}`;
+      return `/attendance/${data.lectureId}`;
     case 'certificate_issued':
     case 'certificate_restored':
       return '/certificates';
@@ -285,7 +285,7 @@ function getLinkForType(type: NotificationType, data: any): string {
 function getShortSummary(type: NotificationType, data: any): string {
   switch (type) {
     case 'attendance_opened':
-      return `تم فتح باب الحضور لمحاضرة: ${data.topic || ''} في دورة ${data.courseTitle || ''}. اضغط لتأكيد الحضور بالكود: ${data.code || ''}`;
+      return `تم فتح باب الحضور لمحاضرة: ${data.topic || ''} في دورة ${data.courseTitle || ''}. افتح الكاميرا لمسح كود الحضور`;
     case 'attendance_confirmed':
       return `تم تسجيل حضورك بنجاح في محاضرة ${data.topic || ''}`;
     case 'lecture_added':

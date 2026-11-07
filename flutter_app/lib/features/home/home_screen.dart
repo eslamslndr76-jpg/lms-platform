@@ -585,7 +585,7 @@ class _MyCoursesTab extends StatefulWidget {
 
 class _MyCoursesTabState extends State<_MyCoursesTab> {
   final ApiClient _api = ApiClient();
-  List<dynamic> _groups = [];
+  List<Map<String, dynamic>> _groups = [];
   bool _loadingGroups = true;
   String _activeTab = 'groups'; // 'groups' | 'orders'
 
@@ -599,8 +599,12 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
     try {
       final res = await _api.get('/api/groups/my/all');
       if (res.statusCode == 200 && res.data is List && mounted) {
+        final list = res.data as List;
         setState(() {
-          _groups = res.data as List;
+          _groups = list
+              .whereType<Map>()
+              .map((item) => Map<String, dynamic>.from(item))
+              .toList();
           _loadingGroups = false;
         });
       }
@@ -630,13 +634,16 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
             decoration: BoxDecoration(
               color: cs.surface,
               border: Border(
-                bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3)),
+                bottom: BorderSide(
+                  color: cs.outlineVariant.withValues(alpha: 0.3),
+                  width: 1,
+                ),
               ),
             ),
             child: Row(
               children: [
                 ChoiceChip(
-                  label: Text('�������� ������� (${_groups.length})'),
+                  label: Text('مجموعاتي ودوراتي (${_groups.length})'),
                   selected: _activeTab == 'groups',
                   onSelected: (val) {
                     if (val) setState(() => _activeTab = 'groups');
@@ -644,7 +651,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                 ),
                 const SizedBox(width: 8),
                 ChoiceChip(
-                  label: Text('��� ���������� (${orders.myOrders.length})'),
+                  label: Text('سجل الاشتراكات (${orders.myOrders.length})'),
                   selected: _activeTab == 'orders',
                   onSelected: (val) {
                     if (val) setState(() => _activeTab = 'orders');
@@ -682,12 +689,12 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
               Icon(Icons.school_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
               const SizedBox(height: 16),
               Text(
-                '�� ��� ������ �� �� ������ ���',
+                'لم يتم تسكينك في أي مجموعة بعد',
                 style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               Text(
-                '����� ������ �� ������ ������ɡ ����� ��� ������ ��������� ������� ������ ������� ����� ������.',
+                'بمجرد تسكينك في مجموعة تدريبية، ستظهر هنا مواعيد المحاضرات والجدول وقاعات التدريب وحالة الحضور.',
                 textAlign: TextAlign.center,
                 style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
@@ -702,15 +709,17 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
       itemCount: _groups.length,
       separatorBuilder: (_, __) => const SizedBox(height: 14),
       itemBuilder: (context, index) {
-        final g = _groups[index] as Map<String, dynamic>;
-        final groupId = g['id'] as int? ?? 0;
-        final title = g['title_ar'] as String? ?? g['course_name'] as String? ?? '���� �������';
-        final groupName = g['name'] as String? ?? '������';
+        final g = _groups[index];
+        final groupId = (g['id'] as num?)?.toInt() ?? 0;
+        final title = g['title_ar'] as String? ?? g['course_name'] as String? ?? 'دورة تدريبية';
+        final groupName = g['name'] as String? ?? 'مجموعة';
         final schedule = g['schedule_display'] as String? ?? g['schedule'] as String? ?? '';
         final instructor = g['instructor_name'] as String? ?? g['instructor'] as String?;
-        final progress = g['lecture_progress'] as Map<String, dynamic>?;
-        final total = progress?['total'] as int? ?? 0;
-        final done = progress?['done'] as int? ?? 0;
+        final progress = g['lecture_progress'] is Map
+            ? Map<String, dynamic>.from(g['lecture_progress'] as Map)
+            : null;
+        final total = (progress?['total'] as num?)?.toInt() ?? 0;
+        final done = (progress?['done'] as num?)?.toInt() ?? 0;
 
         return Card(
           elevation: 1,
@@ -777,7 +786,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                         Icon(Icons.person_outline_rounded, size: 16, color: cs.onSurfaceVariant),
                         const SizedBox(width: 6),
                         Text(
-                          '�������: $instructor',
+                          'المحاضر: $instructor',
                           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                         ),
                       ],
@@ -789,7 +798,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Text(
-                          '���������: $done �� $total',
+                          'المحاضرات: $done من $total',
                           style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         Text(
@@ -820,7 +829,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                       );
                     },
                     icon: const Icon(Icons.event_note_rounded, size: 18),
-                    label: const Text('��� ������ ��������� ������� �������'),
+                    label: const Text('عرض تفاصيل المحاضرات والجدول والحضور'),
                     style: FilledButton.styleFrom(
                       minimumSize: const Size.fromHeight(40),
                     ),
@@ -850,12 +859,12 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
               Icon(Icons.receipt_long_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
               const SizedBox(height: 16),
               Text(
-                '�� ���� ����� ������ �����',
+                'لا توجد طلبات اشتراك مسجلة',
                 style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
               ),
               const SizedBox(height: 8),
               Text(
-                '��� ������� �� �� ���� ������� ����� ������ ����� ������ �������� ���.',
+                'عند اشتراكك في أي دورة تدريبية ستظهر فواتير الدفع وتأكيد الاشتراك هنا.',
                 textAlign: TextAlign.center,
                 style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
               ),
@@ -905,7 +914,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                   children: [
                     Expanded(
                       child: Text(
-                        order.titleAr ?? '���� �������',
+                        order.titleAr ?? 'دورة تدريبية',
                         style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                       ),
                     ),
@@ -945,7 +954,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      '������: ${order.amount.toInt()} �.�',
+                      'المبلغ: ${order.amount.toInt()} ج.م',
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         color: cs.primary,
