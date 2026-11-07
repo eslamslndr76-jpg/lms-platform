@@ -60,8 +60,8 @@ router.get('/app-version', async (_req: Request, res: Response) => {
       return res.json(JSON.parse(result.rows[0].value as string));
     }
     res.json({
-      latestVersion: '1.0.1',
-      buildNumber: 2,
+      latestVersion: '1.0.2',
+      buildNumber: 3,
       forceUpdate: false,
       title: 'تحديث جديد متوفر',
       message: 'يتوفر إصدار جديد من تطبيق الهاتف يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',

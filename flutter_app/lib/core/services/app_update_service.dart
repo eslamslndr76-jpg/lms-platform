@@ -44,9 +44,9 @@ class AppUpdateInfo {
 class AppUpdateService {
   AppUpdateService._();
 
-  // Current app release version & build number matching pubspec.yaml (1.0.1+2)
-  static const int currentBuildNumber = 2;
-  static const String currentVersionName = '1.0.1';
+  // Current app release version & build number matching pubspec.yaml (1.0.2+3)
+  static const int currentBuildNumber = 3;
+  static const String currentVersionName = '1.0.2';
 
   static AppUpdateInfo? _cachedUpdate;
   static bool _checked = false;
