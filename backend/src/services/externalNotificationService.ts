@@ -1,4 +1,6 @@
 import { sql } from '../db/helpers';
+import { sendFcmToToken, isFcmEnabled } from './fcmService';
+import { createNotification } from './notificationService';
 import { sendEmailOTP, sendGenericEmail, isEmailEnabled } from './emailService';
 import { sendTelegramOTP, sendGenericTelegram, isTelegramEnabled } from './telegramService';
 import { getFrontendUrl, OTP_TTL_MINUTES, OTP_LENGTH } from '../config/notification';
@@ -132,11 +134,12 @@ interface UserData {
   name: string | null;
   email_notifications: number;
   telegram_notifications: number;
+  fcm_token?: string | null;
 }
 
 async function getUserData(userId: number): Promise<UserData | null> {
   const result = await sql(
-    `SELECT phone, email, telegram_chat_id, name,
+    `SELECT phone, email, telegram_chat_id, name, fcm_token,
             COALESCE(NULLIF(email_notifications, 0), 1) as email_notifications,
             COALESCE(NULLIF(telegram_notifications, 0), 1) as telegram_notifications
      FROM users WHERE id=?`,
@@ -151,6 +154,7 @@ async function getUserData(userId: number): Promise<UserData | null> {
     name: r.name || null,
     email_notifications: Number(r.email_notifications),
     telegram_notifications: Number(r.telegram_notifications),
+    fcm_token: r.fcm_token || null,
   };
 }
 
@@ -181,7 +185,29 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
   }
 
   const message = buildMessage(type, data);
+  const subject = getSubjectForType(type, data);
+  const link = getLinkForType(type, data);
+  const notifType = getCategoryForType(type);
+  const shortSummary = getShortSummary(type, data);
+
+  // Always create an in-app notification row for real-time and background app push sync
+  try {
+    await createNotification(userId, subject, shortSummary, notifType, link);
+  } catch (notifErr: any) {
+    console.error('[Notify] In-app notification creation failed:', notifErr.message);
+  }
+
   const promises: Promise<any>[] = [];
+
+  // FCM Push Notification (Flutter mobile app)
+  if (isFcmEnabled() && user.fcm_token) {
+    sendFcmToToken(
+      user.fcm_token,
+      subject,
+      shortSummary,
+      { link, type: notifType },
+    ).catch(() => {});
+  }
 
   // Email
   if (user.email && user.email_notifications && isEmailEnabled()) {
@@ -209,6 +235,65 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
   }
 
   await Promise.allSettled(promises);
+}
+
+
+function getCategoryForType(type: NotificationType): 'info' | 'success' | 'warning' {
+  switch (type) {
+    case 'attendance_opened':
+    case 'order_cancelled':
+    case 'certificate_revoked':
+    case 'removed_from_group':
+      return 'warning';
+    case 'order_paid':
+    case 'attendance_confirmed':
+    case 'certificate_issued':
+    case 'certificate_restored':
+      return 'success';
+    default:
+      return 'info';
+  }
+}
+
+function getLinkForType(type: NotificationType, data: any): string {
+  switch (type) {
+    case 'attendance_opened':
+      return `/attendance/${data.lectureId}?code=${data.code || ''}`;
+    case 'certificate_issued':
+    case 'certificate_restored':
+      return '/certificates';
+    case 'order_created':
+    case 'order_cancelled':
+      return '/orders';
+    case 'survey_opened':
+    case 'survey_reminder':
+      return `/survey/${data.groupId}`;
+    case 'instructor_eval_opened':
+      return '/instructor';
+    case 'proposal_reviewed':
+      return `/instructor/proposals/${data.proposalId}`;
+    default:
+      return '/my-courses';
+  }
+}
+
+function getShortSummary(type: NotificationType, data: any): string {
+  switch (type) {
+    case 'attendance_opened':
+      return `تم فتح باب الحضور لمحاضرة: ${data.topic || ''} في دورة ${data.courseTitle || ''}. اضغط لتأكيد الحضور بالكود: ${data.code || ''}`;
+    case 'attendance_confirmed':
+      return `تم تسجيل حضورك بنجاح في محاضرة ${data.topic || ''}`;
+    case 'lecture_added':
+      return `محاضرة جديدة: ${data.topic || ''} في دورة ${data.courseTitle || ''} (${data.date || ''} ${data.timeFrom || ''})`;
+    case 'order_paid':
+      return `تم تأكيد اشتراكك في دورة ${data.courseTitle || ''}`;
+    case 'certificate_issued':
+      return `تهانينا! تم إصدار شهادتك في دورة ${data.courseTitle || ''}`;
+    case 'assigned_to_group':
+      return `تم إضافتك إلى مجموعة ${data.groupName || ''} في دورة ${data.courseTitle || ''}`;
+    default:
+      return buildMessage(type, data).split('\n')[0] || 'إشعار جديد';
+  }
 }
 
 function getSubjectForType(type: NotificationType, data: any): string {
@@ -358,4 +443,28 @@ export async function resetPassword(phone: string, newPassword: string): Promise
 
 export async function markPhoneVerified(phone: string): Promise<void> {
   await sql('UPDATE users SET phone_verified=1 WHERE phone=?', phone);
+}
+
+export async function broadcastAnnouncement(
+  title: string,
+  message: string,
+  link?: string,
+  type: 'info' | 'success' | 'warning' = 'info',
+  targetRole: number = 3,
+): Promise<{ count: number }> {
+  const users = await sql(
+    'SELECT id, email, telegram_chat_id, COALESCE(NULLIF(email_notifications, 0), 1) as email_notifications, COALESCE(NULLIF(telegram_notifications, 0), 1) as telegram_notifications FROM users WHERE role_id=?',
+    targetRole,
+  );
+  for (const row of users.rows as any[]) {
+    const uid = Number(row.id);
+    await createNotification(uid, title, message, type, link || '/dashboard').catch(() => {});
+    if (row.email && Number(row.email_notifications) && isEmailEnabled()) {
+      sendGenericEmail(row.email, title, `${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});
+    }
+    if (row.telegram_chat_id && Number(row.telegram_notifications) && isTelegramEnabled()) {
+      sendGenericTelegram(row.telegram_chat_id, `📢 <b>${title}</b>\n\n${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});
+    }
+  }
+  return { count: users.rows.length };
 }

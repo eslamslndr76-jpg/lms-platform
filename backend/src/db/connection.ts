@@ -111,6 +111,8 @@ export async function initializeDatabase() {
     "CREATE INDEX IF NOT EXISTS idx_group_surveys_user ON group_surveys(user_id)",
     // Give groups completed before the survey existed a 30-day window.
     "UPDATE groups SET survey_closes_at = datetime(COALESCE(completed_at, CURRENT_TIMESTAMP), '+30 days') WHERE status = 'completed' AND survey_closes_at IS NULL",
+    // FCM push notification token for Flutter mobile app
+    "ALTER TABLE users ADD COLUMN fcm_token TEXT",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

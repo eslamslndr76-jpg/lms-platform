@@ -1,18 +1,20 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useEffect, useRef, useState, Suspense } from 'react';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { useBranding } from '../../../../components/BrandingProvider';
 import { api } from '../../../../lib/api';
 
-export default function AttendancePage() {
+function AttendanceContent() {
   const { primaryColor } = useBranding();
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const lectureId = params?.lectureId as string | undefined;
+  const initialCode = searchParams?.get('code') || '';
 
-  const [method, setMethod] = useState<'qr' | 'manual'>('qr');
-  const [manualCode, setManualCode] = useState('');
+  const [method, setMethod] = useState<'qr' | 'manual'>(initialCode ? 'manual' : 'qr');
+  const [manualCode, setManualCode] = useState(initialCode.toUpperCase());
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [scannerStarted, setScannerStarted] = useState(false);
@@ -20,6 +22,7 @@ export default function AttendancePage() {
   const qrVideoRef = useRef<HTMLDivElement>(null);
   const qrScannerRef = useRef<{ stop: () => Promise<void> } | null>(null);
   const attemptedRef = useRef<string | null>(null);
+  const autoSubmittedRef = useRef(false);
 
   /* ── QR Scanner ── */
   const initScanner = async () => {
@@ -42,7 +45,16 @@ export default function AttendancePage() {
             if (p.v === 1 && p.c) code = p.c;
             else code = decoded.trim().toUpperCase();
           } catch {
-            code = decoded.trim().toUpperCase();
+            if (decoded.includes('code=')) {
+              try {
+                const u = new URL(decoded);
+                code = u.searchParams.get('code') || decoded.trim().toUpperCase();
+              } catch {
+                code = decoded.trim().toUpperCase();
+              }
+            } else {
+              code = decoded.trim().toUpperCase();
+            }
           }
           if (code) await submit(code, 'qr');
         },
@@ -64,12 +76,20 @@ export default function AttendancePage() {
   };
 
   useEffect(() => {
-    if (method === 'qr') {
+    if (method === 'qr' && !initialCode) {
       const t = setTimeout(() => initScanner(), 300);
       return () => { clearTimeout(t); stopScanner(); };
     }
     stopScanner();
   }, [method, lectureId]);
+
+  /* ── Auto-submit if code is passed via URL query ── */
+  useEffect(() => {
+    if (initialCode && lectureId && !autoSubmittedRef.current) {
+      autoSubmittedRef.current = true;
+      submit(initialCode.trim().toUpperCase(), 'qr');
+    }
+  }, [initialCode, lectureId]);
 
   /* ── Submit ── */
   const submit = async (code: string, markMethod: 'qr' | 'manual') => {
@@ -282,5 +302,13 @@ export default function AttendancePage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function AttendancePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><p>جاري التحميل...</p></div>}>
+      <AttendanceContent />
+    </Suspense>
   );
 }

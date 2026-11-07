@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -32,7 +33,7 @@ class AppUpdateInfo {
       forceUpdate: json['forceUpdate'] as bool? ?? false,
       title: json['title'] as String? ?? 'تحديث جديد متوفر 🚀',
       message: json['message'] as String? ??
-          'يتوفر إصدار جديد من تطبيق وحدة التدريب يتضمن ميزة إنشاء حساب جديد، خطوط عصرية، والشعار الرسمي. اضغط للتثبيت الآن.',
+          'يتوفر إصدار جديد من تطبيق وحدة التدريب. اضغط للتثبيت الآن.',
       downloadUrl: json['downloadUrl'] as String? ?? 'https://lms-user.vercel.app/download',
       apkDirectUrl: json['apkDirectUrl'] as String? ??
           'https://lms-user.vercel.app/downloads/training-unit.apk',
@@ -43,12 +44,16 @@ class AppUpdateInfo {
 class AppUpdateService {
   AppUpdateService._();
 
-  // Current client build number
   static const int currentBuildNumber = 1;
   static const String currentVersionName = '1.0.0';
 
   static AppUpdateInfo? _cachedUpdate;
   static bool _checked = false;
+
+  // Notification plugin (reuse from local_notification_service channel)
+  static final _plugin = FlutterLocalNotificationsPlugin();
+  static const _downloadChannelId = 'training_download_channel';
+  static const _downloadNotifId = 9999;
 
   static Future<AppUpdateInfo?> check() async {
     if (_checked) return _cachedUpdate;
@@ -68,175 +73,130 @@ class AppUpdateService {
     return _cachedUpdate;
   }
 
-  /// Downloads the APK directly from within the app and triggers the
-  /// Android package installer without external browser navigation.
-  static Future<void> downloadAndInstall(
-    BuildContext context, {
+  /// Downloads the APK in the background with a progress notification.
+  /// The user is NOT blocked — they can continue using the app.
+  /// When download finishes, a "Tap to install" notification appears.
+  static Future<void> downloadAndInstallBackground({
+    required BuildContext context,
     String? directApkUrl,
   }) async {
-    final apkUrl = directApkUrl ??
-        'https://lms-user.vercel.app/downloads/training-unit.apk';
+    final apkUrl =
+        directApkUrl ?? 'https://lms-user.vercel.app/downloads/training-unit.apk';
 
-    // Show Progress Dialog
-    double progress = 0.0;
-    String statusText = 'جارٍ بدء التحميل...';
-    String sizeText = '';
-    bool isDownloading = true;
-    CancelToken cancelToken = CancelToken();
-
-    final dialogContext = context;
-
-    showDialog(
-      context: dialogContext,
-      barrierDismissible: false,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            final cs = Theme.of(context).colorScheme;
-            final tt = Theme.of(context).textTheme;
-
-            return PopScope(
-              canPop: false,
-              child: AlertDialog(
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                title: Row(
-                  children: [
-                    Icon(
-                      Icons.system_update_rounded,
-                      color: cs.primary,
-                      size: 26,
-                    ),
-                    const SizedBox(width: 10),
-                    Text(
-                      'تحديث التطبيق تلقائياً',
-                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-                content: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      statusText,
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 12),
-                    LinearProgressIndicator(
-                      value: progress > 0 ? progress : null,
-                      borderRadius: BorderRadius.circular(8),
-                      minHeight: 8,
-                    ),
-                    if (sizeText.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        sizeText,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: cs.onSurfaceVariant,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 12),
-                    Text(
-                      'سيتم بدء تثبيت التحديث تلقائياً فور انتهاء التحميل.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: cs.onSurfaceVariant.withValues(alpha: 0.8),
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      cancelToken.cancel();
-                      Navigator.of(ctx).pop();
-                    },
-                    child: const Text('إلغاء'),
-                  ),
-                ],
-              ),
-            );
-          },
+    // Ensure download notification channel exists
+    await _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(
+          const AndroidNotificationChannel(
+            _downloadChannelId,
+            'تحديثات التطبيق',
+            importance: Importance.low,
+            showBadge: false,
+          ),
         );
-      },
-    );
+
+    // Show initial "downloading" notification
+    await _showProgress(0);
+
+    // Close bottom sheet if open
+    if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+
+    // Show snackbar confirming background download
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('⬇️ جارٍ تحميل التحديث في الخلفية...'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+    }
 
     try {
       final dir = await getTemporaryDirectory();
-      final savePath = '${dir.path}/training-unit.apk';
+      final savePath = '${dir.path}/training-unit-update.apk';
 
-      // Delete existing temporary apk if exists
-      final existingFile = File(savePath);
-      if (await existingFile.exists()) {
-        await existingFile.delete();
-      }
+      final existing = File(savePath);
+      if (await existing.exists()) await existing.delete();
 
       final dio = Dio();
       await dio.download(
         apkUrl,
         savePath,
-        cancelToken: cancelToken,
-        onReceiveProgress: (received, total) {
-          if (total > 0 && isDownloading) {
-            progress = received / total;
-            final recMb = (received / (1024 * 1024)).toStringAsFixed(1);
-            final totMb = (total / (1024 * 1024)).toStringAsFixed(1);
-            final percent = (progress * 100).toInt();
-            sizeText = '$recMb ميجابايت / $totMb ميجابايت ($percent%)';
-            statusText = 'جارٍ تحميل التحديث... $percent%';
-            // Trigger dialog rebuild
-            if (context.mounted) {
-              (context as Element).markNeedsBuild();
-            }
+        onReceiveProgress: (received, total) async {
+          if (total > 0) {
+            final pct = ((received / total) * 100).toInt();
+            await _showProgress(pct);
           }
         },
       );
 
-      // Dismiss progress dialog
-      if (dialogContext.mounted) {
-        Navigator.of(dialogContext, rootNavigator: true).pop();
-      }
+      // Cancel progress notification
+      await _plugin.cancel(_downloadNotifId);
 
-      // Automatically launch package installer
-      final result = await OpenFilex.open(
-        savePath,
-        type: 'application/vnd.android.package-archive',
+      // Show "ready to install" notification
+      await _plugin.show(
+        _downloadNotifId,
+        '✅ التحديث جاهز للتثبيت',
+        'اضغط هنا لتثبيت الإصدار الجديد',
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            _downloadChannelId,
+            'تحديثات التطبيق',
+            importance: Importance.high,
+            priority: Priority.high,
+            icon: '@mipmap/launcher_icon',
+            autoCancel: true,
+          ),
+        ),
       );
 
-      if (result.type != ResultType.done && dialogContext.mounted) {
-        // Fallback to browser download if package installer was blocked
-        _fallbackBrowser(dialogContext, apkUrl);
-      }
+      // Automatically launch installer
+      await OpenFilex.open(savePath, type: 'application/vnd.android.package-archive');
     } catch (e) {
-      if (dialogContext.mounted) {
-        try {
-          Navigator.of(dialogContext, rootNavigator: true).pop();
-        } catch (_) {}
-
-        if (e is! DioException || e.type != DioExceptionType.cancel) {
-          ScaffoldMessenger.of(dialogContext).showSnackBar(
-            const SnackBar(
-              content: Text('تعذر التثبيت التلقائي، جارٍ فتح صفحة التحميل...'),
+      await _plugin.cancel(_downloadNotifId);
+      if (e is! DioException || e.type != DioExceptionType.cancel) {
+        // Show failure notification
+        await _plugin.show(
+          _downloadNotifId,
+          '❌ فشل التحميل',
+          'تعذر تحميل التحديث. اضغط لفتح صفحة التحميل.',
+          const NotificationDetails(
+            android: AndroidNotificationDetails(
+              _downloadChannelId,
+              'تحديثات التطبيق',
+              importance: Importance.defaultImportance,
+              icon: '@mipmap/launcher_icon',
             ),
-          );
-          _fallbackBrowser(dialogContext, apkUrl);
+          ),
+        );
+        final uri = Uri.parse(apkUrl);
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
         }
       }
     }
   }
 
-  static Future<void> _fallbackBrowser(BuildContext context, String apkUrl) async {
-    final uri = Uri.parse(apkUrl);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
+  static Future<void> _showProgress(int percent) async {
+    await _plugin.show(
+      _downloadNotifId,
+      'جارٍ تحميل التحديث... $percent%',
+      'وحدة التدريب والتطوير',
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          _downloadChannelId,
+          'تحديثات التطبيق',
+          importance: Importance.low,
+          priority: Priority.low,
+          onlyAlertOnce: true,
+          showProgress: true,
+          maxProgress: 100,
+          progress: percent,
+          icon: '@mipmap/launcher_icon',
+        ),
+      ),
+    );
   }
 
   static void showUpdatePrompt(BuildContext context, AppUpdateInfo info) {
@@ -282,14 +242,25 @@ class AppUpdateService {
                   style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
                   textAlign: TextAlign.center,
                 ),
+                const SizedBox(height: 4),
+                Text(
+                  '✅ سيتم التحميل في الخلفية — يمكنك متابعة استخدام التطبيق',
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: () {
-                    Navigator.of(ctx).pop();
-                    downloadAndInstall(context, directApkUrl: info.apkDirectUrl);
+                    downloadAndInstallBackground(
+                      context: ctx,
+                      directApkUrl: info.apkDirectUrl,
+                    );
                   },
-                  icon: const Icon(Icons.install_mobile_rounded),
-                  label: const Text('تثبيت التحديث الآن من داخل التطبيق'),
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('تحميل وتثبيت في الخلفية'),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
                   ),

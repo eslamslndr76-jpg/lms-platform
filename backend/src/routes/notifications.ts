@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
+import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import * as inAppNotificationService from '../services/notificationService';
 import * as extNotificationService from '../services/externalNotificationService';
 import { isEmailEnabled, isTelegramEnabled, getTelegramBotUsername, getTelegramBotToken, getBackendUrl, getTelegramWebhookSecret } from '../config/notification';
@@ -391,4 +392,42 @@ router.patch('/preferences', authMiddleware, async (req: Request, res: Response)
   }
 });
 
+
+// ═══════════════════════════════════════════════
+// Broadcast Announcement (Admin / Employee)
+// ═══════════════════════════════════════════════
+
+router.post('/broadcast', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const { title, message, link, type, roleId } = req.body;
+    if (!title || !message) {
+      return res.status(400).json({ error: 'العنوان والرسالة مطلوبان' });
+    }
+    const result = await extNotificationService.broadcastAnnouncement(
+      title,
+      message,
+      link,
+      type || 'info',
+      roleId ? Number(roleId) : 3,
+    );
+    res.json({ success: true, count: result.count, message: `تم إرسال الإشعار بنجاح إلى ${result.count} مستخدم` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || 'فشل إرسال الإشعار العام' });
+  }
+});
+
+// ── FCM Token registration (Flutter mobile app) ──────────────────────────────
+router.post('/fcm-token', authMiddleware, async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.userId;
+    const { token } = req.body as { token?: string };
+    if (!token) return res.status(400).json({ error: 'token required' });
+    await sql('UPDATE users SET fcm_token=? WHERE id=?', token, userId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;
+

@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "776639885296",
+    "project_id": "reels-494423",
+    "storage_bucket": "reels-494423.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:776639885296:android:32e5f7ae1914f9cf75f735",
+        "android_client_info": {
+          "package_name": "com.trainingunit.flutter_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "776639885296-d2oae80k80ds4e6sl290u7b2uo972m0v.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB5rnoqgQ7PMYTaDDgK2kaC-0EhOvaOfc8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "776639885296-d2oae80k80ds4e6sl290u7b2uo972m0v.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
