@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-/// Displays the platform logo (base64 data URL) or a stylized fallback
-/// with the first letter of the platform name inside a colored circle.
+/// Displays the platform logo from base64 (if provided by API branding)
+/// or the bundled high-resolution asset `assets/images/app_logo.png`.
 class LogoWidget extends StatelessWidget {
   final String logoBase64;
   final String fallbackText;
@@ -16,8 +16,7 @@ class LogoWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-
+    // 1. Try base64 from branding if present
     if (logoBase64.isNotEmpty && logoBase64.startsWith('data:image')) {
       try {
         return ClipRRect(
@@ -27,19 +26,32 @@ class LogoWidget extends StatelessWidget {
             width: size,
             height: size,
             fit: BoxFit.contain,
-            errorBuilder: (_, __, ___) => _fallback(cs),
+            errorBuilder: (_, __, ___) => _buildAssetLogo(),
           ),
         );
       } catch (_) {
-        return _fallback(cs);
+        return _buildAssetLogo();
       }
     }
 
-    return _fallback(cs);
+    // 2. Default to bundled official asset logo
+    return _buildAssetLogo();
+  }
+
+  Widget _buildAssetLogo() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(size * 0.22),
+      child: Image.asset(
+        'assets/images/app_logo.png',
+        width: size,
+        height: size,
+        fit: BoxFit.contain,
+        errorBuilder: (context, error, stackTrace) => _fallback(Theme.of(context).colorScheme),
+      ),
+    );
   }
 
   Widget _fallback(ColorScheme cs) {
-    final letter = fallbackText.isNotEmpty ? fallbackText[0] : 'ت';
     return Container(
       width: size,
       height: size,
@@ -58,16 +70,10 @@ class LogoWidget extends StatelessWidget {
           ),
         ],
       ),
-      child: Center(
-        child: Text(
-          letter,
-          style: TextStyle(
-            color: cs.onPrimary,
-            fontSize: size * 0.44,
-            fontWeight: FontWeight.w900,
-            fontFamily: 'Cairo',
-          ),
-        ),
+      child: Icon(
+        Icons.school_rounded,
+        size: size * 0.55,
+        color: cs.onPrimary,
       ),
     );
   }

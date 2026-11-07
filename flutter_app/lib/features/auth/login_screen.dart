@@ -64,17 +64,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   Center(
                     child: Hero(
                       tag: 'app_logo',
-                      child: Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest.withValues(alpha: 0.5),
-                          shape: BoxShape.circle,
-                        ),
-                        child: LogoWidget(
-                          logoBase64: branding.logoHeader,
-                          fallbackText: branding.systemName,
-                          size: 84,
-                        ),
+                      child: LogoWidget(
+                        logoBase64: branding.logoHeader,
+                        fallbackText: branding.systemName,
+                        size: 96,
                       ),
                     ),
                   ),
