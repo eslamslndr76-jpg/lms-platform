@@ -237,65 +237,73 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
   }
 
   void _showBleScannerSheet() {
-    final provider = context.read<AttendanceProvider>();
-
     showModalBottomSheet(
       context: context,
       builder: (ctx) {
         return Consumer<AttendanceProvider>(
           builder: (context, att, _) {
             final cs = Theme.of(context).colorScheme;
+            final tt = Theme.of(context).textTheme;
 
             return Padding(
               padding: const EdgeInsets.all(24),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.bluetooth_searching_rounded, size: 54, color: cs.primary),
+                  Icon(
+                    Icons.bluetooth_searching_rounded,
+                    size: 48,
+                    color: cs.primary,
+                  ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'استشعار الحضور بالبلوتوث (BLE)',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+                  Text(
+                    'تسجيل الحضور عبر البلوتوث (BLE)',
+                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'جاري البحث عن إشارة قاعة المحاضرات للتحقق من تواجدك الفعلي...',
+                    'تأكد من اقترابك من شاشة القاعة وتشغيل البلوتوث بهاتفك.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13),
+                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
                   ),
                   const SizedBox(height: 20),
-                  if (att.isScanningBle)
-                    const CircularProgressIndicator()
-                  else
-                    FilledButton.icon(
-                      icon: const Icon(Icons.bluetooth_rounded),
-                      label: const Text('بدء المسح الآن'),
+                  if (att.isScanningBle) ...[
+                    const CircularProgressIndicator(),
+                    const SizedBox(height: 12),
+                    const Text('جارٍ البحث عن أجهزة الحضور...'),
+                  ] else ...[
+                    if (att.error != null) ...[
+                      Text(
+                        att.error!,
+                        style: TextStyle(color: cs.error, fontSize: 13),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    FilledButton(
                       onPressed: () {
-                        provider.startBleScan(
-                          onBeaconFound: (lectureId, code) async {
+                        final messenger = ScaffoldMessenger.of(context);
+                        final nav = Navigator.of(context);
+                        att.startBleScan(
+                          onBeaconFound: (lecId, code) async {
                             Navigator.of(ctx).pop();
-                            final messenger = ScaffoldMessenger.of(context);
-                            final navigator = Navigator.of(context);
-                            final res = await provider.markAttendance(
-                              lectureId: lectureId,
+                            final res = await att.markAttendance(
+                              lectureId: lecId,
                               code: code,
                               method: 'ble',
                             );
-                            if (!mounted) return;
-                            messenger.showSnackBar(
-                              SnackBar(content: Text(res.message)),
-                            );
-                            if (res.success) navigator.pop(true);
+                            if (mounted) {
+                              messenger.showSnackBar(
+                                SnackBar(content: Text(res.message)),
+                              );
+                              if (res.success) {
+                                nav.pop(true);
+                              }
+                            }
                           },
                         );
                       },
-                    ),
-                  if (att.error != null) ...[
-                    const SizedBox(height: 12),
-                    Text(
-                      att.error!,
-                      style: TextStyle(color: cs.error, fontSize: 12),
-                      textAlign: TextAlign.center,
+                      child: const Text('بدء الفحص الآن'),
                     ),
                   ],
                 ],
@@ -312,41 +320,29 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final cs = Theme.of(context).colorScheme;
 
     return Scaffold(
-      backgroundColor: Colors.black,
       appBar: AppBar(
+        title: const Text('مسح رمز الحضور (QR)'),
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
-        title: const Text('تسجيل الحضور الذكي'),
         actions: [
-          // Torch toggle
           IconButton(
-            icon: Icon(
-              _isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded,
-              color: _isTorchOn ? Colors.amber : Colors.white,
-            ),
-            tooltip: 'الفلاش',
+            icon: Icon(_isTorchOn ? Icons.flash_on_rounded : Icons.flash_off_rounded),
             onPressed: () {
-              setState(() => _isTorchOn = !_isTorchOn);
               _controller.toggleTorch();
+              setState(() => _isTorchOn = !_isTorchOn);
             },
-          ),
-          // Camera switch
-          IconButton(
-            icon: const Icon(Icons.flip_camera_ios_rounded, color: Colors.white),
-            tooltip: 'تبديل الكاميرا',
-            onPressed: () => _controller.switchCamera(),
           ),
         ],
       ),
       body: Stack(
         children: [
-          // ── Camera Feed ───────────────────────────────────────────────────
+          // Camera scanner
           MobileScanner(
             controller: _controller,
             onDetect: _handleBarcode,
           ),
 
-          // ── Darkened Overlay with Cutout ──────────────────────────────────
+          // Darkened Overlay with Cutout
           ColorFiltered(
             colorFilter: ColorFilter.mode(
               Colors.black.withValues(alpha: 0.55),
@@ -374,7 +370,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
           ),
 
-          // ── Target Frame Border & Instructions ───────────────────────────
+          // Target Frame Border & Instructions
           Align(
             alignment: Alignment.center,
             child: Container(
@@ -392,7 +388,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
           ),
 
-          // ── Top Hint ──────────────────────────────────────────────────────
+          // Top Hint
           Positioned(
             top: 30,
             left: 20,
@@ -411,7 +407,7 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             ),
           ),
 
-          // ── Bottom Controls ───────────────────────────────────────────────
+          // Bottom Controls
           Positioned(
             bottom: 40,
             left: 24,

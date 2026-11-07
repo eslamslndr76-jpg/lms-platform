@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
@@ -18,22 +19,24 @@ class TrainingApp extends StatelessWidget {
       title: branding.systemName,
       debugShowCheckedModeBanner: false,
 
-      // ── Material 3 Themes seeded from admin branding colors ─────────────
+      // Material 3 Themes seeded from admin branding colors
       theme: AppTheme.light(branding.primaryColor, secondary: branding.secondaryColor),
       darkTheme: AppTheme.dark(branding.primaryColor, secondary: branding.secondaryColor),
       themeMode: ThemeMode.system,
 
-      // ── RTL Arabic ────────────────────────────────────────────────────────
+      // Proper Arabic RTL localization with delegates
       locale: const Locale('ar'),
-      supportedLocales: const [Locale('ar'), Locale('en')],
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.rtl,
-          child: child!,
-        );
-      },
+      supportedLocales: const [
+        Locale('ar'),
+        Locale('en'),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
 
-      // ── Routing ───────────────────────────────────────────────────────────
+      // Routing
       home: auth.isAuthenticated ? const HomeScreen() : const LoginScreen(),
     );
   }

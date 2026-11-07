@@ -30,7 +30,7 @@ class AttendanceProvider extends ChangeNotifier {
   String? get error => _error;
   AttendanceResult? get lastResult => _lastResult;
 
-  // ── Mark Attendance via API ────────────────────────────────────────────────
+  // Mark Attendance via API
   Future<AttendanceResult> markAttendance({
     required int lectureId,
     required String code,
@@ -88,11 +88,7 @@ class AttendanceProvider extends ChangeNotifier {
     }
   }
 
-  // ── Parse QR Payload ───────────────────────────────────────────────────────
-  // Supports:
-  // 1. JSON: {"v":1, "l":123, "c":"A1B2C3", "t":1700000000}
-  // 2. URL: https://.../attendance/123?code=A1B2C3
-  // 3. Raw combined format: "123:A1B2C3"
+  // Parse QR Payload
   Map<String, dynamic>? parseQrData(String rawData) {
     try {
       final clean = rawData.trim();
@@ -142,7 +138,7 @@ class AttendanceProvider extends ChangeNotifier {
     return null;
   }
 
-  // ── Bluetooth LE Scan ─────────────────────────────────────────────────────
+  // Bluetooth LE Scan
   Future<void> startBleScan({
     required Function(int lectureId, String code) onBeaconFound,
   }) async {

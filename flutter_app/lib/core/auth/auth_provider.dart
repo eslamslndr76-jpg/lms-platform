@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
@@ -25,14 +26,28 @@ class AppUser {
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
+    // id may come as int or string from the API
+    final rawId = json['id'];
+    final id = rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0;
+
+    // role_id may be missing; derive from role string as fallback
+    final rawRoleId = json['role_id'];
+    int roleId;
+    if (rawRoleId != null) {
+      roleId = rawRoleId is int ? rawRoleId : int.tryParse(rawRoleId.toString()) ?? 3;
+    } else {
+      final role = json['role'] as String? ?? 'student';
+      roleId = role == 'admin' ? 1 : role == 'employee' ? 2 : 3;
+    }
+
     return AppUser(
-      id: json['id'] as int,
-      name: json['name'] as String,
-      email: json['email'] as String,
+      id: id,
+      name: json['name'] as String? ?? '',
+      email: json['email'] as String? ?? '',
       phone: json['phone'] as String?,
       avatar: json['avatar'] as String?,
       role: json['role'] as String? ?? 'student',
-      roleId: (json['role_id'] as num?)?.toInt() ?? 3,
+      roleId: roleId,
     );
   }
 }
@@ -53,7 +68,7 @@ class AuthProvider extends ChangeNotifier {
   bool get loading => _loading;
   String? get error => _error;
 
-  // ── Boot: restore session ────────────────────────────────────────────────
+  // Boot: restore session
   Future<void> restore() async {
     _token = await _storage.read(key: _tokenKey);
     if (_token != null) {
@@ -62,7 +77,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Login ────────────────────────────────────────────────────────────────
+  // Login
   Future<bool> login(String emailOrPhone, String password) async {
     _loading = true;
     _error = null;
@@ -89,7 +104,7 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
-  // ── Logout ───────────────────────────────────────────────────────────────
+  // Logout
   Future<void> logout() async {
     _token = null;
     _user = null;
@@ -98,7 +113,7 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ── Fetch current user from /api/auth/me ─────────────────────────────────
+  // Fetch current user from /api/auth/me
   Future<void> _fetchMe() async {
     try {
       final res = await ApiClient().get(ApiConstants.me);
@@ -112,12 +127,35 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // ── Error extraction from Dio ─────────────────────────────────────────────
+  // Error extraction from Dio / network
   String _extractError(dynamic e) {
     try {
+      if (e is DioException) {
+        if (e.type == DioExceptionType.connectionTimeout ||
+            e.type == DioExceptionType.receiveTimeout ||
+            e.type == DioExceptionType.sendTimeout) {
+          return 'انتهت مهلة الاتصال بالخادم، يرجى التحقق من اتصال الإنترنت';
+        }
+        if (e.type == DioExceptionType.connectionError) {
+          return 'تعذر الاتصال بالخادم، يرجى التأكد من اتصالك بالإنترنت';
+        }
+        final data = e.response?.data;
+        if (data is Map && data['error'] != null) {
+          return data['error'].toString();
+        }
+        if (data is Map && data['message'] != null) {
+          return data['message'].toString();
+        }
+        if (e.response?.statusCode == 401) {
+          return 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+        }
+        if (e.response?.statusCode == 404) {
+          return 'الحساب غير مسجل بالمنظومة';
+        }
+      }
       final data = (e as dynamic).response?.data;
       if (data is Map && data['error'] != null) return data['error'].toString();
     } catch (_) {}
-    return 'حدث خطأ، يرجى المحاولة مرة أخرى';
+    return 'حدث خطأ أثناء تسجيل الدخول، يرجى المحاولة مرة أخرى';
   }
 }

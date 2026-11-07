@@ -24,9 +24,15 @@ class OrderModel {
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
+    final rawId = json['id'];
+    final id = rawId is num ? rawId.toInt() : int.tryParse(rawId.toString()) ?? 0;
+
+    final rawCourseId = json['course_id'];
+    final courseId = rawCourseId is num ? rawCourseId.toInt() : int.tryParse(rawCourseId.toString()) ?? 0;
+
     return OrderModel(
-      id: (json['id'] as num).toInt(),
-      courseId: (json['course_id'] as num).toInt(),
+      id: id,
+      courseId: courseId,
       amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
       status: json['status'] as String? ?? 'pending',
       receiptUrl: json['receipt_url'] as String?,
