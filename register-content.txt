@@ -1,9 +1,9 @@
 - generic [active] [ref=f1e1]:
   - banner [ref=f1e2]:
     - generic [ref=f1e4]:
-      - link "مركز تدريب نادى ريادة الاعمال" [ref=f1e135] [cursor=pointer]:
+      - link "مركز تدريب وحدة التدريب و التطوير" [ref=f1e135] [cursor=pointer]:
         - /url: /
-        - img "مركز تدريب نادى ريادة الاعمال" [ref=f1e137]
+        - img "مركز تدريب وحدة التدريب و التطوير" [ref=f1e137]
       - generic [ref=f1e8]:
         - link "📚 البرامج" [ref=f1e9] [cursor=pointer]:
           - /url: /courses
@@ -29,7 +29,7 @@
         - generic [ref=f1e102]
         - generic [ref=f1e115]
       - generic [ref=f1e128]:
-        - paragraph [ref=f1e129]: © 2026 نادي ريادة الاعمال. جميع الحقوق محفوظة.
+        - paragraph [ref=f1e129]: © 2026 وحدة التدريب و التطوير. جميع الحقوق محفوظة.
         - generic [ref=f1e130]
   - button "العودة للأعلى": ↑
   - alert [ref=f1e134]

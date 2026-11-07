@@ -7,6 +7,7 @@ import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { PageSkeleton } from '../../../components/Skeleton';
+import M3BottomSheet from '../../../components/M3BottomSheet';
 
 interface Order {
   id: number;
@@ -24,31 +25,16 @@ interface Order {
 
 interface OrderDetail extends Order {
   image_url?: string;
-  groups: Array<{
-    id: number;
-    name: string;
-    instructor_name: string;
-    location: string;
-    start_date: string;
-    end_date: string;
-    is_complete: number;
-    zoom_link: string;
-  }>;
+  groups: Array<{ id: number; name: string; instructor_name: string; location: string; start_date: string; end_date: string; is_complete: number; zoom_link: string; }>;
 }
 
-const statusColors: Record<string, string> = {
-  pending: 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-300',
-  review: 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300',
-  paid: 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300',
-  cancelled: 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300',
+const statusStyles: Record<string, { bg: string; fg: string }> = {
+  pending: { bg: '#fef3c7', fg: '#92400e' },
+  review: { bg: '#dbeafe', fg: '#1e40af' },
+  paid: { bg: '#dcfce7', fg: '#166534' },
+  cancelled: { bg: '#fee2e2', fg: '#991b1b' },
 };
-
-const statusLabels: Record<string, string> = {
-  pending: 'قيد الانتظار',
-  review: 'قيد المراجعة',
-  paid: 'تم الدفع',
-  cancelled: 'ملغي',
-};
+const statusLabels: Record<string, string> = { pending: 'قيد الانتظار', review: 'قيد المراجعة', paid: 'تم الدفع', cancelled: 'ملغي' };
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -58,13 +44,18 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [detailOrder, setDetailOrder] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 1024);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     if (!user) return;
-    try {
-      const data = await api('/api/orders/my');
-      setOrders(data || []);
-    } catch { /* ignore */ } finally { setLoading(false); }
+    try { setOrders((await api('/api/orders/my')) || []); } catch { /* ignore */ } finally { setLoading(false); }
   }, [user]);
 
   useEffect(() => {
@@ -73,12 +64,8 @@ export default function OrdersPage() {
   }, [user, authLoading, router, fetchOrders]);
 
   const openDetail = async (orderId: number) => {
-    setDetailLoading(true);
-    setDetailOrder(null);
-    try {
-      const data = await api(`/api/orders/my/${orderId}`);
-      setDetailOrder(data);
-    } catch { setDetailOrder(null); }
+    setDetailLoading(true); setDetailOrder(null);
+    try { setDetailOrder(await api(`/api/orders/my/${orderId}`)); } catch { setDetailOrder(null); }
     setDetailLoading(false);
   };
 
@@ -87,123 +74,109 @@ export default function OrdersPage() {
   return (
     <div className="max-w-4xl mx-auto p-4">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>طلباتي</h1>
-        <Link href="/courses" className="text-sm" style={{ color: primaryColor }}>← تصفح الكورسات</Link>
+        <h1 className="text-2xl font-bold flex items-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+          <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>receipt_long</span> طلباتي
+        </h1>
+        <Link href="/courses" className="text-sm flex items-center gap-1" style={{ color: 'var(--md-sys-color-primary)' }}>
+          <span className="material-symbols-outlined text-[16px]">arrow_forward</span> تصفح الكورسات
+        </Link>
       </div>
 
       {orders.length === 0 ? (
         <div className="text-center py-16">
-          <div className="text-6xl mb-4">📋</div>
-          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text)' }}>لا توجد طلبات</h2>
-          <p className="mb-6" style={{ color: 'var(--text-muted)' }}>لم تقم بالتسجيل في أي كورس بعد</p>
-          <Link href="/courses" className="inline-block px-6 py-3 rounded-xl text-white font-medium" style={{ backgroundColor: primaryColor }}>
-            تصفح الكورسات
+          <span className="material-symbols-outlined text-[64px] block mb-4" style={{ color: 'var(--md-sys-color-outline)' }}>receipt_long</span>
+          <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>لا توجد طلبات</h2>
+          <p className="mb-6" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>لم تقم بالتسجيل في أي كورس بعد</p>
+          <Link href="/courses" className="inline-flex items-center gap-2 h-12 px-6 rounded-full text-sm font-medium"
+            style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
+            <span className="material-symbols-outlined text-[18px]">search</span> تصفح الكورسات
           </Link>
         </div>
       ) : (
         <div className="space-y-3">
-          {orders.map(order => (
-            <button key={order.id} onClick={() => openDetail(order.id)} className="w-full text-right">
-              <div className="rounded-2xl p-4 shadow-sm border text-right w-full transition-all hover:shadow-md" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-bold" style={{ color: 'var(--text)' }}>{order.title_ar}</h3>
-                  <span className={`text-xs px-3 py-1 rounded-full font-medium ${statusColors[order.status] || 'bg-gray-100'}`}>
-                    {statusLabels[order.status] || order.status}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-3">
-                    <span style={{ color: 'var(--text-muted)' }}>{new Date(order.created_at).toLocaleDateString('ar-EG')}</span>
-                    {order.payment_method && <span className="text-xs" style={{ color: 'var(--text-muted)' }}>💳 {order.payment_method}</span>}
+          {orders.map(order => {
+            const st = statusStyles[order.status] || { bg: '#f3f4f6', fg: '#374151' };
+            return (
+              <button key={order.id} onClick={() => openDetail(order.id)} className="w-full text-right">
+                <div className="rounded-md3-md p-4 w-full transition-all hover:shadow-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{order.title_ar}</h3>
+                    <span className="text-xs px-3 py-1 rounded-full font-medium" style={{ backgroundColor: st.bg, color: st.fg }}>{statusLabels[order.status] || order.status}</span>
                   </div>
-                  <span className="font-bold" style={{ color: primaryColor }}>{order.amount} ج.م</span>
-                </div>
-                {order.notes_student && (
-                  <div className="mt-2 pt-2 border-t text-xs" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                    📝 {order.notes_student}
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                        <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                        {new Date(order.created_at).toLocaleDateString('ar-EG')}
+                      </span>
+                      {order.payment_method && (
+                        <span className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                          <span className="material-symbols-outlined text-[14px]">payment</span> {order.payment_method}
+                        </span>
+                      )}
+                    </div>
+                    <span className="font-bold" style={{ color: 'var(--md-sys-color-primary)' }}>{order.amount} ج.م</span>
                   </div>
-                )}
-              </div>
-            </button>
-          ))}
+                  {order.notes_student && (
+                    <div className="mt-2 pt-2 text-xs flex items-center gap-1" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                      <span className="material-symbols-outlined text-[14px]">sticky_note_2</span> {order.notes_student}
+                    </div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
         </div>
       )}
 
-      {/* Detail Modal */}
       {detailOrder && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDetailOrder(null)}>
-          <div className="absolute inset-0 bg-black/40" />
-          <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-2xl p-6 shadow-xl" style={{ backgroundColor: 'var(--card)' }} onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-bold" style={{ color: 'var(--text)' }}>تفاصيل الطلب</h2>
-              <button onClick={() => setDetailOrder(null)} className="p-1 text-lg" style={{ color: 'var(--text-muted)' }}>✕</button>
-            </div>
-
+        isMobile ? (
+          <M3BottomSheet open={!!detailOrder} onClose={() => setDetailOrder(null)} title="تفاصيل الطلب" maxHeightVh={75}>
             {detailLoading ? (
-              <div className="text-center py-8" style={{ color: 'var(--text-muted)' }}>جاري التحميل...</div>
+              <div className="text-center py-8" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}><div className="h-full rounded-full animate-pulse" style={{ width: '40%', backgroundColor: 'var(--md-sys-color-primary)' }} /></div></div>
             ) : (
-              <div className="space-y-4">
+              <div className="px-5 pb-6 space-y-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-xl overflow-hidden">
+                  <div className="w-14 h-14 rounded-md3-md overflow-hidden flex-shrink-0">
                     {detailOrder.image_url ? (
                       <img src={detailOrder.image_url} alt={detailOrder.title_ar} className="w-full h-full object-cover" />
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: primaryColor }}>
-                        {detailOrder.title_ar.charAt(0)}
-                      </div>
+                      <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: 'var(--md-sys-color-primary)' }}>{detailOrder.title_ar.charAt(0)}</div>
                     )}
                   </div>
                   <div>
-                    <p className="font-bold" style={{ color: 'var(--text)' }}>{detailOrder.title_ar}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{detailOrder.title_en}</p>
+                    <p className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.title_ar}</p>
+                    <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{detailOrder.title_en}</p>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المبلغ</p>
-                    <p className="font-bold" style={{ color: primaryColor }}>{detailOrder.amount} ج.م</p>
-                  </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${statusColors[detailOrder.status] || ''}`}>
-                      {statusLabels[detailOrder.status] || detailOrder.status}
-                    </span>
-                  </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</p>
-                    <p style={{ color: 'var(--text)' }}>{detailOrder.payment_method || 'cash'}</p>
-                  </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>التاريخ</p>
-                    <p style={{ color: 'var(--text)' }}>{new Date(detailOrder.created_at).toLocaleDateString('ar-EG')}</p>
-                  </div>
+                  {[
+                    { label: 'المبلغ', value: <span style={{ color: 'var(--md-sys-color-primary)' }}>{detailOrder.amount} ج.م</span> },
+                    { label: 'الحالة', value: <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: statusStyles[detailOrder.status]?.bg || '#f3f4f6', color: statusStyles[detailOrder.status]?.fg || '#374151' }}>{statusLabels[detailOrder.status]}</span> },
+                    { label: 'طريقة الدفع', value: <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.payment_method || 'cash'}</span> },
+                    { label: 'التاريخ', value: <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{new Date(detailOrder.created_at).toLocaleDateString('ar-EG')}</span> },
+                  ].map((item, i) => (
+                    <div key={i} className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                      <p className="text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{item.label}</p>
+                      {item.value}
+                    </div>
+                  ))}
                 </div>
-
                 {detailOrder.notes_student && (
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظاتك</p>
-                    <p className="text-sm" style={{ color: 'var(--text)' }}>{detailOrder.notes_student}</p>
+                  <div className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                    <p className="text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>ملاحظاتك</p>
+                    <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.notes_student}</p>
                   </div>
                 )}
-
                 {detailOrder.groups && detailOrder.groups.length > 0 && (
                   <div>
-                    <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>المجموعات</h4>
+                    <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>المجموعات</h4>
                     <div className="space-y-2">
                       {detailOrder.groups.map((g: any) => (
-                        <div key={g.id} className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                          <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>{g.name}</p>
-                          {g.instructor_name && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>🧑‍🏫 {g.instructor_name}</p>}
-                          {g.location && <p className="text-xs" style={{ color: 'var(--text-muted)' }}>📍 {g.location}</p>}
-                          {g.start_date && (
-                            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                              📅 {new Date(g.start_date).toLocaleDateString('ar-EG')} - {g.end_date ? new Date(g.end_date).toLocaleDateString('ar-EG') : 'بدون'}
-                            </p>
-                          )}
-                          {g.zoom_link && (
-                            <a href={g.zoom_link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 underline">رابط Zoom</a>
-                          )}
+                        <div key={g.id} className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                          <p className="font-medium text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{g.name}</p>
+                          {g.instructor_name && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><span className="material-symbols-outlined text-[12px]">person</span> {g.instructor_name}</p>}
+                          {g.location && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><span className="material-symbols-outlined text-[12px]">location_on</span> {g.location}</p>}
                         </div>
                       ))}
                     </div>
@@ -211,8 +184,72 @@ export default function OrdersPage() {
                 )}
               </div>
             )}
+          </M3BottomSheet>
+        ) : (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setDetailOrder(null)}>
+            <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <div className="relative w-full max-w-lg max-h-[80vh] overflow-y-auto rounded-md3-md p-6 shadow-xl" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تفاصيل الطلب</h2>
+                <button onClick={() => setDetailOrder(null)} className="w-10 h-10 rounded-full flex items-center justify-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              {detailLoading ? (
+                <div className="text-center py-8" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}><div className="h-full rounded-full animate-pulse" style={{ width: '40%', backgroundColor: 'var(--md-sys-color-primary)' }} /></div></div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-md3-md overflow-hidden flex-shrink-0">
+                      {detailOrder.image_url ? (
+                        <img src={detailOrder.image_url} alt={detailOrder.title_ar} className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center text-white font-bold" style={{ backgroundColor: 'var(--md-sys-color-primary)' }}>{detailOrder.title_ar.charAt(0)}</div>
+                      )}
+                    </div>
+                    <div>
+                      <p className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.title_ar}</p>
+                      <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{detailOrder.title_en}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    {[
+                      { label: 'المبلغ', value: <span style={{ color: 'var(--md-sys-color-primary)' }}>{detailOrder.amount} ج.م</span> },
+                      { label: 'الحالة', value: <span className="text-xs px-2 py-0.5 rounded-full" style={{ backgroundColor: statusStyles[detailOrder.status]?.bg || '#f3f4f6', color: statusStyles[detailOrder.status]?.fg || '#374151' }}>{statusLabels[detailOrder.status]}</span> },
+                      { label: 'طريقة الدفع', value: <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.payment_method || 'cash'}</span> },
+                      { label: 'التاريخ', value: <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{new Date(detailOrder.created_at).toLocaleDateString('ar-EG')}</span> },
+                    ].map((item, i) => (
+                      <div key={i} className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                        <p className="text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{item.label}</p>
+                        {item.value}
+                      </div>
+                    ))}
+                  </div>
+                  {detailOrder.notes_student && (
+                    <div className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                      <p className="text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>ملاحظاتك</p>
+                      <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.notes_student}</p>
+                    </div>
+                  )}
+                  {detailOrder.groups && detailOrder.groups.length > 0 && (
+                    <div>
+                      <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>المجموعات</h4>
+                      <div className="space-y-2">
+                        {detailOrder.groups.map((g: any) => (
+                          <div key={g.id} className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                            <p className="font-medium text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{g.name}</p>
+                            {g.instructor_name && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><span className="material-symbols-outlined text-[12px]">person</span> {g.instructor_name}</p>}
+                            {g.location && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}><span className="material-symbols-outlined text-[12px]">location_on</span> {g.location}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        )
       )}
     </div>
   );

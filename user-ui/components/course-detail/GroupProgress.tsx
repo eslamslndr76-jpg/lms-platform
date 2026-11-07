@@ -48,14 +48,12 @@ export function GroupProgress({
     ? 'linear-gradient(90deg, #d97706, #f59e0b)'
     : 'linear-gradient(90deg, #16a34a, #22c55e)';
 
-  // Create animate function outside useEffect
   const animateFn = useCallback((currentTime: number) => {
     const startTime = animateRef.current?.startTime || performance.now();
     animateRef.current = animateRef.current || { startTime };
     const elapsed = currentTime - animateRef.current.startTime;
     const duration = 1000;
     const progress = Math.min(elapsed / duration, 1);
-    // easeOutExpo
     const eased = progress === 1 ? 1 : 1 - Math.pow(2, -10 * progress);
     setDisplayProgress(pct * eased);
 
@@ -64,7 +62,6 @@ export function GroupProgress({
     }
   }, [pct]);
 
-  // Animate progress on mount
   useEffect(() => {
     if (!animate) {
       setDisplayProgress(pct);
@@ -75,14 +72,13 @@ export function GroupProgress({
     requestAnimationFrame(animateFn);
   }, [pct, animate, animateFn]);
 
-  // Intersection observer for scroll-triggered animation
   useEffect(() => {
     if (!animate) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && displayProgress === 0) {
-          setDisplayProgress(0); // Trigger re-animation
+          setDisplayProgress(0);
         }
       },
       { threshold: 0.5, rootMargin: '0px 0px -100px 0px' }
@@ -94,24 +90,22 @@ export function GroupProgress({
     return () => observer.disconnect();
   }, [animate, displayProgress]);
 
-  const statusIcon = isFull ? '🏆' : isAlmostFull ? '⚡' : '🟢';
+  const statusIcon = isFull ? 'emoji_events' : isAlmostFull ? 'bolt' : 'check_circle';
   const statusMessage = isFull
     ? 'المجموعة الحالية اكتملت — احجز الآن لتكون أول شخص في المجموعة الجديدة'
     : isAlmostFull
     ? `لم يتبق سوى ${remaining} مقاعد! احجز الآن قبل نفادها`
     : `مازال متسع — ${remaining} مقعد متاح`;
 
-  // Compact variant - for CourseCard
   if (variant === 'compact') {
     return (
       <div className={`flex items-center gap-2 ${className}`} style={{ minWidth: '120px' }}>
-        <div className="relative w-16 h-2 rounded-full overflow-hidden flex-1" style={{ backgroundColor: 'var(--border)' }}>
+        <div className="relative w-16 h-2 rounded-full overflow-hidden flex-1" style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}>
           <div
             className="h-full rounded-full transition-all duration-1000 ease-expo relative"
             style={{
               width: `${Math.min(displayProgress, 100)}%`,
               background: gradient,
-              boxShadow: `0 0 8px ${colors.glow}`,
             }}
           />
         </div>
@@ -122,41 +116,35 @@ export function GroupProgress({
     );
   }
 
-  // Card variant - for sidebar
   if (variant === 'card') {
     return (
       <div
         ref={containerRef}
-        className={`p-4 rounded-2xl relative overflow-hidden ${className}`}
+        className={`p-4 relative overflow-hidden ${className}`}
         style={{
           backgroundColor: colors.bg,
-          borderColor: colors.border,
-          borderWidth: '1px',
-          borderStyle: 'solid',
+          border: `1px solid ${colors.border}`,
+          borderRadius: '16px',
         }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between mb-3">
-          <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>{label}</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{label}</span>
           <span className="text-xs font-bold" style={{ color: colors.glow }}>
             {current} / {max} طالب
           </span>
         </div>
 
-        {/* Progress Bar */}
         <div className="relative h-3 rounded-full overflow-hidden mb-3" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}>
           <div
             className="h-full rounded-full transition-all duration-1000 ease-expo relative"
             style={{
               width: `${Math.min(displayProgress, 100)}%`,
               background: gradient,
-              boxShadow: `0 0 20px ${colors.glow}`,
             }}
           >
             <div className="absolute inset-0 animate-shimmer rounded-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
           </div>
 
-          {/* Milestone dots */}
           {showMilestones && [25, 50, 75, 100].map((milestone) => (
             <div
               key={milestone}
@@ -166,16 +154,14 @@ export function GroupProgress({
               <div
                 className="w-2 h-2 rounded-full transition-all duration-300"
                 style={{
-                  backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--border)',
+                  backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--md-sys-color-outline-variant)',
                   transform: displayProgress >= milestone ? 'scale(1.3)' : 'scale(1)',
-                  boxShadow: displayProgress >= milestone ? `0 0 8px ${colors.glow}` : 'none',
                 }}
               />
             </div>
           ))}
         </div>
 
-        {/* Status Message */}
         <p className="text-xs text-center font-medium" style={{ color: colors.glow }}>
           {statusMessage}
         </p>
@@ -183,41 +169,35 @@ export function GroupProgress({
     );
   }
 
-  // Detailed variant - with milestones
   if (variant === 'detailed') {
     return (
       <div
         ref={containerRef}
-        className={`p-5 rounded-2xl relative overflow-hidden ${className}`}
+        className={`p-5 relative overflow-hidden ${className}`}
         style={{
           backgroundColor: colors.bg,
-          borderColor: colors.border,
-          borderWidth: '1px',
-          borderStyle: 'solid',
+          border: `1px solid ${colors.border}`,
+          borderRadius: '16px',
         }}
       >
-        {/* Header */}
         <div className="flex items-center justify-between mb-4">
-          <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>{label}</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{label}</span>
           <span className="text-xs font-bold" style={{ color: colors.glow }}>
             {current} / {max} طالب
           </span>
         </div>
 
-        {/* Progress Bar */}
         <div className="relative h-4 rounded-full overflow-hidden mb-4" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}>
           <div
             className="h-full rounded-full transition-all duration-1000 ease-expo relative"
             style={{
               width: `${Math.min(displayProgress, 100)}%`,
               background: gradient,
-              boxShadow: `0 0 20px ${colors.glow}`,
             }}
           >
             <div className="absolute inset-0 animate-shimmer rounded-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
           </div>
 
-          {/* Milestone dots */}
           {showMilestones && [25, 50, 75, 100].map((milestone) => (
             <div
               key={milestone}
@@ -227,34 +207,30 @@ export function GroupProgress({
               <div
                 className="w-2 h-2 rounded-full transition-all duration-300"
                 style={{
-                  backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--border)',
+                  backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--md-sys-color-outline-variant)',
                   transform: displayProgress >= milestone ? 'scale(1.3)' : 'scale(1)',
-                  boxShadow: displayProgress >= milestone ? `0 0 8px ${colors.glow}` : 'none',
                 }}
               />
             </div>
           ))}
         </div>
 
-        {/* Status Message */}
         <div className="flex items-center justify-center gap-2 mb-4">
-          <span className="text-lg" aria-hidden="true">{statusIcon}</span>
+          <span className="material-symbols-outlined" style={{ fontSize: '20px', color: colors.glow }}>{statusIcon}</span>
           <p className="text-xs text-center font-medium" style={{ color: colors.glow }}>
             {statusMessage}
           </p>
         </div>
 
-        {/* Milestone indicators */}
         <div className="flex justify-between pt-4" style={{ borderTop: '1px solid rgba(0,0,0,0.05)' }}>
           {[25, 50, 75, 100].map((milestone) => (
             <div key={milestone} className="text-center flex-1">
               <div className="w-2 h-2 rounded-full mx-auto mb-1 transition-all duration-500" style={{
-                backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--border)',
+                backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--md-sys-color-outline-variant)',
                 transform: displayProgress >= milestone ? 'scale(1.3)' : 'scale(1)',
-                boxShadow: displayProgress >= milestone ? `0 0 8px ${colors.glow}` : 'none',
               }} />
               <span className="text-[10px] font-bold" style={{
-                color: displayProgress >= milestone ? colors.glow : 'var(--text-light)',
+                color: displayProgress >= milestone ? colors.glow : 'var(--md-sys-color-outline)',
               }}>
                 {milestone}%
               </span>
@@ -265,34 +241,29 @@ export function GroupProgress({
     );
   }
 
-  // Default variant
   return (
     <div
       ref={containerRef}
-      className={`p-4 md:p-5 rounded-2xl relative overflow-hidden ${className}`}
+      className={`p-4 md:p-5 relative overflow-hidden ${className}`}
       style={{
         backgroundColor: colors.bg,
-        borderColor: colors.border,
-        borderWidth: '1px',
-        borderStyle: 'solid',
+        border: `1px solid ${colors.border}`,
+        borderRadius: '16px',
       }}
     >
-      {/* Header */}
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>{label}</span>
+        <span className="text-sm font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{label}</span>
         <span className="text-xs font-bold" style={{ color: colors.glow }}>
           {current} / {max} طالب
         </span>
       </div>
 
-      {/* Progress Bar */}
       <div className="relative h-3 rounded-full overflow-hidden mb-3" style={{ backgroundColor: 'rgba(0,0,0,0.05)' }}>
         <div
           className="h-full rounded-full transition-all duration-1000 ease-expo relative"
           style={{
             width: `${Math.min(displayProgress, 100)}%`,
             background: gradient,
-            boxShadow: `0 0 20px ${colors.glow}`,
           }}
         >
           <div className="absolute inset-0 animate-shimmer rounded-full" style={{ background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
@@ -307,16 +278,14 @@ export function GroupProgress({
             <div
               className="w-2 h-2 rounded-full transition-all duration-300"
               style={{
-                backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--border)',
+                backgroundColor: displayProgress >= milestone ? colors.glow : 'var(--md-sys-color-outline-variant)',
                 transform: displayProgress >= milestone ? 'scale(1.3)' : 'scale(1)',
-                boxShadow: displayProgress >= milestone ? `0 0 8px ${colors.glow}` : 'none',
               }}
             />
           </div>
         ))}
       </div>
 
-      {/* Status Message */}
       <p className="text-xs text-center font-medium" style={{ color: colors.glow }}>
         {statusMessage}
       </p>
@@ -324,7 +293,6 @@ export function GroupProgress({
   );
 }
 
-/* Circular Progress for CourseCard */
 interface CircularProgressProps {
   current: number;
   max: number;
@@ -352,7 +320,7 @@ export function CircularProgress({
   const getColor = () => {
     if (isFull) return '#dc2626';
     if (isAlmostFull) return '#d97706';
-    return '#16a34a';
+    return 'var(--md-sys-color-primary)';
   };
 
   const color = getColor();
@@ -360,16 +328,14 @@ export function CircularProgress({
   return (
     <div className={`relative inline-flex ${className}`} style={{ width: size, height: size }}>
       <svg className="transform -rotate-90" width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-        {/* Background circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           fill="none"
-          stroke="var(--border)"
+          stroke="var(--md-sys-color-outline-variant)"
           strokeWidth={strokeWidth}
         />
-        {/* Progress circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -396,7 +362,6 @@ export function CircularProgress({
   );
 }
 
-/* Progress Steps for multi-step processes */
 interface ProgressStepsProps {
   steps: Array<{
     label: string;
@@ -417,12 +382,11 @@ export function ProgressSteps({
     <div className={`flex items-center ${className}`} role="list" aria-label="خطوات التقدم">
       {steps.map((step, index) => (
         <div key={index} className="flex items-center flex-1 relative" role="listitem">
-          {/* Connecting line */}
           {index < steps.length - 1 && (
             <div
               className="absolute left-0 right-0 top-1/2 -translate-y-1/2 h-1 -ml-2 mr-2 z-0"
               style={{
-                backgroundColor: step.completed ? primaryColor : 'var(--border)',
+                backgroundColor: step.completed ? primaryColor : 'var(--md-sys-color-outline-variant)',
               }}
               aria-hidden="true"
             />
@@ -432,22 +396,21 @@ export function ProgressSteps({
             <div
               className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
                 step.completed
-                  ? 'bg-[var(--primary)] text-white'
+                  ? 'text-white'
                   : step.current
-                  ? 'bg-[var(--primary)] text-white animate-pulse-soft ring-4'
-                  : 'bg-[var(--bg)] border-2'
+                  ? 'text-white animate-pulse-soft ring-4'
+                  : 'border-2'
               }`}
               style={{
-                borderColor: step.current ? 'var(--primary)' : step.completed ? 'var(--primary)' : 'var(--border)',
+                backgroundColor: step.completed || step.current ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container)',
+                borderColor: step.current ? 'var(--md-sys-color-primary)' : step.completed ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)',
                 boxShadow: step.current ? '0 0 0 4px rgba(37,99,235,0.3)' : 'none',
               }}
             >
               {step.completed ? (
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                </svg>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check</span>
               ) : step.icon ? (
-                <span aria-hidden="true">{step.icon}</span>
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>{step.icon}</span>
               ) : (
                 <span>{index + 1}</span>
               )}
@@ -455,7 +418,7 @@ export function ProgressSteps({
 
             <span
               className={`text-xs font-medium text-center transition-colors ${
-                step.current ? 'text-[var(--primary)]' : step.completed ? 'text-[var(--text)]' : 'text-[var(--text-muted)]'
+                step.current ? 'text-[var(--md-sys-color-primary)]' : step.completed ? 'text-[var(--md-sys-color-on-surface)]' : 'text-[var(--md-sys-color-on-surface-variant)]'
               }`}
             >
               {step.label}

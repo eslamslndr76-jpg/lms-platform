@@ -2,12 +2,13 @@ import { Router, Request, Response } from 'express';
 import { sql, escape } from '../../db/helpers';
 import { execute } from '../../db/turso-http';
 import { authMiddleware } from '../../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../../middleware/rbac';
 import * as groupService from '../../services/groupService';
+import { sendNotification } from '../../services/externalNotificationService';
 
 const router = Router();
 
-router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('orders', 'read'), async (req: Request, res: Response) => {
   try {
     const status = req.query.status as string | undefined;
     const search = req.query.search as string | undefined;
@@ -50,7 +51,7 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
   }
 });
 
-router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
+router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('financials', 'read'), async (_req: Request, res: Response) => {
   try {
     const total = await sql(
       `SELECT COUNT(*) as count, COALESCE(SUM(amount),0) as sum FROM orders WHERE status='paid'`,
@@ -80,13 +81,20 @@ router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_
   }
 });
 
-router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+router.patch('/:id/status', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('orders', 'write'), async (req: Request, res: Response) => {
   try {
     const { status } = req.body;
     if (!['pending', 'review', 'paid', 'cancelled'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status' });
     }
     await sql('UPDATE orders SET status=? WHERE id=?', status, Number(req.params.id));
+
+    // Fetch order + course info for notifications
+    const orderInfo = await sql(
+      'SELECT o.user_id, o.amount, c.title_ar FROM orders o JOIN courses c ON o.course_id=c.id WHERE o.id=?',
+      Number(req.params.id),
+    );
+    const orderRow = orderInfo.rows.length > 0 ? orderInfo.rows[0] as any : null;
 
     if (status === 'paid') {
       const order = await sql('SELECT * FROM orders WHERE id=?', Number(req.params.id));
@@ -98,22 +106,38 @@ router.patch('/:id/status', authMiddleware, requireRole(ADMIN), async (req: Requ
         req.user!.userId, Number(req.params.id),
       );
 
-      const orderRow = order.rows[0] as any;
-      const studentId = Number(orderRow.user_id);
-      const courseId = Number(orderRow.course_id);
+      const orderData = order.rows[0] as any;
+      const studentId = Number(orderData.user_id);
+      const courseId = Number(orderData.course_id);
 
       const courseCheck = await sql('SELECT auto_assign FROM courses WHERE id=?', courseId);
       const autoAssign = courseCheck.rows.length > 0 ? Number(courseCheck.rows[0].auto_assign) : 0;
-      if (autoAssign === 0) {
-        return res.json({ message: 'Order paid. Student needs manual assignment.' });
+      let assignResult = { assigned: false };
+      if (autoAssign > 0) {
+        assignResult = await groupService.autoAssignStudent(studentId, courseId);
       }
 
-      const result = await groupService.autoAssignStudent(studentId, courseId);
-      if (!result.assigned) {
-        return res.json({ message: 'Order paid (already in group)' });
+      // External notification (email + telegram)
+      if (orderRow) {
+        await sendNotification(studentId, 'order_paid', {
+          courseTitle: orderRow.title_ar || '',
+          amount: Number(orderRow.amount),
+        }).catch(e => console.error('[Notify] order_paid failed:', e.message));
       }
+
+      res.json({ message: autoAssign ? (assignResult.assigned ? 'Order paid and student assigned' : 'Order paid (already in group)') : 'Order paid. Student needs manual assignment.' });
+    } else if (status === 'cancelled') {
+      // External notification (email + telegram)
+      if (orderRow) {
+        await sendNotification(Number(orderRow.user_id), 'order_cancelled', {
+          courseTitle: orderRow.title_ar || '',
+        }).catch(e => console.error('[Notify] order_cancelled failed:', e.message));
+      }
+
+      res.json({ message: `Order ${status}` });
+    } else {
+      res.json({ message: `Order ${status}` });
     }
-    res.json({ message: `Order ${status}` });
   } catch (err: any) {
     console.error('Admin update order status error:', err?.message || err);
     res.status(500).json({ error: 'فشل تحديث حالة الطلب' });
@@ -144,7 +168,7 @@ router.put('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res:
 router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
     const { user_id, course_id, amount, payment_method, notes_team, notes_student, sender_phone } = req.body;
-    if (!user_id || !course_id || !amount) {
+    if (!user_id || !course_id || amount === undefined || amount === null) {
       return res.status(400).json({ error: 'user_id, course_id, and amount are required' });
     }
     const result = await sql(
@@ -154,11 +178,21 @@ router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: R
     );
     const orderId = Number(result.lastInsertRowid);
 
+    const courseData = await sql('SELECT title_ar FROM courses WHERE id=?', course_id);
+    const courseTitle = courseData.rows.length > 0 ? (courseData.rows[0] as any).title_ar : '';
+
     const courseCheck = await sql('SELECT auto_assign FROM courses WHERE id=?', course_id);
     const autoAssign = courseCheck.rows.length > 0 ? Number(courseCheck.rows[0].auto_assign) : 0;
     if (autoAssign > 0) {
       await groupService.autoAssignStudent(Number(user_id), Number(course_id));
     }
+
+    // External notification (email + telegram)
+    await sendNotification(Number(user_id), 'order_paid', {
+      courseTitle,
+      amount: Number(amount),
+    }).catch(e => console.error('[Notify] order_paid failed:', e.message));
+
     res.status(201).json({ id: orderId, message: autoAssign ? 'Order created and student auto-assigned' : 'Order created' });
   } catch (err: any) {
     console.error('Admin create order error:', err?.message || err);

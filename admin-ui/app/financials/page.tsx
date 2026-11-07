@@ -4,15 +4,13 @@ import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import DataTable from '../../components/DataTable';
 import StatsCard from '../../components/StatsCard';
-import ExportModal from '../../components/ExportModal';
+import ExportButton from '../../components/ExportButton';
 
 export default function FinancialsPage() {
   const [financials, setFinancials] = useState<any[]>([]);
   const [summary, setSummary] = useState({ total: 0, paid: 0, pending: 0 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [exportOpen, setExportOpen] = useState(false);
-
   const load = async () => {
     setLoading(true);
     setError('');
@@ -42,9 +40,7 @@ export default function FinancialsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>المالية</h1>
-        <button onClick={() => setExportOpen(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
-          📥 تصدير
-        </button>
+        <ExportButton dataset="financials" title="تصدير التقرير المالي" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -66,8 +62,6 @@ export default function FinancialsPage() {
         />
       </div>
 
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)}
-        title="تصدير التقارير المالية" endpoint="/api/exports/financials" filename="financials" />
     </div>
   );
 }

@@ -1,5 +1,27 @@
 import { sql } from '../db/helpers';
 
+/** In-app notifications are kept (and shown) for the last 30 days only. */
+const RETENTION_DAYS = 30;
+const RETENTION_CUTOFF = `datetime('now','-${RETENTION_DAYS} days')`;
+
+let lastCleanupAt = 0;
+
+/**
+ * Physically removes notifications older than the retention window.
+ * Runs at most once per hour unless `force` is set (used on boot).
+ */
+export async function cleanupOldNotifications(force = false): Promise<number> {
+  const now = Date.now();
+  if (!force && now - lastCleanupAt < 60 * 60 * 1000) return 0;
+  try {
+    const result = await sql(`DELETE FROM notifications WHERE created_at < ${RETENTION_CUTOFF}`);
+    lastCleanupAt = now;
+    return result.rowsAffected;
+  } catch {
+    return 0;
+  }
+}
+
 export async function createNotification(
   userId: number,
   title: string,
@@ -11,6 +33,8 @@ export async function createNotification(
     'INSERT INTO notifications (user_id, title, message, type, link) VALUES (?,?,?,?,?)',
     userId, title, message || null, type, link || null,
   );
+  // Fire-and-forget: keep the table tidy without delaying the notification.
+  void cleanupOldNotifications();
   return Number(result.lastInsertRowid);
 }
 
@@ -43,16 +67,21 @@ export async function notifyGroupStudents(
 }
 
 export async function getMyNotifications(userId: number, limit: number = 20): Promise<any[]> {
+  const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
   const result = await sql(
-    'SELECT * FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT ?',
-    userId, limit,
+    `SELECT * FROM notifications
+     WHERE user_id=? AND created_at >= ${RETENTION_CUTOFF}
+     ORDER BY created_at DESC, id DESC
+     LIMIT ?`,
+    userId, safeLimit,
   );
   return result.rows;
 }
 
 export async function getUnreadCount(userId: number): Promise<number> {
   const result = await sql(
-    'SELECT COUNT(*) as cnt FROM notifications WHERE user_id=? AND is_read=0',
+    `SELECT COUNT(*) as cnt FROM notifications
+     WHERE user_id=? AND is_read=0 AND created_at >= ${RETENTION_CUTOFF}`,
     userId,
   );
   return Number(result.rows[0].cnt);

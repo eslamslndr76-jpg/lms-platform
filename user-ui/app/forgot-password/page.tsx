@@ -7,15 +7,15 @@ import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 import { api } from '../../lib/api';
 
-type Step = 'phone' | 'otp' | 'password' | 'success';
+type Step = 'email' | 'otp' | 'password' | 'success';
 
 export default function ForgotPasswordPage() {
   const { show } = useToast();
   const { primaryColor } = useBranding();
   const router = useRouter();
 
-  const [step, setStep] = useState<Step>('phone');
-  const [phone, setPhone] = useState('');
+  const [step, setStep] = useState<Step>('email');
+  const [email, setEmail] = useState('');
   const [otp, setOtp] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -24,14 +24,13 @@ export default function ForgotPasswordPage() {
   const [showNewPass, setShowNewPass] = useState(false);
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
-  const validatePhone = (): boolean => {
-    const cleaned = phone.replace(/\s/g, '');
-    if (!cleaned) {
-      setErrors({ phone: 'رقم الهاتف مطلوب' });
+  const validateEmail = (): boolean => {
+    if (!email.trim()) {
+      setErrors({ email: 'البريد الإلكتروني مطلوب' });
       return false;
     }
-    if (!/^01[0-9]{9}$/.test(cleaned)) {
-      setErrors({ phone: 'رقم الهاتف يجب أن يكون 11 رقم ويبدأ بـ 01' });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setErrors({ email: 'البريد الإلكتروني غير صحيح' });
       return false;
     }
     setErrors({});
@@ -39,20 +38,16 @@ export default function ForgotPasswordPage() {
   };
 
   const handleSendOTP = async () => {
-    if (!validatePhone()) return;
+    if (!validateEmail()) return;
     
     setLoading(true);
     try {
-      await api('/api/whatsapp/forgot-password', { method: 'POST', body: JSON.stringify({ phone: phone.replace(/\s/g, '') }) });
-      show('تم إرسال رمز التحقق إلى رقم هاتفك');
+      await api('/api/notifications/forgot-password', { method: 'POST', body: JSON.stringify({ email }) });
+      show('تم إرسال رمز التحقق إلى بريدك الإلكتروني');
       setStep('otp');
     } catch (err: any) {
       const msg = err.message || '';
-      if (msg.includes('not connected') || msg.includes('503') || msg.includes('bot not')) {
-        show('خدمة واتساب غير متصلة حالياً. حاول مرة أخرى بعد دقائق قليلة.', 'error');
-      } else {
-        show(msg || 'فشل إرسال رمز التحقق', 'error');
-      }
+      show(msg || 'فشل إرسال رمز التحقق', 'error');
     } finally {
       setLoading(false);
     }
@@ -66,9 +61,9 @@ export default function ForgotPasswordPage() {
     
     setLoading(true);
     try {
-      await api('/api/whatsapp/verify-otp', { 
+      await api('/api/notifications/verify-otp', { 
         method: 'POST', 
-        body: JSON.stringify({ phone: phone.replace(/\s/g, ''), otp }) 
+        body: JSON.stringify({ email, otp }) 
       });
       show('تم التحقق بنجاح');
       setStep('password');
@@ -99,13 +94,9 @@ export default function ForgotPasswordPage() {
     
     setLoading(true);
     try {
-      await api('/api/whatsapp/reset-password', {
+      await api('/api/notifications/reset-password', {
         method: 'POST',
-        body: JSON.stringify({
-          phone: phone.replace(/\s/g, ''),
-          otp,
-          newPassword,
-        }),
+        body: JSON.stringify({ email, otp, newPassword }),
       });
       show('تم إعادة تعيين كلمة المرور بنجاح');
       setStep('success');
@@ -125,37 +116,38 @@ export default function ForgotPasswordPage() {
         نسيت كلمة المرور؟
       </h1>
       <p className="text-[var(--text-muted)] text-center mb-8">
-        {step === 'phone' && 'أدخل رقم هاتفك لإرسال رمز التحقق'}
-        {step === 'otp' && 'أدخل الرمز المرسل على واتساب'}
+        {step === 'email' && 'أدخل بريدك الإلكتروني لإرسال رمز التحقق'}
+        {step === 'otp' && 'أدخل الرمز المرسل على بريدك الإلكتروني'}
         {step === 'password' && 'أدخل كلمة المرور الجديدة'}
         {step === 'success' && 'تم إعادة تعيين كلمة المرور بنجاح'}
       </p>
 
-      {/* Step 1: Phone */}
-      {step === 'phone' && (
+      {/* Step 1: Email */}
+      {step === 'email' && (
         <div className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1" style={{ color: 'var(--text)' }}>
-              رقم الهاتف
+              البريد الإلكتروني
             </label>
             <div className="relative">
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm">📱</span>
+              <span className="absolute right-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }}>
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 0 1-2.25 2.25h-15a2.25 2.25 0 0 1-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0 0 19.5 4.5h-15a2.25 2.25 0 0 0-2.25 2.25m19.5 0v.243a2.25 2.25 0 0 1-1.07 1.916l-7.5 4.615a2.25 2.25 0 0 1-2.36 0L3.32 8.91a2.25 2.25 0 0 1-1.07-1.916V6.75" /></svg>
+              </span>
               <input
-                type="tel"
-                value={phone}
+                type="email"
+                value={email}
                 onChange={e => {
-                  setPhone(e.target.value.replace(/\D/g, '').slice(0, 11));
+                  setEmail(e.target.value);
                   setErrors({});
                 }}
-                className={inputClass('phone')}
+                className={inputClass('email')}
                 style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}
-                placeholder="01000000000"
-                maxLength={11}
+                placeholder="example@email.com"
                 dir="ltr"
                 required
               />
             </div>
-            {errors.phone && <p className="text-xs mt-1 text-red-500">{errors.phone}</p>}
+            {errors.email && <p className="text-xs mt-1 text-red-500">{errors.email}</p>}
           </div>
           
           <button
@@ -202,11 +194,11 @@ export default function ForgotPasswordPage() {
           </button>
           
           <button
-            onClick={() => setStep('phone')}
+            onClick={() => setStep('email')}
             className="w-full py-2 text-sm font-medium"
             style={{ color: primaryColor }}
           >
-            تغيير الرقم
+            تغيير البريد
           </button>
         </div>
       )}
@@ -232,9 +224,13 @@ export default function ForgotPasswordPage() {
                 required
               />
               <button type="button" onClick={() => setShowNewPass(!showNewPass)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+                className="absolute left-3 top-1/2 -translate-y-1/2"
                 style={{ color: 'var(--text-muted)' }}>
-                {showNewPass ? '🙈' : '👁'}
+                {showNewPass ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+                )}
               </button>
             </div>
             {errors.newPassword && <p className="text-xs mt-1 text-red-500">{errors.newPassword}</p>}
@@ -258,9 +254,13 @@ export default function ForgotPasswordPage() {
                 required
               />
               <button type="button" onClick={() => setShowConfirmPass(!showConfirmPass)}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-sm"
+                className="absolute left-3 top-1/2 -translate-y-1/2"
                 style={{ color: 'var(--text-muted)' }}>
-                {showConfirmPass ? '🙈' : '👁'}
+                {showConfirmPass ? (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" /></svg>
+                ) : (
+                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}><path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /></svg>
+                )}
               </button>
             </div>
             {errors.confirmPassword && <p className="text-xs mt-1 text-red-500">{errors.confirmPassword}</p>}
@@ -280,8 +280,8 @@ export default function ForgotPasswordPage() {
       {/* Step 4: Success */}
       {step === 'success' && (
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center text-3xl" style={{ backgroundColor: '#22c55e20' }}>
-            ✅
+          <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center" style={{ backgroundColor: '#22c55e20' }}>
+            <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="#22c55e" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5" /></svg>
           </div>
           <p style={{ color: 'var(--text)' }}>تم إعادة تعيين كلمة المرور بنجاح</p>
           <button

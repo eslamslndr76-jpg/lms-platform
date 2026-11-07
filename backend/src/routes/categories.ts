@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../middleware/rbac';
 
 const router = Router();
 
@@ -14,7 +14,7 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
-router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('categories', 'write'), async (req: Request, res: Response) => {
   try {
     const { name_ar, name_en, description } = req.body;
     if (!name_ar || !name_en) return res.status(400).json({ error: 'Arabic and English names required' });
@@ -28,7 +28,7 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
   }
 });
 
-router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('categories', 'write'), async (req: Request, res: Response) => {
   try {
     const { name_ar, name_en, description } = req.body;
     await sql('UPDATE categories SET name_ar=?, name_en=?, description=? WHERE id=?',

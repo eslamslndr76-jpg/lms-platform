@@ -1,113 +1,331 @@
 import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
-import ExcelJS from 'exceljs';
-import PDFDocument from 'pdfkit';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE, SECTIONS, getEffectivePermissions, hasPermission } from '../middleware/rbac';
+import {
+  EXPORT_DATASETS,
+  ExportDataset,
+  ExportParams,
+  findDataset,
+  runDataset,
+} from '../services/exportDatasets';
+import {
+  buildBrandedWorkbook,
+  loadBranding,
+  safeFilename,
+  type ExportColumn,
+} from '../services/excelExportService';
 
 const router = Router();
 
-function sendJSON(res: Response, data: any, filename: string) {
-  res.setHeader('Content-Type', 'application/json');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}.json"`);
-  res.json(data);
+// Every export endpoint is restricted to staff.
+router.use(authMiddleware, requireRole(ADMIN, EMPLOYEE));
+
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+// ─── Helpers ───────────────────────────────────────────────────────
+
+function parseParams(req: Request): ExportParams {
+  const q = req.query;
+  const num = (value: unknown) => {
+    const n = Number(value);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  return {
+    status: typeof q.status === 'string' && q.status !== 'all' ? q.status : undefined,
+    courseId: num(q.courseId),
+    groupId: num(q.groupId),
+    studentId: num(q.studentId),
+    lectureId: num(q.lectureId),
+    from: typeof q.from === 'string' && q.from ? q.from : undefined,
+    to: typeof q.to === 'string' && q.to ? q.to : undefined,
+    search: typeof q.search === 'string' && q.search.trim() ? q.search.trim() : undefined,
+    limit: num(q.limit),
+  };
 }
 
-async function sendExcel(res: Response, rows: Record<string, any>[], filename: string) {
-  const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet('Sheet1');
-  if (rows.length > 0) {
-    ws.columns = Object.keys(rows[0]).map(k => ({ header: k, key: k }));
-    rows.forEach(r => ws.addRow(r));
-    ws.getRow(1).font = { bold: true };
+function contentDisposition(filename: string, asciiFallback: string): string {
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
+async function describeFilters(
+  dataset: ExportDataset,
+  params: ExportParams,
+): Promise<{ label: string; value: string }[]> {
+  const applied: { label: string; value: string }[] = [];
+
+  if (params.status) {
+    const option = dataset.filters
+      .find((f) => f.key === 'status')
+      ?.options?.find((o) => o.value === params.status);
+    applied.push({ label: 'الحالة', value: option?.label || params.status });
   }
-  res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}.xlsx"`);
-  const buf = await wb.xlsx.writeBuffer();
-  res.send(Buffer.from(buf));
-}
 
-function sendPDF(res: Response, rows: Record<string, any>[], title: string, filename: string) {
-  const doc = new PDFDocument({ margin: 30, size: 'A4' });
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
-  doc.pipe(res);
-  doc.fontSize(16).font('Helvetica-Bold').text(title, { align: 'right' });
-  doc.moveDown();
-  if (rows.length > 0) {
-    const keys = Object.keys(rows[0]);
-    const colW = Math.min(120, Math.floor(500 / keys.length));
-    doc.fontSize(10).font('Helvetica-Bold');
-    let x = 30;
-    keys.forEach(k => { doc.text(k, x, doc.y, { width: colW, align: 'right' }); x += colW; });
-    doc.moveDown(0.5);
-    doc.font('Helvetica').fontSize(8);
-    rows.forEach(r => {
-      x = 30;
-      const y = doc.y;
-      if (y > 750) { doc.addPage(); }
-      keys.forEach(k => { doc.text(String(r[k] ?? ''), x, doc.y, { width: colW, align: 'right' }); x += colW; });
-      doc.moveDown(0.3);
+  if (params.courseId) {
+    const row = await sql('SELECT title_ar FROM courses WHERE id=?', params.courseId);
+    applied.push({
+      label: 'الكورس',
+      value: row.rows.length ? String((row.rows[0] as any).title_ar) : `#${params.courseId}`,
     });
   }
-  doc.end();
+
+  if (params.groupId) {
+    const row = await sql('SELECT name FROM groups WHERE id=?', params.groupId);
+    applied.push({
+      label: 'المجموعة',
+      value: row.rows.length ? String((row.rows[0] as any).name) : `#${params.groupId}`,
+    });
+  }
+
+  if (params.studentId) {
+    const row = await sql('SELECT name FROM users WHERE id=?', params.studentId);
+    applied.push({
+      label: 'الطالب',
+      value: row.rows.length ? String((row.rows[0] as any).name) : `#${params.studentId}`,
+    });
+  }
+
+  if (params.lectureId) {
+    const row = await sql('SELECT topic, date FROM lectures WHERE id=?', params.lectureId);
+    const lecture = row.rows[0] as any;
+    applied.push({
+      label: 'المحاضرة',
+      value: lecture ? `${lecture.topic || 'محاضرة'} — ${lecture.date || ''}`.trim() : `#${params.lectureId}`,
+    });
+  }
+
+  if (params.from) applied.push({ label: 'من تاريخ', value: params.from });
+  if (params.to) applied.push({ label: 'إلى تاريخ', value: params.to });
+  if (params.search) applied.push({ label: 'بحث', value: params.search });
+
+  return applied;
 }
 
-router.get('/students/:courseId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+async function exporterIdentity(req: Request): Promise<{ name: string; role: string }> {
   try {
-    const { courseId } = req.params;
+    const row = await sql('SELECT name, role_id FROM users WHERE id=?', req.user!.userId);
+    const user = row.rows[0] as any;
+    const role = req.user!.role === 'admin' ? 'مدير النظام' : 'موظف';
+    return { name: user?.name ? String(user.name) : `#${req.user!.userId}`, role };
+  } catch {
+    return { name: `#${req.user!.userId}`, role: req.user!.role };
+  }
+}
+
+function toCsv(columns: ExportColumn[], rows: Record<string, unknown>[]): string {
+  const escapeCell = (value: unknown) => {
+    if (value === null || value === undefined) return '';
+    const text = String(value);
+    return /[",;\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+
+  const lines = [columns.map((c) => escapeCell(c.header)).join(',')];
+  for (const row of rows) {
+    lines.push(columns.map((c) => escapeCell(row[c.key])).join(','));
+  }
+  // BOM keeps Arabic readable when the CSV is opened directly in Excel.
+  return '\uFEFF' + lines.join('\r\n');
+}
+
+// ─── Catalog ───────────────────────────────────────────────────────
+
+/** Admins can export everything; staff only sees the sections they hold. */
+async function readableSections(req: Request): Promise<Set<string> | 'all'> {
+  if (Number(req.user!.roleId) === ADMIN) return 'all';
+  const permissions = await getEffectivePermissions(
+    Number(req.user!.userId),
+    Number(req.user!.roleId),
+  );
+  return new Set(SECTIONS.map((section) => section.key).filter((key) => hasPermission(permissions, key, 'read')));
+}
+
+async function canReadSection(req: Request, section: string): Promise<boolean> {
+  const sections = await readableSections(req);
+  return sections === 'all' || sections.has(section);
+}
+
+router.get('/catalog', async (req: Request, res: Response) => {
+  try {
+    const sections = await readableSections(req);
+    const datasets = EXPORT_DATASETS.filter(
+      (dataset) => sections === 'all' || sections.has(dataset.section),
+    );
+    res.json({
+      datasets: datasets.map((dataset) => ({
+        key: dataset.key,
+        name: dataset.name,
+        description: dataset.description,
+        icon: dataset.icon,
+        section: dataset.section,
+        columns: dataset.columns,
+        filters: dataset.filters,
+      })),
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to load export catalog' });
+  }
+});
+
+// ─── Legacy endpoints (kept for backward compatibility) ────────────
+
+router.get('/students/:courseId', requirePermission('students', 'read'), async (req: Request, res: Response) => {
+  try {
+    const courseId = Number(req.params.courseId);
+    if (!Number.isFinite(courseId)) return res.status(400).json({ error: 'Invalid course id' });
+
     const course = await sql('SELECT title_ar FROM courses WHERE id=?', courseId);
     if (course.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
+    const courseName = String((course.rows[0] as any).title_ar);
+
     const students = await sql(
-      `SELECT u.name, u.email, u.phone, o.status, o.created_at as order_date
+      `SELECT u.name, u.email, u.phone, o.status, o.amount, o.created_at AS order_date
        FROM orders o JOIN users u ON o.user_id=u.id
        WHERE o.course_id=? AND o.status='paid'
        ORDER BY u.name ASC`,
       courseId,
     );
-    const format = (req.query.format as string) || 'json';
-    const rows = students.rows.map((s: any) => ({ name: s.name, email: s.email, phone: s.phone, status: s.status, date: s.order_date }));
-    const courseName = (course.rows[0] as any).title_ar;
-    const fn = `students-${courseId}`;
-    if (format === 'xlsx') return sendExcel(res, rows, fn);
-    if (format === 'pdf') return sendPDF(res, rows, `طلاب: ${courseName}`, fn);
-    sendJSON(res, { course: courseName, students: rows }, fn);
-  } catch {
+
+    const columns: ExportColumn[] = [
+      { key: 'name', header: 'الاسم', type: 'text' },
+      { key: 'email', header: 'البريد الإلكتروني', type: 'text' },
+      { key: 'phone', header: 'الهاتف', type: 'text', width: 16 },
+      { key: 'amount', header: 'المبلغ', type: 'currency', width: 15, total: 'sum' },
+      { key: 'status', header: 'حالة الطلب', type: 'text', width: 14 },
+      { key: 'order_date', header: 'تاريخ الدفع', type: 'datetime', width: 18 },
+    ];
+
+    const rows = students.rows as Record<string, unknown>[];
+    const format = String(req.query.format || 'xlsx');
+
+    if (format === 'json') {
+      return res.json({ course: courseName, students: rows });
+    }
+
+    if (format === 'csv') {
+      const filename = safeFilename(`طلاب-${courseName}`, 'csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Content-Disposition', contentDisposition(filename, `students-${courseId}.csv`));
+      return res.send(toCsv(columns, rows));
+    }
+
+    if (format !== 'xlsx') {
+      return res.status(400).json({ error: 'Unsupported format. Use xlsx, csv or json.' });
+    }
+
+    const branding = await loadBranding();
+    const identity = await exporterIdentity(req);
+    const buffer = await buildBrandedWorkbook({
+      sheetName: 'الطلاب',
+      title: `طلاب كورس: ${courseName}`,
+      description: 'قائمة الطلاب الذين تم الدفع لهم في هذا الكورس.',
+      columns,
+      rows,
+      branding,
+      filters: [{ label: 'الكورس', value: courseName }],
+      exportedBy: identity.name,
+      exportedByRole: identity.role,
+    });
+
+    const filename = safeFilename(`طلاب-${courseName}`);
+    res.setHeader('Content-Type', XLSX_MIME);
+    res.setHeader('Content-Disposition', contentDisposition(filename, `students-${courseId}.xlsx`));
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error('[Exports] students error:', err?.message);
     res.status(500).json({ error: 'Failed to export students' });
   }
 });
 
-router.get('/orders', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
-  try {
-    const result = await sql(
-      `SELECT o.id, u.name as student, c.title_ar as course, o.amount, o.status, o.created_at
-       FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id
-       ORDER BY o.created_at DESC`,
-    );
-    const format = (_req.query.format as string) || 'json';
-    const rows = result.rows.map((r: any) => ({ id: r.id, student: r.student, course: r.course, amount: r.amount, status: r.status, date: r.created_at }));
-    if (format === 'xlsx') return sendExcel(res, rows, 'orders');
-    if (format === 'pdf') return sendPDF(res, rows, 'جميع الطلبات', 'orders');
-    sendJSON(res, { data: rows }, 'orders');
-  } catch {
-    res.status(500).json({ error: 'Failed to export orders' });
-  }
-});
+// ─── Generic dataset export ────────────────────────────────────────
 
-router.get('/financials', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
+router.get('/:dataset', async (req: Request, res: Response) => {
+  const dataset = findDataset(req.params.dataset);
+  if (!dataset) {
+    return res.status(404).json({
+      error: 'Unknown dataset',
+      available: EXPORT_DATASETS.map((d) => d.key),
+    });
+  }
+
   try {
-    const result = await sql(
-      `SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as count, SUM(amount) as total
-       FROM orders WHERE status='paid'
-       GROUP BY month ORDER BY month DESC`,
+    if (!(await canReadSection(req, dataset.section))) {
+      return res.status(403).json({ error: `No read permission for ${dataset.section}` });
+    }
+    const params = parseParams(req);
+    const isPreview = req.query.preview === '1' || req.query.preview === 'true';
+    if (isPreview) params.limit = Math.min(params.limit || 10, 50);
+
+    // Optional column selection (comma separated keys) — keeps the workbook focused.
+    const requestedColumns =
+      typeof req.query.columns === 'string' && req.query.columns.trim()
+        ? req.query.columns.split(',').map((c) => c.trim()).filter(Boolean)
+        : [];
+    const columns = requestedColumns.length
+      ? dataset.columns.filter((c) => requestedColumns.includes(c.key))
+      : dataset.columns;
+    if (columns.length === 0) {
+      return res.status(400).json({ error: 'No valid columns selected' });
+    }
+
+    const rows = await runDataset(dataset, params);
+    const format = String(req.query.format || 'xlsx');
+
+    // ── Preview for the admin UI ────────────────────────────────
+    if (isPreview) {
+      return res.json({
+        columns,
+        rows,
+        total: rows.length,
+      });
+    }
+
+    if (format === 'json') {
+      return res.json({ dataset: dataset.key, rows, count: rows.length });
+    }
+
+    if (format === 'csv') {
+      const filename = safeFilename(dataset.name, 'csv');
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        contentDisposition(filename, `${dataset.key}-${new Date().toISOString().slice(0, 10)}.csv`),
+      );
+      return res.send(toCsv(columns, rows));
+    }
+
+    if (format !== 'xlsx') {
+      return res.status(400).json({ error: 'Unsupported format. Use xlsx, csv or json.' });
+    }
+
+    const [branding, filters, identity] = await Promise.all([
+      loadBranding(),
+      describeFilters(dataset, params),
+      exporterIdentity(req),
+    ]);
+
+    const buffer = await buildBrandedWorkbook({
+      sheetName: dataset.name,
+      title: dataset.name,
+      description: dataset.description,
+      columns,
+      rows,
+      branding,
+      filters,
+      exportedBy: identity.name,
+      exportedByRole: identity.role,
+    });
+
+    const filename = safeFilename(dataset.name);
+    res.setHeader('Content-Type', XLSX_MIME);
+    res.setHeader(
+      'Content-Disposition',
+      contentDisposition(filename, `${dataset.key}-${new Date().toISOString().slice(0, 10)}.xlsx`),
     );
-    const format = (_req.query.format as string) || 'json';
-    const rows = result.rows.map((r: any) => ({ month: r.month, count: Number(r.count), total: Number(r.total) }));
-    if (format === 'xlsx') return sendExcel(res, rows, 'financials');
-    if (format === 'pdf') return sendPDF(res, rows, 'التقارير المالية', 'financials');
-    sendJSON(res, { data: rows }, 'financials');
-  } catch {
-    res.status(500).json({ error: 'Failed to export financials' });
+    res.setHeader('Content-Length', String(buffer.length));
+    return res.send(buffer);
+  } catch (err: any) {
+    console.error(`[Exports] ${dataset.key} error:`, err?.message);
+    res.status(500).json({ error: 'Failed to export data' });
   }
 });
 

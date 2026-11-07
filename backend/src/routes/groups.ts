@@ -1,7 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import * as groupService from '../services/groupService';
+import * as instructorEvalService from '../services/instructorEvalService';
+import { sql } from '../db/helpers';
 
 const router = Router();
 
@@ -46,6 +48,12 @@ router.get('/my/:id/lectures', authMiddleware, async (req: Request, res: Respons
 });
 
 // GET /api/groups — list (filter by ?courseId)
+// Everything below is staff-only; a group permission is derived from the HTTP method.
+router.use(authMiddleware, (req, res, next) => {
+  const action = req.method === 'GET' ? 'read' : 'write';
+  return requirePermission('groups', action)(req, res, next);
+});
+
 router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
     const courseId = req.query.courseId ? Number(req.query.courseId) : undefined;
@@ -53,6 +61,19 @@ router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reques
     res.json(groups);
   } catch {
     res.status(500).json({ error: 'Failed to fetch groups' });
+  }
+});
+
+// GET /api/groups/instructor-accounts — active accounts a group can be linked to
+router.get('/instructor-accounts', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
+  try {
+    const rows = await sql(
+      `SELECT u.id, u.name, u.email FROM users u JOIN roles r ON u.role_id=r.id
+       WHERE r.name='instructor' AND u.is_active=1 ORDER BY u.name`,
+    );
+    res.json(rows.rows);
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch instructor accounts' });
   }
 });
 
@@ -70,9 +91,9 @@ router.get('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
 // POST /api/groups — create
 router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { course_id, name, zoom_link, end_date, instructor_name, location, max_students, status } = req.body;
+    const { course_id, name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, status } = req.body;
     if (!course_id || !name) return res.status(400).json({ error: 'Course ID and name required' });
-    const id = await groupService.createGroup({ course_id, name, zoom_link, end_date, instructor_name, location, max_students, status });
+    const id = await groupService.createGroup({ course_id, name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, status });
     res.status(201).json({ id });
   } catch (err: any) {
     console.error('Create group error:', err?.message || err);
@@ -83,11 +104,60 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 // PUT /api/groups/:id — update
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { name, zoom_link, end_date, instructor_name, location, max_students, is_active, status } = req.body;
-    await groupService.updateGroup(Number(req.params.id), { name, zoom_link, end_date, instructor_name, location, max_students, is_active, status });
+    const { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status } = req.body;
+    await groupService.updateGroup(Number(req.params.id), { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status });
     res.json({ message: 'Group updated' });
-  } catch {
-    res.status(500).json({ error: 'Failed to update group' });
+  } catch (err: any) {
+    console.error('Update group error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to update group' });
+  }
+});
+
+// GET /api/groups/:id/instructor-eval — instructor evaluation status (admin UI)
+router.get('/:id/instructor-eval', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const status = await instructorEvalService.getInstructorEvaluationStatus(Number(req.params.id));
+    res.json(status);
+  } catch (err: any) {
+    console.error('Instructor evaluation status error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to fetch evaluation status' });
+  }
+});
+
+// POST /api/groups/:id/instructor-eval/reopen — admin only, keeps saved scores
+router.post('/:id/instructor-eval/reopen', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    await instructorEvalService.reopenInstructorEvaluation(Number(req.params.id));
+    res.json({ message: 'Instructor evaluation reopened' });
+  } catch (err: any) {
+    console.error('Reopen instructor evaluation error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to reopen evaluation' });
+  }
+});
+
+// POST /api/groups/:id/complete — official manual completion (edit-plan.md §4.2)
+router.post('/:id/complete', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const result = await groupService.completeGroup(Number(req.params.id), req.user!.userId);
+    res.json({
+      message: 'Group completed',
+      students: result.students,
+      certificates: result.certificates,
+    });
+  } catch (err: any) {
+    console.error('Complete group error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to complete group' });
+  }
+});
+
+// POST /api/groups/:id/reopen — undo an official completion
+router.post('/:id/reopen', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    await groupService.reopenGroup(Number(req.params.id));
+    res.json({ message: 'Group reopened' });
+  } catch (err: any) {
+    console.error('Reopen group error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to reopen group' });
   }
 });
 
@@ -104,18 +174,6 @@ router.post('/batch/delete', authMiddleware, requireRole(ADMIN, EMPLOYEE), async
     res.json({ message: `${deleted} groups deleted`, deleted });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Failed to batch delete' });
-  }
-});
-
-// POST /api/groups/batch/toggle
-router.post('/batch/toggle', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
-  try {
-    const { ids, is_active } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ error: 'ids array required' });
-    const updated = await groupService.batchToggleGroups(ids, !!is_active);
-    res.json({ message: `${updated} groups updated`, updated });
-  } catch (err: any) {
-    res.status(500).json({ error: err?.message || 'Failed to batch toggle' });
   }
 });
 
@@ -189,9 +247,9 @@ router.post('/:id/students', authMiddleware, requireRole(ADMIN, EMPLOYEE), async
     const { user_ids } = req.body;
     if (!Array.isArray(user_ids)) return res.status(400).json({ error: 'user_ids array required' });
     const added = await groupService.addStudentsToGroup(Number(req.params.id), user_ids, req.user!.userId);
-    res.json({ message: `${added} students added` });
-  } catch {
-    res.status(500).json({ error: 'Failed to add students' });
+    res.json({ message: `${added} students added`, added });
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to add students' });
   }
 });
 

@@ -8,14 +8,36 @@ export default function PasswordInput({ value, onChange, placeholder, className 
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
-      <input type={show ? 'text' : 'password'} value={value}
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
         onChange={e => onChange(e.target.value)}
         placeholder={placeholder || '••••••••'}
-        className={`w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 dark:bg-gray-700 dark:text-white focus:outline-none focus:ring-2 focus:ring-[var(--primary)] ${className}`}
-        required />
-      <button type="button" onClick={() => setShow(!show)}
-        className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 text-sm">
-        {show ? 'إخفاء' : 'إظهار'}
+        className={`w-full h-14 px-4 pr-12 rounded-md3-sm border text-sm transition-all duration-200 focus:outline-none ${className}`}
+        style={{
+          backgroundColor: 'var(--md-sys-color-surface-container-highest)',
+          borderColor: 'var(--md-sys-color-outline)',
+          color: 'var(--md-sys-color-on-surface)',
+        }}
+        onFocus={e => {
+          e.currentTarget.style.borderColor = 'var(--md-sys-color-primary)';
+          e.currentTarget.style.borderWidth = '2px';
+        }}
+        onBlur={e => {
+          e.currentTarget.style.borderColor = 'var(--md-sys-color-outline)';
+          e.currentTarget.style.borderWidth = '1px';
+        }}
+        required
+      />
+      <button
+        type="button"
+        onClick={() => setShow(!show)}
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full flex items-center justify-center transition-colors duration-200"
+        style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+      >
+        <span className="material-symbols-outlined text-[20px]">
+          {show ? 'visibility_off' : 'visibility'}
+        </span>
       </button>
     </div>
   );

@@ -36,39 +36,34 @@ export function InfoCard({
   const [isHovered, setIsHovered] = useState(false);
   const cardColor = color || primaryColor;
 
-  const variants = {
+  const variants: Record<string, string> = {
     default: `
-      bg-[var(--card)]
-      border border-[var(--border)]
-      hover:border-[var(--primary)]
-      hover:shadow-lg
+      border border-[var(--md-sys-color-outline-variant)]
+      hover:border-[var(--md-sys-color-primary)]
     `,
     elevated: `
-      bg-[var(--card)]
-      border border-[var(--border)]
+      border border-[var(--md-sys-color-outline-variant)]
       shadow-lg
-      hover:shadow-xl
     `,
     glass: `
-      glass-card
-      hover:bg-[var(--glass-bg-strong)]
+      border border-[var(--md-sys-color-outline-variant)]
+      bg-[var(--md-sys-color-surface-container-low)]
     `,
     gradient: `
-      bg-gradient-to-br from-[var(--card)] to-[var(--bg)]
-      border border-[var(--border)]
+      border border-[var(--md-sys-color-outline-variant)]
       relative overflow-hidden
     `,
     bordered: `
-      bg-[var(--card)]
-      border-2 border-[var(--border)]
-      hover:border-[var(--primary)]
+      border-2 border-[var(--md-sys-color-outline-variant)]
+      hover:border-[var(--md-sys-color-primary)]
     `,
   };
 
   const baseClasses = `
-    relative rounded-2xl p-5 md:p-6
+    relative rounded-md3-md p-5 md:p-6
     transition-all duration-300 ease-expo
     flex flex-col items-center text-center
+    bg-[var(--md-sys-color-surface-container)]
     ${variants[variant]}
     ${hoverable && !onClick ? 'cursor-pointer hover:-translate-y-1' : ''}
     ${onClick ? 'cursor-pointer' : ''}
@@ -96,25 +91,15 @@ export function InfoCard({
 
   const iconWrapper = (
     <div
-      className={`relative inline-flex items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-2xl mb-4 transition-all duration-500 ${hoverable ? 'group-hover:scale-110 group-hover:rotate-3' : ''}`}
+      className={`relative inline-flex items-center justify-center w-14 h-14 md:w-16 md:h-16 rounded-md3-md mb-4 transition-all duration-500 ${hoverable ? 'group-hover:scale-110 group-hover:rotate-3' : ''}`}
       style={{
-        background: `linear-gradient(135deg, ${cardColor}15, ${secondaryColor}15)`,
-        boxShadow: `0 0 30px ${cardColor}20`,
+        background: `linear-gradient(135deg, ${cardColor}18, ${secondaryColor}18)`,
       }}
       aria-hidden="true"
     >
-      <span className="text-2xl md:text-3xl" style={{ filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}>
+      <span className="material-symbols-outlined text-[var(--md-sys-color-primary)]" style={{ fontSize: '2rem' }}>
         {icon}
       </span>
-      {animated && (
-        <div
-          className="absolute inset-0 rounded-2xl animate-pulse-soft opacity-20"
-          style={{
-            background: `linear-gradient(135deg, ${cardColor}, ${secondaryColor})`,
-          }}
-          aria-hidden="true"
-        />
-      )}
     </div>
   );
 
@@ -143,53 +128,45 @@ export function InfoCard({
         <div className="relative z-10 w-full">{children}</div>
       ) : (
         <>
-          {/* Icon */}
           {iconWrapper}
 
-          {/* Value */}
           <div className="mb-2 relative z-10">
             <span
-              className="text-3xl md:text-4xl font-extrabold gradient-text"
-              style={{
-                background: `linear-gradient(135deg, ${cardColor}, ${secondaryColor})`,
-              }}
+              className="text-3xl md:text-4xl font-extrabold"
+              style={{ color: 'var(--md-sys-color-primary)' }}
             >
               {typeof value === 'number' ? value.toLocaleString() : value}
             </span>
           </div>
 
-          {/* Label */}
-          <p className="text-sm md:text-base font-semibold mb-1 relative z-10" style={{ color: 'var(--text)' }}>
+          <p className="text-sm md:text-base font-semibold mb-1 relative z-10" style={{ color: 'var(--md-sys-color-on-surface)' }}>
             {label}
           </p>
 
-          {/* Subtitle */}
           {subtitle && (
-            <p className="text-xs relative z-10" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs relative z-10" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               {subtitle}
             </p>
           )}
         </>
       )}
 
-      {/* Hover shine effect */}
       {hoverable && (
         <div
-          className="absolute inset-0 rounded-2xl opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+          className="absolute inset-0 rounded-md3-md opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none"
           style={{
-            background: `linear-gradient(135deg, ${cardColor}10, ${secondaryColor}10)`,
+            background: `linear-gradient(135deg, ${cardColor}08, ${secondaryColor}08)`,
           }}
           aria-hidden="true"
         />
       )}
 
-      {/* Click ripple effect */}
       {onClick && (
-        <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <div className="absolute inset-0 rounded-md3-md overflow-hidden pointer-events-none">
           <div
             className="absolute inset-0"
             style={{
-              background: `radial-gradient(circle at center, ${cardColor}30 0%, transparent 70%)`,
+              background: `radial-gradient(circle at center, ${cardColor}20 0%, transparent 70%)`,
               transform: isHovered ? 'scale(1)' : 'scale(0)',
               opacity: isHovered ? 0 : 1,
               transition: 'transform 0.4s ease-out, opacity 0.4s ease-out',
@@ -202,7 +179,6 @@ export function InfoCard({
   );
 }
 
-/* Horizontal variant for inline use */
 interface HorizontalInfoCardProps {
   icon: string;
   label: string;
@@ -223,25 +199,24 @@ export function HorizontalInfoCard({
 
   return (
     <div
-      className={`inline-flex items-center gap-3 px-4 py-3 rounded-xl glass-card transition-all duration-300 ${className}`}
-      style={{ borderColor: 'var(--glass-border)' }}
+      className={`inline-flex items-center gap-3 px-4 py-3 rounded-md3-md transition-all duration-300 bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] ${className}`}
     >
       <div
-        className="w-10 h-10 rounded-xl flex items-center justify-center text-lg flex-shrink-0"
+        className="w-10 h-10 rounded-md3-md flex items-center justify-center flex-shrink-0"
         style={{
-          background: `linear-gradient(135deg, ${cardColor}15, ${cardColor}25)`,
+          background: `linear-gradient(135deg, ${cardColor}18, ${cardColor}28)`,
         }}
         aria-hidden="true"
       >
-        <span>{icon}</span>
+        <span className="material-symbols-outlined text-[var(--md-sys-color-primary)]" style={{ fontSize: '1.25rem' }}>
+          {icon}
+        </span>
       </div>
       <div className="flex flex-col min-w-0">
-        <span className="text-sm font-bold gradient-text" style={{
-          background: `linear-gradient(135deg, ${cardColor}, ${primaryColor})`,
-        }}>
+        <span className="text-sm font-bold" style={{ color: 'var(--md-sys-color-primary)' }}>
           {typeof value === 'number' ? value.toLocaleString() : value}
         </span>
-        <span className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+        <span className="text-xs truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
           {label}
         </span>
       </div>
@@ -249,7 +224,6 @@ export function HorizontalInfoCard({
   );
 }
 
-{/* Grid layout for multiple info cards */}
 interface InfoGridProps {
   cards: Array<{
     icon: string;
@@ -302,7 +276,6 @@ export function InfoGrid({
   );
 }
 
-/* Stat card with trend indicator */
 interface StatCardProps {
   icon: string;
   label: string;
@@ -340,15 +313,17 @@ export function StatCard({
       children={
         trend && (
           <div
-            className={`mt-3 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold ${trend.isPositive ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}
+            className="mt-3 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
             style={{
-              backgroundColor: trend.isPositive ? 'rgba(22,163,74,0.1)' : 'rgba(220,38,38,0.1)',
-              color: trend.isPositive ? '#16a34a' : '#dc2626',
+              backgroundColor: trend.isPositive ? 'var(--md-sys-color-primary-container)' : 'var(--md-sys-color-secondary-container)',
+              color: trend.isPositive ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-secondary-container)',
             }}
           >
-            <span aria-hidden="true">{trend.isPositive ? '↑' : '↓'}</span>
+            <span className="material-symbols-outlined" style={{ fontSize: '0.875rem' }}>
+              {trend.isPositive ? 'trending_up' : 'trending_down'}
+            </span>
             <span>{trend.value}%</span>
-            <span style={{ color: trend.isPositive ? '#16a34a99' : '#dc262699' }}>{trend.label}</span>
+            <span style={{ opacity: 0.7 }}>{trend.label}</span>
           </div>
         )
       }

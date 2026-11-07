@@ -16,7 +16,7 @@ interface Branding {
 }
 
 const defaultBranding: Branding = {
-  systemName: 'نظام إدارة التعلم - نادي ريادة الاعمال',
+  systemName: 'نظام إدارة التعلم - وحدة التدريب و التطوير',
   logoHeader: '',
   logoFooter: '',
   favicon: '',
@@ -24,7 +24,7 @@ const defaultBranding: Branding = {
   secondaryColor: '#7c3aed',
   sloganAr: 'نحو تعليم أفضل',
   sloganEn: 'Towards Better Learning',
-  messageFooter: 'هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
+  messageFooter: 'هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
 };
 
 const BrandingContext = createContext<Branding>(defaultBranding);
@@ -44,8 +44,13 @@ export function BrandingProvider({ children }: { children: ReactNode }) {
           document.documentElement.style.setProperty('--primary', data.primaryColor || defaultBranding.primaryColor);
           document.documentElement.style.setProperty('--secondary', data.secondaryColor || defaultBranding.secondaryColor);
           if (data.favicon) {
-            const link = document.querySelector<HTMLLinkElement>('link[rel*="icon"]');
-            if (link) link.href = data.favicon;
+            let link = document.querySelector<HTMLLinkElement>('link[rel*="icon"]');
+            if (!link) {
+              link = document.createElement('link');
+              link.rel = 'icon';
+              document.head.appendChild(link);
+            }
+            link.href = data.favicon;
           }
         }
       })

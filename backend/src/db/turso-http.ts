@@ -14,10 +14,25 @@ interface QueryResult {
   affectedRowCount?: number;
 }
 
+/**
+ * A single libSQL client reused for the whole process in local `file:` mode.
+ * Creating a client per query leaks a connection handle every call and can
+ * exhaust resources (and crash the server) under load.
+ */
+let fileClientPromise: Promise<any> | null = null;
+
+function getFileClient(): Promise<any> {
+  if (!fileClientPromise) {
+    fileClientPromise = import('@libsql/client').then(({ createClient }) =>
+      createClient({ url: TURSO_URL }),
+    );
+  }
+  return fileClientPromise;
+}
+
 export async function execute(sql: string): Promise<QueryResult> {
   if (TURSO_URL.startsWith('file:')) {
-    const { createClient } = await import('@libsql/client');
-    const client = createClient({ url: TURSO_URL });
+    const client = await getFileClient();
     const result = await client.execute(sql);
     return {
       rows: result.rows,
@@ -55,8 +70,7 @@ export async function execute(sql: string): Promise<QueryResult> {
 
 export async function executeMultiple(sql: string): Promise<void> {
   if (TURSO_URL.startsWith('file:')) {
-    const { createClient } = await import('@libsql/client');
-    const client = createClient({ url: TURSO_URL });
+    const client = await getFileClient();
     await client.executeMultiple(sql);
     return;
   }

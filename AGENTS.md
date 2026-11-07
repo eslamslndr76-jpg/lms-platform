@@ -1,81 +1,82 @@
-# Repository Reference (project-specific facts)
+# AGENTS.md
+
+## Working rules (token budget — highest priority)
+- Reply to me in Arabic, short (a few lines). Code, comments, errors, commit messages in English.
+- Do NOT deploy, run Playwright/E2E, run full `build`, or open a browser unless I explicitly ask. After code changes run only `npm run typecheck` (+ lint on changed files if needed).
+- Don't read big files whole or dump long logs: use `grep` / line ranges; pipe command output through `tail -n 30`.
+- Never read or grep: `node_modules`, `.next`, `dist`, `backend/data.db` (scratch DB), lockfiles, `tests/`.
+- Don't re-explore the repo each session; rely on this file. Don't restate plans or re-summarize your work beyond 2–3 lines.
+- Write complete working code (no TODOs/placeholders). Async UI needs loading/error states. Backend routes use try/catch with descriptive HTTP status codes.
+- Task plan lives in `edit-plan.md` + `plan/phase-N-*.md`. Read them only when working on that plan, and only the current phase file.
+- `GROUP_WORKFLOW.md` is a human guide (group states, notifications). Read it only when touching group-state or notification logic.
 
 ## Layout
-npm workspace (`name: lms-erp-monorepo`) with three independent pillars + a root Playwright suite:
-- `backend/` — Node/Express 4 API on libSQL/Turso (SQLite-compatible). No ORM; hand-rolled `sql()` helper in `src/db/helpers.ts` with `?` placeholders → `escape()` → raw SQL. Mounted under `/api/*`.
-- `admin-ui/` — Next.js 14 (App Router) admin dashboard. Client-rendered, role-gated.
-- `user-ui/` — Next.js 14 (App Router) student-facing site. RTL Arabic marketing + authed `app/(dashboard)/` area.
-- `tests/` — Playwright E2E (config at root `playwright.config.ts`; starts backend + user-ui as webServers, baseURL `localhost:3001`). 4 spec files: `admin-api.spec.ts`, `settings-test.spec.ts`, `backend-api.spec.ts`, `user-ui.spec.ts`.
-- `whatsapp-bot/` — Baileys (WhatsApp Web library) service for OTP delivery. Runs as a standalone Node/Express process on port 3002. NOT deployed on Vercel (requires persistent WebSocket). Deployed separately on Render.com.
-- Root `tsconfig.base.json` exists but **none of the pillars extend it** — each pillar ships its own `tsconfig.json`.
+npm workspace with three pillars:
+- `backend/` — Express 4 API on libSQL/Turso. No ORM: `sql()` helper in `src/db/helpers.ts` (`?` placeholders). Routes in `src/routes/` (one resource per file, default-exported Router; admin-only under `routes/admin/`), mounted at `/api/*`.
+- `admin-ui/` — Next.js 14 App Router admin dashboard (client-rendered, role-gated).
+- `user-ui/` — Next.js 14 App Router student site: RTL Arabic marketing + authed `app/(dashboard)/`.
+- Root `tsconfig.base.json` is unused; each pillar has its own `tsconfig.json`.
 
-## Commands
-Root (run from repo root):
-- `npm run dev:backend` / `dev:admin` / `dev:user` — start each pillar independently.
-- `npm run dev:whatsapp` — start WhatsApp bot locally (port 3002).
-- `npm run build:backend` / `build:admin` / `build:user`
-- `npm run lint` — `eslint . --ext .ts,.tsx` across the workspace (config: `@typescript-eslint`, no-unused-vars as warn, no-explicit-any as warn).
-- `npm run format` — `prettier --write .` (config: single quotes, trailing commas, 100 print width, 2 tab width).
+## Commands (repo root)
+- `npm run dev` — all pillars: backend `:3001`, user-ui `:3000`, admin-ui `:3002`. Single: `dev:backend` / `dev:admin` / `dev:user`.
+- `npm run typecheck` — tsc for all three. `npm run lint` — eslint. `npm run format` — prettier (single quotes, trailing commas, width 100).
 
-Per-pillar scripts: `dev`, `build`, `start` (Next/Node), `lint` (`next lint`). **No `typecheck` or `test` script anywhere.** Type-check manually with `npx tsc --noEmit`. Run Playwright via `npx playwright test`.
+## Architecture rules
+- **Sessions:** user-ui JWT in `localStorage['token']`; admin-ui in `localStorage['admin_token']`. Never share.
+- **API calls:** each UI has `lib/api.ts` (native fetch, Bearer token from localStorage, 15s timeout). Route all calls through it; no axios.
+- **user-ui auth:** real authed pages only under `app/(dashboard)/` (layout redirects to `/login`).
+- **admin-ui auth:** client-side only (`app/ClientLayout.tsx`); auth flash on load is expected.
+- **Backend auth:** `middleware/auth.ts` (`authMiddleware`/`optionalAuth`), `middleware/rbac.ts` (`requireRole`/`requirePermission`). Role ids: ADMIN=1, EMPLOYEE=2, STUDENT=3.
+- **Notifications:** Email (Nodemailer) + Telegram Bot API, sent together via `Promise.allSettled` in `backend/src/services/externalNotificationService.ts`. No WhatsApp.
+- **QR:** admin generates via `qrcode.react` in `admin-ui/app/courses/[id]/page.tsx`; user-ui scans with `html5-qrcode`.
+- **Groups** are managed inside the course-detail page (`admin-ui/app/courses/[id]/page.tsx`), not a separate route.
+- **Branding:** `BrandingProvider` (both UIs) fetches `/api/branding` and sets `--primary`/`--secondary` CSS vars. Use `useBranding()` + inline `style`, not hard-coded colors.
 
-## Architecture Boundaries & Rules
-- **Session isolation:** `user-ui` stores JWT in `localStorage['token']`; `admin-ui` uses `localStorage['admin_token']`. They share one backend but never share tokens — keep these namespaces separate.
-- **Data layer:** Each frontend has its own `lib/api.ts` wrapper around native `fetch` (no axios). Both inject `Authorization: Bearer <token>` from localStorage and enforce a 15s `AbortController` timeout. Do not bypass — route all API calls through `lib/api.ts`.
-- **user-ui guarded surface:** The real authed pages live only inside the `app/(dashboard)/` route group (its `layout.tsx` redirects to `/login` when unauthed).
-- **admin-ui protection is client-side only:** `app/ClientLayout.tsx` redirects unauthed users to `/login`; no middleware/SSR guard. Expect auth flash on load.
-- **QR workflow:** admin generates QR via `qrcode.react` → `QRCodeSVG` in `admin-ui/app/courses/[id]/page.tsx`. user-ui scans via `html5-qrcode`. Not in dedicated routes.
-- **Backend routes:** one resource per file in `backend/src/routes/`, each default-exports an `express.Router`; admin-only routes under `routes/admin/`. Auth via `middleware/auth.ts` (`authMiddleware` / `optionalAuth`), RBAC via `middleware/rbac.ts` (`requireRole`, `requirePermission`). Role ids: `ADMIN=1`, `EMPLOYEE=2`, `STUDENT=3`.
-- **BrandingProvider** in both UIs fetches `/api/branding` at runtime and injects `--primary`/`--secondary` CSS vars onto `document.documentElement`. Prefer `useBranding()` + inline `style` over hard-coded color literals (they get overridden).
+## Conventions
+- RTL Arabic: `<html lang="ar" dir="rtl">` in both root layouts. All new UI must be RTL-aware.
+- No `next/image`: images are base64 data URLs (`lib/imageUtils.ts` → `compressAndEncode`, max 800px / JPEG 0.7) in plain `<img>`.
+- State: React Context only. Animations: hand-rolled CSS keyframes. Icons: emoji glyphs. No extra libraries.
+- TypeScript `strict: true`. Alias `@/*` exists, but code mostly uses relative imports.
+- DB columns, API fields, and frontend variables use the same names. Define request/response JSON before wiring frontend to backend.
+- Uploads: `multer` in `routes/uploads.ts`, served statically at `/uploads`.
 
-## Coding Conventions
-- **RTL/Arabic:** `<html lang="ar" dir="rtl">` hardcoded in both frontends' root `layout.tsx`. Keep all new UI RTL-aware.
-- **No `next/image`:** images are base64 data URLs via `lib/imageUtils.ts` → `compressAndEncode` (canvas resize, max 800px / JPEG 0.7), rendered in plain `<img>`. No image-domain config in any `next.config.js`.
-- **State:** React Context only (no Redux/Zustand/SWR/React-Query). **Animations:** hand-rolled CSS keyframes (no framer-motion). **Icons:** emoji glyphs (no icon library).
-- **TypeScript:** `strict: true` everywhere. Path alias `@/*` in both UIs' tsconfig but code mostly uses relative imports.
-- **Backend SQL:** uses `sql()` helper with `?` placeholders (positional, via string replace). No knex/prisma. The `execute()` in `turso-http.ts` handles two modes: `file:` URLs → `@libsql/client` local SQLite; `libsql://` → rewritten to `https://` + HTTP fetch to Turso pipeline API.
-
-## Environment Variables
-Backend (`backend/`):
-- `TURSO_DATABASE_URL` (defaults to `file:./data.db`)
-- `TURSO_AUTH_TOKEN`
-- `JWT_SECRET` (fallback `'fallback-dev-secret-do-not-use-in-production'` in `src/middleware/auth.ts` — always set in prod)
-- `FRONTEND_URL` (CORS origin; default `http://localhost:3000`)
-- `ADMIN_EMAIL` / `ADMIN_PASSWORD` (seed admin user; defaults `admin@lms.com` / `admin123`)
-- `GEMINI_API_KEY` (optional; powers AI assistant chat component in both UIs)
-- No `dotenv` import — vars must exist in process env (Vercel injects them).
-
-Frontends (both): `NEXT_PUBLIC_API_URL` — backend base URL; falls back to `http://localhost:3001`. (user-ui also reads `window.__NEXT_PUBLIC_API_URL` at runtime; admin-ui does not.)
-
-## Deployment (`--prod` only, never preview URLs)
-- Backend: Vercel serverless via `@vercel/node`; `vercel.json` routes all traffic to `api/index.ts` (re-exports Express app). Local entry `src/index.ts` calls `app.listen` only when `NODE_ENV !== 'production'`.
-- admin-ui: `https://lms-admin-xi-seven.vercel.app` / `https://lms-admin-x2-hims.vercel.app`. Deploy from `admin-ui/` directory.
-- user-ui: `https://lms-user-psi.vercel.app` / `https://lms-user-x2-hims.vercel.app` / `https://lms-user.vercel.app`. **Deploy from monorepo root** (not from `user-ui/`), using root `vercel.json` for build settings. The root `.vercel` must be linked to the `lms-user` project.
+## Env vars
+Backend (no `dotenv`; vars must exist in process env): `TURSO_DATABASE_URL` (default `file:./data.db`), `TURSO_AUTH_TOKEN`, `JWT_SECRET`, `FRONTEND_URL`, `ADMIN_URL`, `ALLOWED_ORIGINS`, `BACKEND_URL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_BOT_USERNAME`, `TELEGRAM_WEBHOOK_SECRET`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`, `ADMIN_EMAIL`/`ADMIN_PASSWORD` (seed admin, default `admin@lms.com`/`admin123`), `GEMINI_API_KEY` (optional).
+Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 
 ## Gotchas
-- **Schema & migrations not versioned.** `backend/src/db/connection.ts` runs `SCHEMA_SQL` + hard-coded `ALTER TABLE` array **on every boot** (each wrapped in try/catch). `seed()` (default roles, branding, aiKeys, admin user) also runs on every startup. To add a column, append an idempotent `ALTER TABLE` to the array.
-- **CORS allowlist bypassed:** `backend/src/index.ts` origin callback returns `cb(null, true)` in all branches — fix here when tightening origins.
-- **`backend/data.db` is committed** as local fallback when `TURSO_DATABASE_URL` unset. Treat as scratch, not source of truth.
-- **Groups managed inside course-detail page** (`admin-ui/app/courses/[id]/page.tsx`), not in a separate route.
-- **No test/lint infrastructure inside pillars:** only root-level `lint` and Playwright. No Jest/Vitest and no per-pillar eslint config.
-- **`uploads/` directory** mounted at `/uploads` as static files in backend. Handled via `multer` in `routes/uploads.ts`.
-- **Root `vercel.json`** configures build for `lms-user` project (build inside `user-ui/`, output `user-ui/.next`). Required for deploying user-ui from monorepo root.
+- **No versioned migrations.** `backend/src/db/connection.ts` runs `SCHEMA_SQL` + an `ALTER TABLE` array (each in try/catch) and `seed()` on every boot. To add a column, append an idempotent `ALTER TABLE` to that array.
+- **CORS:** allowlist = known prod origins + `FRONTEND_URL` + `ADMIN_URL` + `ALLOWED_ORIGINS`; localhost allowed outside production; requests without `Origin` always allowed.
+- **Telegram webhook** `/api/notifications/telegram/webhook` requires header `X-Telegram-Bot-Api-Secret-Token` = `TELEGRAM_WEBHOOK_SECRET` (derived from bot token by default). After changing bot token or `BACKEND_URL`, re-register via `POST /api/notifications/telegram/setup-webhook` (admin token).
+- `execute()` in `turso-http.ts`: `file:` URLs → `@libsql/client` local SQLite; `libsql://` → HTTPS fetch to Turso pipeline API.
 
----
+## Flutter Mobile App (APK / iOS) — Parallel Development
 
-# Language & Branding Directives
-- **Language:** Communicate with user in Arabic. English reserved for code, errors, and technical file contents only.
-- **Branding (always use for mock data, headers, footers):**
-  - Platform Name: "نادي ريادة الاعمال" (formerly "فريق تدريب X2")
-  - Disclaimer: "هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)"
-  - Slogan (Arabic): "نحو تعليم أفضل"
-  - Slogan (English): "Towards Better Learning"
-- **UI/UX:** Premium polished interfaces with loading/success/error states on all components. Backend routes must have try/catch with descriptive HTTP status codes.
-- **API contracts:** Define JSON request/response before connecting frontend to backend. Use matching variable names across DB schema, API, and frontend.
-- **No placeholders or TODOs** in code — always deliver complete, functioning implementations.
+> **A second AI agent is actively developing the Flutter mobile app in `flutter_app/` in parallel.**
+> Both agents share the same Backend and DB — coordinate carefully when touching APIs.
 
-# Automation Rules
-- **Every code change** must be followed by: (1) deploy to Vercel `--prod`, (2) run `npx playwright test` locally, (3) verify deployed page loads without errors (browser snapshot). Do not skip any step.
-- Deploy user-ui from monorepo root: `vercel deploy --prod --yes` (root must be linked to `lms-user`). Do NOT deploy from `user-ui/` directory.
-- Deploy admin-ui from `admin-ui/`: `vercel deploy --prod --yes`
-- Deploy backend from repo root: `vercel deploy --prod --yes` (uses `backend/` as root in project settings).
+- **Location:** `d:\مركز تدريب\flutter_app\` — standalone Flutter project, NOT part of the npm workspace.
+- **Purpose:** Native student-facing mobile app (Android APK first, iOS later) that consumes the same `backend/` REST API.
+- **Platform:** Android Studio installed; Flutter SDK will be installed separately. Target Flutter Stable ≥ 3.22.
+- **Auth:** JWT stored in `flutter_secure_storage` (NOT localStorage). Same `/api/auth/login` endpoint, same token format.
+- **API base URL:** Read from env/config — same `NEXT_PUBLIC_API_URL` equivalent (`http://localhost:3001` in dev, real server in prod).
+- **Native features the Flutter app uses:** Bluetooth LE (attendance), Camera/QR scan, Push Notifications (Firebase FCM), GPS.
+- **Shared resources with web:** All `/api/*` endpoints, same DB schema, same JWT secret, same branding API (`/api/branding`).
+
+### Rules for the **web/backend agent** (do NOT break Flutter compatibility):
+- When adding a **new API endpoint**, keep response shape consistent: `{ data, error }` — no breaking renames.
+- When adding a **new DB column**, it's fine — just append the idempotent `ALTER TABLE` as usual; Flutter will read it via API.
+- When adding a **new role or permission**, update `middleware/rbac.ts` only — Flutter reads roles from the JWT payload.
+- Do NOT change the JWT payload shape (`{ userId, roleId, role }`) without notifying the Flutter agent.
+- Do NOT change existing API field names that are already consumed by Flutter (coordinate via this file or comments).
+- **CORS:** Flutter in dev hits the backend directly (no browser Origin header) — requests without Origin are already allowed; keep it that way.
+- If you add a new `/api/*` route that Flutter will need, document it here under "API changes for Flutter" below.
+
+### API changes for Flutter (append here when adding new endpoints Flutter will consume):
+<!-- Format: METHOD /api/path — description — added by web agent on DATE -->
+
+## Language & branding
+- Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").
+- Disclaimer: "هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)"
+- Slogan: "نحو تعليم أفضل" / "Towards Better Learning"
+- Use this branding in mock data, headers, footers. Premium, polished UI.

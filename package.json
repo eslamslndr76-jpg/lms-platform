@@ -5,19 +5,21 @@
   "workspaces": [
     "backend",
     "admin-ui",
-    "user-ui",
-    "whatsapp-bot"
+    "user-ui"
   ],
   "scripts": {
+    "dev": "node scripts/dev.mjs",
     "dev:backend": "npm run dev -w backend",
     "dev:admin": "npm run dev -w admin-ui",
     "dev:user": "npm run dev -w user-ui",
-    "dev:whatsapp": "npm run dev -w whatsapp-bot",
     "build:backend": "npm run build -w backend",
     "build:admin": "npm run build -w admin-ui",
     "build:user": "npm run build -w user-ui",
-    "build:whatsapp": "npm run build -w whatsapp-bot",
     "lint": "eslint . --ext .ts,.tsx",
+    "typecheck": "npm run typecheck -w backend && npm run typecheck -w admin-ui && npm run typecheck -w user-ui",
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:report": "playwright show-report",
     "format": "prettier --write ."
   },
   "devDependencies": {

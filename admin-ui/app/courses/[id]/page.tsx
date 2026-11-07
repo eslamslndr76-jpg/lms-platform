@@ -11,6 +11,8 @@ import Skeleton from '../../../components/Skeleton';
 import StatusBadge from '../../../components/StatusBadge';
 import { compressAndEncode } from '../../../lib/imageUtils';
 import { useToast } from '../../../components/Toast';
+import { useAdminAuth } from '../../../lib/auth';
+import ExportButton from '../../../components/ExportButton';
 import { QRCodeSVG } from 'qrcode.react';
 
 const daysOfWeek = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
@@ -30,6 +32,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const courseId = Number(params.id);
   const router = useRouter();
   const { toast } = useToast();
+  const { isAdmin } = useAdminAuth();
 
   const [tab, setTab] = useState('info');
 
@@ -46,16 +49,36 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [groupsLoading, setGroupsLoading] = useState(false);
 
   const [addGroupModal, setAddGroupModal] = useState(false);
-  const [groupForm, setGroupForm] = useState({ name: '', location: '', max_students: '', status: 'pending' });
+  const [groupForm, setGroupForm] = useState({ name: '', location: '', place_id: '', max_students: '', status: 'pending', instructor_user_id: '' });
   const [groupSaving, setGroupSaving] = useState(false);
+  const [places, setPlaces] = useState<any[]>([]);
+  const [instructorAccounts, setInstructorAccounts] = useState<any[]>([]);
+  const [groupPlaceCap, setGroupPlaceCap] = useState<number | null>(null);
+  const [groupPlaceInfo, setGroupPlaceInfo] = useState<{ conflicts: any[]; groups: any[] }>({ conflicts: [], groups: [] });
 
   const [editGroupModal, setEditGroupModal] = useState(false);
   const [editGroupForm, setEditGroupForm] = useState<any>({});
   const [editingGroupId, setEditingGroupId] = useState<number | null>(null);
   const [editGroupSaving, setEditGroupSaving] = useState(false);
+  const [editGroupPlaceCap, setEditGroupPlaceCap] = useState<number | null>(null);
+  const [editGroupPlaceInfo, setEditGroupPlaceInfo] = useState<{ conflicts: any[]; groups: any[] }>({ conflicts: [], groups: [] });
 
   const [detailGroup, setDetailGroup] = useState<any>(null);
-  const [detailGroupTab, setDetailGroupTab] = useState<'info' | 'lectures' | 'students'>('info');
+  const [detailGroupTab, setDetailGroupTab] = useState<'info' | 'lectures' | 'students' | 'survey'>('info');
+
+  // Group survey (edit-plan.md §4.4)
+  const [surveyStats, setSurveyStats] = useState<any>(null);
+  const [surveyLoading, setSurveyLoading] = useState(false);
+  const [surveyError, setSurveyError] = useState('');
+  const [surveyReminding, setSurveyReminding] = useState(false);
+  const [surveyExtendOpen, setSurveyExtendOpen] = useState(false);
+  const [surveyExtendDate, setSurveyExtendDate] = useState('');
+  const [surveyExtendSaving, setSurveyExtendSaving] = useState(false);
+
+  // Instructor evaluation of the group's students (edit-plan.md §5)
+  const [instructorEval, setInstructorEval] = useState<any>(null);
+  const [instructorEvalLoading, setInstructorEvalLoading] = useState(false);
+  const [reopeningInstructorEval, setReopeningInstructorEval] = useState(false);
 
   const [lectures, setLectures] = useState<any[]>([]);
   const [lecturesLoading, setLecturesLoading] = useState(false);
@@ -121,10 +144,12 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
   const [confirmToggleCourse, setConfirmToggleCourse] = useState<any>(null);
   const [confirmDeleteCourse, setConfirmDeleteCourse] = useState<any>(null);
-  const [confirmToggleGroup, setConfirmToggleGroup] = useState<any>(null);
   const [confirmDeleteGroup, setConfirmDeleteGroup] = useState<any>(null);
   const [confirmRemoveStudent, setConfirmRemoveStudent] = useState<any>(null);
   const [confirmDeleteLecture, setConfirmDeleteLecture] = useState<any>(null);
+  const [confirmCompleteGroup, setConfirmCompleteGroup] = useState<any>(null);
+  const [confirmReopenGroup, setConfirmReopenGroup] = useState<any>(null);
+  const [groupActionLoading, setGroupActionLoading] = useState(false);
 
   const loadCourse = async () => {
     setLoading(true);
@@ -152,6 +177,65 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     }
     setGroupsLoading(false);
     loadUnassigned();
+  };
+
+  // ── Places (rooms) ─────────────────────────────
+  useEffect(() => {
+    api('/api/places')
+      .then(data => { if (Array.isArray(data)) setPlaces(data); })
+      .catch(() => { /* places may be unavailable for this role */ });
+    api('/api/groups/instructor-accounts')
+      .then(data => { if (Array.isArray(data)) setInstructorAccounts(data); })
+      .catch(() => { /* instructor accounts are optional */ });
+  }, []);
+
+  const loadPlaceInfo = async (placeId: any, groupId?: number) => {
+    if (!placeId) return { conflicts: [], groups: [] };
+    try {
+      const qs = `placeId=${placeId}${groupId ? `&groupId=${groupId}` : ''}`;
+      const res = await api(`/api/places/conflicts?${qs}`);
+      return {
+        conflicts: Array.isArray(res.conflicts) ? res.conflicts : [],
+        groups: Array.isArray(res.groups) ? res.groups : [],
+      };
+    } catch {
+      return { conflicts: [], groups: [] };
+    }
+  };
+
+  const handleSelectGroupPlace = async (value: string) => {
+    const place = places.find(p => String(p.id) === value);
+    setGroupForm(prev => ({
+      ...prev,
+      place_id: value,
+      location: place ? place.name : '',
+      max_students: place ? String(place.capacity) : prev.max_students,
+    }));
+    setGroupPlaceCap(place ? Number(place.capacity) : null);
+    setGroupPlaceInfo(await loadPlaceInfo(value));
+  };
+
+  const handleSelectEditGroupPlace = async (value: string) => {
+    const place = places.find(p => String(p.id) === value);
+    setEditGroupForm((prev: any) => ({
+      ...prev,
+      place_id: value,
+      location: place ? place.name : '',
+      max_students: place ? String(place.capacity) : prev.max_students,
+    }));
+    setEditGroupPlaceCap(place ? Number(place.capacity) : null);
+    setEditGroupPlaceInfo(await loadPlaceInfo(value, editingGroupId || undefined));
+  };
+
+  const warnPlaceConflict = async (group: any) => {
+    if (!group?.place_id) return;
+    const info = await loadPlaceInfo(group.place_id, group.id);
+    if (info.conflicts.length > 0) {
+      const list = info.conflicts
+        .map((c: any) => `${c.name} (${(c.days || []).join('، ')} ${c.time_from || ''}-${c.time_to || ''})`)
+        .join(' | ');
+      toast(`⚠️ تعارض في المكان: ${list}`, 'warning');
+    }
   };
 
   const loadCourseStudents = async () => {
@@ -235,14 +319,22 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     try {
       await api('/api/groups', {
         method: 'POST',
-        body: JSON.stringify({ ...groupForm, course_id: courseId, max_students: groupForm.max_students ? Number(groupForm.max_students) : null }),
+        body: JSON.stringify({
+          ...groupForm,
+          course_id: courseId,
+          place_id: groupForm.place_id ? Number(groupForm.place_id) : null,
+          max_students: groupForm.max_students ? Number(groupForm.max_students) : null,
+          instructor_user_id: groupForm.instructor_user_id ? Number(groupForm.instructor_user_id) : null,
+        }),
       });
       setAddGroupModal(false);
-      setGroupForm({ name: '', location: '', max_students: '', status: 'pending' });
+      setGroupForm({ name: '', location: '', place_id: '', max_students: '', status: 'pending', instructor_user_id: '' });
+      setGroupPlaceCap(null);
+      setGroupPlaceInfo({ conflicts: [], groups: [] });
       toast('تم إضافة المجموعة', 'success');
       loadGroups();
-    } catch {
-      toast('فشل إضافة المجموعة', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل إضافة المجموعة', 'error');
     } finally {
       setGroupSaving(false);
     }
@@ -254,9 +346,17 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       name: row.name, course_id: row.course_id?.toString() || '',
       is_active: Number(row.is_active),
       status: row.status || 'pending',
-      location: row.location || '', max_students: row.max_students?.toString() || '',
+      location: row.location || '',
+      place_id: row.place_id != null ? String(row.place_id) : '',
+      max_students: row.max_students?.toString() || '',
+      instructor_user_id: row.instructor_user_id != null ? String(row.instructor_user_id) : '',
     });
+    setEditGroupPlaceCap(row.place_capacity != null ? Number(row.place_capacity) : null);
+    setEditGroupPlaceInfo({ conflicts: [], groups: [] });
     setEditGroupModal(true);
+    if (row.place_id) {
+      loadPlaceInfo(row.place_id, row.id).then(setEditGroupPlaceInfo);
+    }
   };
 
   const saveEditGroup = async () => {
@@ -268,16 +368,20 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         body: JSON.stringify({
           name: editGroupForm.name,
           location: editGroupForm.location,
+          place_id: editGroupForm.place_id ? Number(editGroupForm.place_id) : null,
           max_students: editGroupForm.max_students ? Number(editGroupForm.max_students) : null,
           status: editGroupForm.status,
+          instructor_user_id: editGroupForm.instructor_user_id ? Number(editGroupForm.instructor_user_id) : null,
         }),
       });
       setEditGroupModal(false);
       setEditingGroupId(null);
+      setEditGroupPlaceCap(null);
+      setEditGroupPlaceInfo({ conflicts: [], groups: [] });
       toast('تم تحديث المجموعة', 'success');
       loadGroups();
-    } catch {
-      toast('فشل تحديث المجموعة', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل تحديث المجموعة', 'error');
     } finally {
       setEditGroupSaving(false);
     }
@@ -287,6 +391,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     setDetailGroup(group);
     setDetailGroupTab('info');
     setGroupStudentsLoading(true);
+    setSurveyStats(null);
+    setSurveyError('');
     loadLectures(group.id);
     try {
       const students = await api(`/api/groups/${group.id}/students`);
@@ -296,26 +402,95 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       setGroupStudents([]);
     }
     setGroupStudentsLoading(false);
+    loadSurvey(group.id);
+    loadInstructorEval(group.id);
   };
 
-  const toggleGroupActive = async () => {
-    if (!confirmToggleGroup) return;
-    const currentlyActive = Number(confirmToggleGroup.is_active);
+  // ── Group survey (edit-plan.md §4.4) ──────────────────────────
+  const loadSurvey = async (groupId: number) => {
+    setSurveyLoading(true);
+    setSurveyError('');
     try {
-      await api(`/api/groups/${confirmToggleGroup.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({
-          is_active: currentlyActive ? 0 : 1,
-          status: currentlyActive ? 'cancelled' : 'active',
-        }),
-      });
-      toast(currentlyActive ? 'تم تعطيل المجموعة' : 'تم تفعيل المجموعة', 'success');
-      setConfirmToggleGroup(null);
-      loadGroups();
-    } catch {
-      toast('فشل تغيير حالة المجموعة', 'error');
+      const stats = await api(`/api/surveys/group/${groupId}/stats`);
+      setSurveyStats(stats);
+    } catch (err: any) {
+      setSurveyError(err?.message || 'فشل تحميل بيانات الاستبيان');
+      setSurveyStats(null);
+    } finally {
+      setSurveyLoading(false);
     }
   };
+
+  const remindSurveyPending = async () => {
+    if (!detailGroup || surveyReminding) return;
+    setSurveyReminding(true);
+    try {
+      const res: any = await api(`/api/surveys/group/${detailGroup.id}/remind`, { method: 'POST' });
+      if (res?.sent > 0) toast(`تم إرسال التذكير إلى ${res.sent} طالب`, 'success');
+      else toast('لا يوجد طلاب بانتظار الإجابة', 'info');
+      await loadSurvey(detailGroup.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل إرسال التذكير', 'error');
+    } finally {
+      setSurveyReminding(false);
+    }
+  };
+
+  const openSurveyExtend = () => {
+    const current = surveyStats?.group?.closes_at ? new Date(surveyStats.group.closes_at) : null;
+    const base = current && !Number.isNaN(current.getTime()) ? current : new Date();
+    base.setDate(base.getDate() + 7);
+    const iso = `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+    setSurveyExtendDate(iso);
+    setSurveyExtendOpen(true);
+  };
+
+  const saveSurveyExtend = async () => {
+    if (!detailGroup || !surveyExtendDate || surveyExtendSaving) return;
+    setSurveyExtendSaving(true);
+    try {
+      const closesAt = new Date(`${surveyExtendDate}T23:59:59`).toISOString();
+      await api(`/api/surveys/group/${detailGroup.id}/window`, {
+        method: 'PUT',
+        body: JSON.stringify({ closes_at: closesAt }),
+      });
+      setSurveyExtendOpen(false);
+      toast('تم تمديد مدة الاستبيان', 'success');
+      await loadSurvey(detailGroup.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل تمديد المدة', 'error');
+    } finally {
+      setSurveyExtendSaving(false);
+    }
+  };
+
+  // ── Instructor evaluation (edit-plan.md §5) ───────────────────
+  const loadInstructorEval = async (groupId: number) => {
+    setInstructorEvalLoading(true);
+    try {
+      const status = await api(`/api/groups/${groupId}/instructor-eval`);
+      setInstructorEval(status);
+    } catch {
+      setInstructorEval(null);
+    } finally {
+      setInstructorEvalLoading(false);
+    }
+  };
+
+  const reopenInstructorEval = async () => {
+    if (!detailGroup || reopeningInstructorEval) return;
+    setReopeningInstructorEval(true);
+    try {
+      await api(`/api/groups/${detailGroup.id}/instructor-eval/reopen`, { method: 'POST' });
+      toast('تم إعادة فتح تقييم المحاضر', 'success');
+      await loadInstructorEval(detailGroup.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل إعادة فتح التقييم', 'error');
+    } finally {
+      setReopeningInstructorEval(false);
+    }
+  };
+
 
   const deleteGroup = async () => {
     if (!confirmDeleteGroup) return;
@@ -327,6 +502,55 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       loadGroups();
     } catch {
       toast('فشل حذف المجموعة', 'error');
+    }
+  };
+
+  // ── Official group completion (edit-plan.md §4.2) ──────────────
+  const isGroupCompleted = (g: any) =>
+    !!g && (g.status === 'completed' || Number(g.is_complete) === 1 || !!g.completed_at);
+
+  const refreshDetailGroup = async (groupId: number) => {
+    try {
+      const fresh = await api(`/api/groups/${groupId}`);
+      setDetailGroup((prev: any) => (prev && Number(prev.id) === Number(groupId) ? fresh : prev));
+    } catch { /* keep current view */ }
+  };
+
+  const completeGroup = async () => {
+    if (!confirmCompleteGroup || groupActionLoading) return;
+    const target = confirmCompleteGroup;
+    setGroupActionLoading(true);
+    try {
+      const res: any = await api(`/api/groups/${target.id}/complete`, { method: 'POST' });
+      setConfirmCompleteGroup(null);
+      toast(
+        `تم إنهاء المجموعة — ${res?.students ?? 0} طالب تم إشعارهم` +
+          (res?.certificates ? ` وإصدار ${res.certificates} شهادة` : ''),
+        'success',
+      );
+      await loadGroups();
+      await refreshDetailGroup(target.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل إنهاء المجموعة', 'error');
+    } finally {
+      setGroupActionLoading(false);
+    }
+  };
+
+  const reopenGroup = async () => {
+    if (!confirmReopenGroup || groupActionLoading) return;
+    const target = confirmReopenGroup;
+    setGroupActionLoading(true);
+    try {
+      await api(`/api/groups/${target.id}/reopen`, { method: 'POST' });
+      setConfirmReopenGroup(null);
+      toast('تم إعادة فتح المجموعة', 'success');
+      await loadGroups();
+      await refreshDetailGroup(target.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل إعادة فتح المجموعة', 'error');
+    } finally {
+      setGroupActionLoading(false);
     }
   };
 
@@ -352,6 +576,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast('تم إضافة المحاضرة', 'success');
       loadLectures(detailGroup.id);
       loadGroups();
+      warnPlaceConflict(detailGroup);
     } catch (err: any) {
       toast(err?.message || 'فشل إضافة المحاضرة', 'error');
     } finally {
@@ -380,6 +605,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast('تم تحديث المحاضرة', 'success');
       loadLectures(detailGroup.id);
       loadGroups();
+      warnPlaceConflict(detailGroup);
     } catch (err: any) {
       toast(err?.message || 'فشل تحديث المحاضرة', 'error');
     } finally {
@@ -517,8 +743,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     setSelectedStudentIds([]);
     setStudentSearch('');
     try {
-      const data = await api('/api/admin/users?role=student&limit=500');
-      setAllStudents(data.users || []);
+      const data = await api(`/api/admin/unassigned/course/${courseId}`);
+      setAllStudents(data.map((u: any) => ({ ...u, id: u.user_id })));
     } catch { setAllStudents([]); }
   };
 
@@ -535,8 +761,14 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       const students = await api(`/api/groups/${detailGroup.id}/students`);
       setGroupStudents(students);
       loadGroups();
-    } catch {
-      toast('فشل إضافة الطلاب', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل إضافة الطلاب', 'error');
+      // A capacity error may still have added some students before it stopped.
+      try {
+        const students = await api(`/api/groups/${detailGroup.id}/students`);
+        setGroupStudents(students);
+        loadGroups();
+      } catch { /* ignore */ }
     } finally {
       setAddStudentSaving(false);
     }
@@ -586,8 +818,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         setGroupStudents(students);
       }
       loadGroups();
-    } catch {
-      toast('فشل تسكين الطالب', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل تسكين الطالب', 'error');
     }
   };
 
@@ -596,7 +828,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     setMoveTargetGroupId(null);
     try {
       const groups = await api(`/api/groups?courseId=${courseId}`);
-      setOtherGroups(groups.filter((g: any) => g.id !== detailGroup?.id));
+      setOtherGroups(groups.filter((g: any) => g.id !== detailGroup?.id && Number(g.is_active) === 1));
     } catch {
       setOtherGroups([]);
     }
@@ -616,8 +848,8 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       const students = await api(`/api/groups/${detailGroup.id}/students`);
       setGroupStudents(students);
       loadGroups();
-    } catch {
-      toast('فشل نقل الطالب', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل نقل الطالب', 'error');
     }
     setMovingStudent(false);
   };
@@ -638,28 +870,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     setBatchLoading(false);
   };
 
-  const batchToggle = async () => {
-    if (batchToggleAction === undefined && !mixedToggle) return;
-    setBatchLoading(true);
-    try {
-      const ids = Array.from(selectedGroupIds);
-      // Mixed toggle: each group gets the opposite of its current state
-      if (mixedToggle) {
-        for (const id of ids) {
-          const g = groups.find((g: any) => g.id === id);
-          await api('/api/groups/batch/toggle', { method: 'POST', body: JSON.stringify({ ids: [id], is_active: !Number(g?.is_active) }) });
-        }
-      } else {
-        await api('/api/groups/batch/toggle', { method: 'POST', body: JSON.stringify({ ids, is_active: batchToggleAction }) });
-      }
-      toast('تم تحديث حالة المجموعات', 'success');
-      setSelectedGroupIds(new Set());
-      loadGroups();
-    } catch {
-      toast('فشل التحديث الجماعي', 'error');
-    }
-    setBatchLoading(false);
-  };
 
   const batchUpdateStatus = async () => {
     setBatchLoading(true);
@@ -711,8 +921,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         setGroupStudents(students);
       }
       loadGroups();
-    } catch {
-      toast('فشل التسكين الجماعي', 'error');
+    } catch (err: any) {
+      toast(err?.message || 'فشل التسكين الجماعي', 'error');
+      loadUnassigned();
+      loadGroups();
     }
     setBatchLoading(false);
   };
@@ -732,13 +944,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
     return true;
   });
 
-  // Smart batch toggle: determine if selected groups are all active, all inactive, or mixed
-  const selectedGroups = groups.filter((g: any) => selectedGroupIds.has(g.id));
-  const allSelectedActive = selectedGroups.length > 0 && selectedGroups.every((g: any) => Number(g.is_active));
-  const allSelectedInactive = selectedGroups.length > 0 && selectedGroups.every((g: any) => !Number(g.is_active));
-  const mixedToggle = selectedGroups.length > 0 && !allSelectedActive && !allSelectedInactive;
-  const batchToggleLabel = allSelectedActive ? '🔴 تعطيل الكل' : allSelectedInactive ? '🟢 تفعيل الكل' : '🔁 عكس حالة الكل';
-  const batchToggleAction = allSelectedActive ? false : allSelectedInactive ? true : undefined;
 
   const tabs = [
     { key: 'info', label: 'معلومات الكورس' },
@@ -896,10 +1101,23 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         <div className="rounded-2xl p-6 shadow-sm border space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between">
             <h2 className="font-bold" style={{ color: 'var(--text)' }}>المجموعات ({filteredGroups.length})</h2>
-            <button onClick={() => setAddGroupModal(true)}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>
-              + إضافة مجموعة
-            </button>
+            <div className="flex items-center gap-2">
+              <ExportButton
+                dataset="groups"
+                title="تصدير مجموعات الكورس"
+                query={{ courseId: course.id, status: statusFilter || undefined }}
+                variant="soft"
+              />
+              <button onClick={() => {
+                setGroupForm({ name: '', location: '', place_id: '', max_students: '', status: 'pending', instructor_user_id: '' });
+                setGroupPlaceCap(null);
+                setGroupPlaceInfo({ conflicts: [], groups: [] });
+                setAddGroupModal(true);
+              }}
+                className="px-4 py-2 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>
+                + إضافة مجموعة
+              </button>
+            </div>
           </div>
 
           {/* Filters */}
@@ -933,11 +1151,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <div className="flex items-center gap-2 p-3 rounded-xl border animate-fade-in"
               style={{ backgroundColor: 'rgba(59,130,246,0.06)', borderColor: 'rgba(59,130,246,0.2)' }}>
               <span className="text-sm font-medium ml-2" style={{ color: 'var(--text)' }}>إجراء جماعي:</span>
-              <button onClick={batchToggle} disabled={batchLoading}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
-                style={{ backgroundColor: allSelectedActive ? '#fef2f2' : '#f0fdf4', color: allSelectedActive ? '#dc2626' : '#16a34a' }}>
-                {batchToggleLabel}
-              </button>
               <button onClick={() => { setBatchStatusValue('active'); setBatchStatusModal(true); }} disabled={batchLoading}
                 className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
                 style={{ backgroundColor: '#eff6ff', color: '#2563eb' }}>📋 تغيير الحالة</button>
@@ -967,7 +1180,17 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   </span>
                 )},
                 { key: 'instructor_name', label: 'المدرب' },
-                { key: 'student_count', label: 'عدد الطلاب', render: (v: number) => `${v || 0} طالب` },
+                { key: 'place_name', label: 'المكان', render: (_: any, row: any) => (
+                  row.place_name
+                    ? <span>📍 {row.place_name}</span>
+                    : <span style={{ color: 'var(--text-muted)' }}>{course?.course_mode === 'offline' ? (row.location || 'غير محدد') : '💻 أونلاين'}</span>
+                )},
+                { key: 'student_count', label: 'عدد الطلاب', render: (v: number, row: any) => {
+                  const cap = row.place_capacity != null
+                    ? Math.min(Number(row.place_capacity), Number(row.max_students ?? row.place_capacity))
+                    : row.max_students;
+                  return `${v || 0}${cap ? ` / ${cap}` : ''} طالب`;
+                } },
                 { key: 'schedule_display', label: 'الموعد', render: (v: string) => v || 'لم يتم تحديد الميعاد بعد' },
                 { key: 'status', label: 'الحالة', render: (v: any, row: any) => (
                   <div className="flex items-center gap-2">
@@ -976,14 +1199,20 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                   </div>
                 )},
                 { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
-                  <div className="flex gap-1" onClick={e => e.stopPropagation()}>
+                  <div className="flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
+                    {isGroupCompleted(row) ? (
+                      <button onClick={() => setConfirmReopenGroup(row)}
+                        data-testid={`group-reopen-${row.id}`}
+                        className="px-2 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 hover:bg-amber-100">↩️ إعادة فتح</button>
+                    ) : row.status !== 'cancelled' ? (
+                      <button onClick={() => setConfirmCompleteGroup(row)}
+                        data-testid={`group-complete-${row.id}`}
+                        disabled={(row.lecture_progress?.total || 0) === 0}
+                        title={(row.lecture_progress?.total || 0) === 0 ? 'أضف محاضرة واحدة على الأقل أولاً' : ''}
+                        className="px-2 py-1 rounded-lg text-xs font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">🏁 إنهاء</button>
+                    ) : null}
                     <button onClick={() => startEditGroup(row)}
                       className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
-                    <button onClick={() => setConfirmToggleGroup(row)}
-                      className="px-2 py-1 rounded-lg text-xs font-medium"
-                      style={{ backgroundColor: Number(row.is_active) ? '#fef2f2' : '#f0fdf4', color: Number(row.is_active) ? '#dc2626' : '#16a34a' }}>
-                      {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
-                    </button>
                     <button onClick={() => setConfirmDeleteGroup(row)}
                       className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">حذف</button>
                   </div>
@@ -999,7 +1228,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       {/* ============================== TAB: Students ============================== */}
       {tab === 'students' && (
         <div className="rounded-2xl p-6 shadow-sm border space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>الطلاب المسجلين ({courseStudents.length})</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="font-bold" style={{ color: 'var(--text)' }}>الطلاب المسجلين ({courseStudents.length})</h2>
+            <ExportButton dataset="orders" title="تصدير طلاب الكورس" query={{ courseId: course.id }} variant="soft" />
+          </div>
           {courseStudentsLoading ? (
             <Skeleton rows={5} cols={4} />
           ) : courseStudents.length === 0 ? (
@@ -1028,6 +1260,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         <div className="rounded-2xl p-6 shadow-sm border space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
           <div className="flex items-center justify-between">
             <h2 className="font-bold" style={{ color: 'var(--text)' }}>الطلاب الغير مسكنين</h2>
+            <ExportButton dataset="unassigned" title="تصدير الطلاب غير المسكنين" query={{ courseId: course.id }} variant="soft" />
           </div>
           {unassignedLoading ? (
             <Skeleton rows={3} cols={3} />
@@ -1282,16 +1515,68 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورس</span>
             <span style={{ color: 'var(--primary)' }}>{course?.title_ar}</span>
           </div>
-          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
-            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المدرب</span>
-            <span style={{ color: 'var(--text)' }}>{course?.instructor || 'غير محدد'}</span>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>حساب المحاضر</label>
+            <select value={groupForm.instructor_user_id} onChange={e => setGroupForm({ ...groupForm, instructor_user_id: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">بدون حساب{course?.instructor ? ` — ${course.instructor}` : ''}</option>
+              {instructorAccounts.map((account: any) => (
+                <option key={account.id} value={account.id}>{account.name}</option>
+              ))}
+            </select>
+            <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>يربط المجموعة بحساب المحاضر لتقييم الطلاب وإشعاره.</p>
           </div>
-          <input placeholder="المكان" value={groupForm.location}
-            onChange={e => setGroupForm({ ...groupForm, location: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="الحد الأقصى للطلاب" type="number" value={groupForm.max_students}
-            onChange={e => setGroupForm({ ...groupForm, max_students: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          {course?.course_mode === 'offline' ? (
+            <select value={groupForm.place_id} onChange={e => handleSelectGroupPlace(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">اختر المكان</option>
+              {places.filter(p => Number(p.is_active)).map((p: any) => (
+                <option key={p.id} value={p.id}>{p.name} — سعة {p.capacity}</option>
+              ))}
+            </select>
+          ) : (
+            <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+              <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الانعقاد</span>
+              <span style={{ color: 'var(--text)' }}>💻 أونلاين — بدون مكان</span>
+            </div>
+          )}
+          <div>
+            <input placeholder="الحد الأقصى للطلاب" type="number" min="1" max={groupPlaceCap ?? undefined}
+              value={groupForm.max_students}
+              onChange={e => {
+                const v = e.target.value;
+                setGroupForm({
+                  ...groupForm,
+                  max_students: groupPlaceCap != null && v !== '' && Number(v) > groupPlaceCap ? String(groupPlaceCap) : v,
+                });
+              }}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            {groupPlaceCap != null && (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>سعة المكان {groupPlaceCap} طالب — يمكنك تقليلها فقط</p>
+            )}
+          </div>
+          {groupForm.place_id && groupPlaceInfo.groups.length > 0 && (
+            <div className="col-span-2 p-3 rounded-xl text-xs" style={{
+              backgroundColor: groupPlaceInfo.conflicts.length ? '#fef2f2' : 'var(--bg)',
+              border: `1px solid ${groupPlaceInfo.conflicts.length ? '#fca5a5' : 'var(--border)'}`,
+              color: groupPlaceInfo.conflicts.length ? '#991b1b' : 'var(--text-muted)',
+            }}>
+              <p className="font-bold mb-1">
+                {groupPlaceInfo.conflicts.length
+                  ? '⚠️ تعارض في حجز المكان (تحذير فقط — يمكنك المتابعة)'
+                  : 'ℹ️ هذا المكان مستخدم في مجموعات أخرى'}
+              </p>
+              <ul className="space-y-0.5">
+                {(groupPlaceInfo.conflicts.length ? groupPlaceInfo.conflicts : groupPlaceInfo.groups).map((c: any) => (
+                  <li key={c.id}>
+                    • {c.name} — {(c.days || []).join('، ') || 'بدون أيام'}{c.time_from ? ` ${c.time_from}` : ''}{c.time_to ? ` - ${c.time_to}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="col-span-2 p-3 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b' }}>
             <span style={{ color: '#92400e' }}>📅</span>
             <span style={{ color: '#92400e', fontWeight: 500 }}>الموعد يُحدد من تاريخ أول محاضرة</span>
@@ -1302,7 +1587,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
             <option value="pending">قيد الانتظار</option>
             <option value="active">نشطة</option>
-            <option value="completed">مكتملة</option>
             <option value="cancelled">ملغية</option>
           </select>
           <button onClick={saveGroup} disabled={groupSaving}
@@ -1323,16 +1607,70 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورس</span>
             <span style={{ color: 'var(--primary)' }}>{course?.title_ar}</span>
           </div>
-          <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
-            <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المدرب</span>
-            <span style={{ color: 'var(--text)' }}>{course?.instructor || 'غير محدد'}</span>
+          <div>
+            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>حساب المحاضر</label>
+            <select value={editGroupForm.instructor_user_id || ''} onChange={e => setEditGroupForm({ ...editGroupForm, instructor_user_id: e.target.value })}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">بدون حساب{course?.instructor ? ` — ${course.instructor}` : ''}</option>
+              {instructorAccounts.map((account: any) => (
+                <option key={account.id} value={account.id}>{account.name}</option>
+              ))}
+            </select>
+            <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>حساب المحاضر يستقبل إشعار فتح التقييم.</p>
           </div>
-          <input placeholder="المكان" value={editGroupForm.location}
-            onChange={e => setEditGroupForm({ ...editGroupForm, location: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <input placeholder="الحد الأقصى للطلاب" type="number" value={editGroupForm.max_students}
-            onChange={e => setEditGroupForm({ ...editGroupForm, max_students: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          {course?.course_mode === 'offline' ? (
+            <select value={editGroupForm.place_id || ''} onChange={e => handleSelectEditGroupPlace(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm"
+              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              <option value="">اختر المكان</option>
+              {places
+                .filter(p => Number(p.is_active) || String(p.id) === String(editGroupForm.place_id))
+                .map((p: any) => (
+                  <option key={p.id} value={p.id}>{p.name} — سعة {p.capacity}{Number(p.is_active) ? '' : ' (معطّل)'}</option>
+                ))}
+            </select>
+          ) : (
+            <div className="p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)' }}>
+              <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الانعقاد</span>
+              <span style={{ color: 'var(--text)' }}>💻 أونلاين — بدون مكان</span>
+            </div>
+          )}
+          <div>
+            <input placeholder="الحد الأقصى للطلاب" type="number" min="1" max={editGroupPlaceCap ?? undefined}
+              value={editGroupForm.max_students}
+              onChange={e => {
+                const v = e.target.value;
+                setEditGroupForm({
+                  ...editGroupForm,
+                  max_students: editGroupPlaceCap != null && v !== '' && Number(v) > editGroupPlaceCap ? String(editGroupPlaceCap) : v,
+                });
+              }}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            {editGroupPlaceCap != null && (
+              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>سعة المكان {editGroupPlaceCap} طالب — يمكنك تقليلها فقط</p>
+            )}
+          </div>
+          {editGroupForm.place_id && editGroupPlaceInfo.groups.length > 0 && (
+            <div className="col-span-2 p-3 rounded-xl text-xs" style={{
+              backgroundColor: editGroupPlaceInfo.conflicts.length ? '#fef2f2' : 'var(--bg)',
+              border: `1px solid ${editGroupPlaceInfo.conflicts.length ? '#fca5a5' : 'var(--border)'}`,
+              color: editGroupPlaceInfo.conflicts.length ? '#991b1b' : 'var(--text-muted)',
+            }}>
+              <p className="font-bold mb-1">
+                {editGroupPlaceInfo.conflicts.length
+                  ? '⚠️ تعارض في حجز المكان (تحذير فقط — يمكنك المتابعة)'
+                  : 'ℹ️ هذا المكان مستخدم في مجموعات أخرى'}
+              </p>
+              <ul className="space-y-0.5">
+                {(editGroupPlaceInfo.conflicts.length ? editGroupPlaceInfo.conflicts : editGroupPlaceInfo.groups).map((c: any) => (
+                  <li key={c.id}>
+                    • {c.name} — {(c.days || []).join('، ') || 'بدون أيام'}{c.time_from ? ` ${c.time_from}` : ''}{c.time_to ? ` - ${c.time_to}` : ''}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <div className="col-span-2 p-3 rounded-xl text-sm flex items-center gap-2" style={{ backgroundColor: '#fef3c7', border: '1px solid #f59e0b' }}>
             <span style={{ color: '#92400e' }}>📅</span>
             <span style={{ color: '#92400e', fontWeight: 500 }}>الموعد يُحدد من تاريخ أول محاضرة</span>
@@ -1343,7 +1681,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
             <option value="pending">قيد الانتظار</option>
             <option value="active">نشطة</option>
-            <option value="completed">مكتملة</option>
             <option value="cancelled">ملغية</option>
           </select>
           <button onClick={saveEditGroup} disabled={editGroupSaving}
@@ -1359,14 +1696,17 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         {detailGroup && (
           <div className="space-y-4">
             <div className="flex gap-1 border-b pb-2" style={{ borderColor: 'var(--border)' }}>
-              {(['info', 'lectures', 'students'] as const).map(t => (
-                <button key={t} onClick={() => setDetailGroupTab(t)}
+              {(['info', 'lectures', 'students', 'survey'] as const).map(t => (
+                <button key={t} onClick={() => {
+                  setDetailGroupTab(t);
+                  if (t === 'survey') loadSurvey(detailGroup.id);
+                }}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
                   style={{
                     backgroundColor: detailGroupTab === t ? 'var(--primary)' : 'transparent',
                     color: detailGroupTab === t ? '#fff' : 'var(--text)',
                   }}>
-                  {t === 'info' ? 'معلومات' : t === 'lectures' ? 'جدول المحاضرات' : 'الطلاب'}
+                  {t === 'info' ? 'معلومات' : t === 'lectures' ? 'جدول المحاضرات' : t === 'students' ? 'الطلاب' : 'الاستبيان'}
                 </button>
               ))}
             </div>
@@ -1390,7 +1730,10 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 {detailGroup.location && (
                   <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
                     <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المكان</span>
-                    <span style={{ color: 'var(--text)' }}>{detailGroup.location}</span>
+                    <span style={{ color: 'var(--text)' }}>
+                      {detailGroup.place_name || detailGroup.location}
+                      {detailGroup.place_capacity ? ` — سعة ${detailGroup.place_capacity}` : ''}
+                    </span>
                   </div>
                 )}
                 {detailGroup.schedule_display && (
@@ -1434,9 +1777,244 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
                   <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تقدم المحاضرات</span>
                   <span style={{ color: 'var(--text)' }}>
-                    {detailGroup.lecture_done || 0} / {detailGroup.lecture_count || 0}
+                    {detailGroup.lecture_progress?.done ?? detailGroup.lecture_done ?? 0} / {detailGroup.lecture_progress?.total ?? detailGroup.lecture_count ?? 0}
                   </span>
                 </div>
+                {isGroupCompleted(detailGroup) && (
+                  <>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#ecfdf5' }}>
+                      <span className="block text-xs mb-1" style={{ color: '#047857' }}>تاريخ الإنهاء</span>
+                      <span style={{ color: '#065f46' }}>
+                        {detailGroup.completed_at
+                          ? new Date(detailGroup.completed_at).toLocaleString('ar-EG')
+                          : '—'}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl" style={{ backgroundColor: '#ecfdf5' }}>
+                      <span className="block text-xs mb-1" style={{ color: '#047857' }}>أنهى المجموعة</span>
+                      <span style={{ color: '#065f46' }}>{detailGroup.completed_by_name || '—'}</span>
+                    </div>
+                  </>
+                )}
+                <div className="col-span-2 p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تقييم المحاضر للطلاب</span>
+                      {instructorEvalLoading ? (
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>جارٍ التحميل…</span>
+                      ) : instructorEval?.instructor_user_id == null ? (
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                          لم يُربط حساب محاضر بهذه المجموعة — اربطه من «تعديل» ليتمكن من التقييم.
+                        </span>
+                      ) : instructorEval?.status === 'submitted' ? (
+                        <span className="text-sm" style={{ color: '#047857' }}>
+                          ✅ تم الإرسال{instructorEval.submitted_at ? ` في ${new Date(instructorEval.submitted_at).toLocaleDateString('ar-EG')}` : ''}
+                          {` — ${instructorEval.completed_count} / ${instructorEval.students_count} طالب`}
+                        </span>
+                      ) : instructorEval?.status === 'draft' ? (
+                        <span className="text-sm" style={{ color: 'var(--text)' }}>
+                          ⏳ قيد الإدخال — {instructorEval.completed_count} / {instructorEval.students_count} طالب مكتمل
+                        </span>
+                      ) : (
+                        <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+                          {isGroupCompleted(detailGroup) ? 'لم يبدأ المحاضر التقييم بعد.' : 'يُفتح بعد إنهاء المجموعة.'}
+                        </span>
+                      )}
+                    </div>
+                    {isAdmin && instructorEval?.can_reopen && (
+                      <button onClick={reopenInstructorEval} disabled={reopeningInstructorEval}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-50"
+                        style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                        {reopeningInstructorEval ? 'جارٍ الفتح…' : '🔓 إعادة فتح التقييم'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="col-span-2 flex flex-col sm:flex-row gap-2">
+                  {isGroupCompleted(detailGroup) ? (
+                    <button onClick={() => setConfirmReopenGroup(detailGroup)}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white"
+                      style={{ backgroundColor: '#f59e0b' }}>
+                      ↩️ إعادة فتح المجموعة
+                    </button>
+                  ) : detailGroup.status !== 'cancelled' ? (
+                    <button onClick={() => setConfirmCompleteGroup(detailGroup)}
+                      disabled={(detailGroup.lecture_progress?.total ?? detailGroup.lecture_count ?? 0) === 0}
+                      title={(detailGroup.lecture_progress?.total ?? detailGroup.lecture_count ?? 0) === 0 ? 'أضف محاضرة واحدة على الأقل أولاً' : ''}
+                      className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                      style={{ backgroundColor: '#059669' }}>
+                      🏁 إنهاء المجموعة
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+
+            {detailGroupTab === 'survey' && (
+              <div className="space-y-4">
+                {!isGroupCompleted(detailGroup) ? (
+                  <div className="p-4 rounded-xl text-sm" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                    ⏳ يُفتح استبيان الطالب تلقائياً بعد إنهاء المجموعة. أنهِ المجموعة من تبويب «معلومات» أولاً.
+                  </div>
+                ) : surveyLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+                  </div>
+                ) : surveyError ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <p className="text-sm" style={{ color: '#dc2626' }}>{surveyError}</p>
+                    <button onClick={() => loadSurvey(detailGroup.id)} className="px-4 py-2 rounded-xl text-sm text-white" style={{ backgroundColor: 'var(--primary)' }}>
+                      إعادة المحاولة
+                    </button>
+                  </div>
+                ) : surveyStats && (
+                  <>
+                    {/* نسبة الإجابة */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="p-4 rounded-xl sm:col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>نسبة الإجابة</span>
+                          <span className="text-sm font-bold" style={{ color: 'var(--primary)' }}>
+                            {surveyStats.answered} من {surveyStats.total_students} ({surveyStats.response_rate}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--border)' }}>
+                          <div className="h-full rounded-full transition-all duration-500"
+                            style={{ width: `${surveyStats.response_rate}%`, backgroundColor: 'var(--primary)' }} />
+                        </div>
+                        <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                          {surveyStats.pending > 0 ? `${surveyStats.pending} طالب لم يجب بعد` : 'أجاب جميع الطلاب 🎉'}
+                        </p>
+                      </div>
+                      <div className="p-4 rounded-xl text-center" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>متوسط الرضا العام</span>
+                        <span className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>
+                          {surveyStats.overall_avg != null ? `${surveyStats.overall_avg} / 5` : '—'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* النافذة والتذكيرات */}
+                    <div className="p-4 rounded-xl space-y-2" style={{ backgroundColor: 'var(--bg)' }}>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="text-sm" style={{ color: 'var(--text)' }}>
+                          <span className="font-bold">نافذة الاستبيان:</span>{' '}
+                          {surveyStats.group.closes_at
+                            ? `تُغلق في ${new Date(surveyStats.group.closes_at).toLocaleString('ar-EG')}`
+                            : 'غير محددة'}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={remindSurveyPending} disabled={surveyReminding || surveyStats.pending === 0}
+                            className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                            style={{ backgroundColor: '#f59e0b' }}>
+                            {surveyReminding ? 'جاري الإرسال...' : '🔔 تذكير الباقين'}
+                          </button>
+                          <button onClick={openSurveyExtend}
+                            className="px-4 py-2 rounded-xl text-sm font-medium text-white"
+                            style={{ backgroundColor: 'var(--primary)' }}>
+                            📅 تمديد المدة
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1 text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <span>التذكير الأول: {surveyStats.group.reminder1_at ? new Date(surveyStats.group.reminder1_at).toLocaleDateString('ar-EG') : 'لم يُرسل'}</span>
+                        <span>التذكير الثاني: {surveyStats.group.reminder2_at ? new Date(surveyStats.group.reminder2_at).toLocaleDateString('ar-EG') : 'لم يُرسل'}</span>
+                        <span>المجموعة: {surveyStats.group.course_mode === 'offline' ? 'أوفلاين — يشمل بند المكان' : 'أونلاين — بلا بند مكان'}</span>
+                      </div>
+                    </div>
+
+                    {/* البنود حسب المجال */}
+                    {surveyStats.sections.map((section: any) => {
+                      const items = surveyStats.items.filter((i: any) => i.section === section.key);
+                      if (items.length === 0) return null;
+                      return (
+                        <div key={section.key} className="rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                          <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: 'var(--bg)' }}>
+                            <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>{section.title}</span>
+                            <span className="text-xs font-bold" style={{ color: 'var(--primary)' }}>
+                              {section.avg != null ? `${section.avg} / 5` : 'لا توجد إجابات'}
+                            </span>
+                          </div>
+                          <table className="w-full text-sm">
+                            <tbody>
+                              {items.map((item: any) => (
+                                <tr key={item.key} className="border-t" style={{ borderColor: 'var(--border)' }}>
+                                  <td className="px-4 py-2.5" style={{ color: 'var(--text)' }}>{item.label}</td>
+                                  <td className="px-4 py-2.5 text-left whitespace-nowrap font-medium" style={{ color: item.avg != null ? 'var(--primary)' : 'var(--text-muted)' }}>
+                                    {item.avg != null ? `${item.avg} / 5` : '—'}
+                                  </td>
+                                  <td className="px-4 py-2.5 text-left whitespace-nowrap text-xs" style={{ color: 'var(--text-muted)' }}>
+                                    {item.count} إجابة
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+
+                    {/* هل ساعدك */}
+                    <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                      <p className="text-sm font-bold mb-2" style={{ color: 'var(--text)' }}>هل البرنامج ساعدك على تطوير مهاراتك؟</p>
+                      {surveyStats.helped.yes_percent == null ? (
+                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>لا توجد إجابات بعد</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <div className="flex justify-between text-xs" style={{ color: 'var(--text)' }}>
+                            <span>نعم — {surveyStats.helped.yes}</span>
+                            <span>لا — {surveyStats.helped.no}</span>
+                          </div>
+                          <div className="w-full h-2.5 rounded-full overflow-hidden flex" style={{ backgroundColor: '#fca5a5' }}>
+                            <div className="h-full" style={{ width: `${surveyStats.helped.yes_percent}%`, backgroundColor: '#059669' }} />
+                          </div>
+                          <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{surveyStats.helped.yes_percent}% أجابوا بنعم</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* الردود */}
+                    <div className="rounded-xl border overflow-hidden" style={{ borderColor: 'var(--border)' }}>
+                      <div className="px-4 py-2.5 flex items-center justify-between" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>الردود والملاحظات</span>
+                        <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{surveyStats.responses.length} رد</span>
+                      </div>
+                      {surveyStats.responses.length === 0 ? (
+                        <p className="px-4 py-6 text-center text-sm" style={{ color: 'var(--text-muted)' }}>لم يجب أي طالب بعد.</p>
+                      ) : (
+                        <div className="divide-y" style={{ borderColor: 'var(--border)' }}>
+                          {surveyStats.responses.map((response: any, idx: number) => (
+                            <div key={idx} className="px-4 py-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-medium flex items-center gap-1.5" style={{ color: 'var(--text)' }}>
+                                  {response.is_anonymous ? (
+                                    <><span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--text-muted)' }}>visibility_off</span> بدون اسم</>
+                                  ) : (
+                                    <><span className="material-symbols-outlined text-[16px]" style={{ color: 'var(--primary)' }}>person</span> {response.student_name || '—'}</>
+                                  )}
+                                </span>
+                                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                  {response.submitted_at ? new Date(response.submitted_at).toLocaleDateString('ar-EG') : ''}
+                                </span>
+                              </div>
+                              {response.answers?.notes ? (
+                                <p className="text-xs mt-1.5 p-2 rounded-lg whitespace-pre-wrap" style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}>
+                                  {response.answers.notes}
+                                </p>
+                              ) : (
+                                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>بدون ملاحظات</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      🔒 نتائج الاستبيان متاحة للإدارة فقط — المحاضر لا يرى الأسماء ولا النتائج.
+                    </p>
+                  </>
+                )}
               </div>
             )}
 
@@ -1444,8 +2022,17 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>جدول المحاضرات</h4>
-                  <button onClick={() => { setAddLectureModal(true); setLectureForm({ date: '', time_from: '', time_to: '', topic: '', location: '' }); }}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>+ إضافة محاضرة</button>
+                  <div className="flex items-center gap-2">
+                    <ExportButton
+                      dataset="lectures"
+                      title="تصدير محاضرات الكورس"
+                      query={{ courseId: course.id, groupId: detailGroup?.id }}
+                      variant="icon"
+                      label="تصدير المحاضرات"
+                    />
+                    <button onClick={() => { setAddLectureModal(true); setLectureForm({ date: '', time_from: '', time_to: '', topic: '', location: '' }); }}
+                      className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>+ إضافة محاضرة</button>
+                  </div>
                 </div>
                 {lecturesLoading ? (
                   <div className="animate-spin h-5 w-5 border-2 rounded-full mx-auto" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
@@ -1566,6 +2153,26 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         )}
       </Modal>
 
+      {/* ===================== SURVEY WINDOW MODAL ===================== */}
+      <Modal open={surveyExtendOpen} onClose={() => setSurveyExtendOpen(false)} title="تمديد مدة الاستبيان">
+        <div className="space-y-3">
+          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+            اختر التاريخ الذي يُغلق فيه الاستبيان. الطلاب الذين لم يجيبوا يستطيعون الإجابة حتى نهاية ذلك اليوم.
+          </p>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تاريخ الإغلاق</label>
+            <input type="date" value={surveyExtendDate}
+              onChange={e => setSurveyExtendDate(e.target.value)}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <button onClick={saveSurveyExtend} disabled={surveyExtendSaving || !surveyExtendDate}
+            className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+            style={{ backgroundColor: 'var(--primary)' }}>
+            {surveyExtendSaving ? 'جاري الحفظ...' : 'حفظ التاريخ'}
+          </button>
+        </div>
+      </Modal>
+
       {/* ===================== LECTURE MODALS ===================== */}
       <Modal open={addLectureModal} onClose={() => setAddLectureModal(false)} title="إضافة محاضرة">
         <div className="space-y-3">
@@ -1675,18 +2282,39 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         confirmLabel="حذف" variant="danger"
         onConfirm={deleteCourse} onCancel={() => setConfirmDeleteCourse(null)} />
 
-      <ConfirmDialog open={!!confirmToggleGroup}
-        title={Number(confirmToggleGroup?.is_active) ? 'تعطيل المجموعة' : 'تفعيل المجموعة'}
-        message={Number(confirmToggleGroup?.is_active) ? `تعطيل "${confirmToggleGroup?.name}"؟` : `تفعيل "${confirmToggleGroup?.name}"؟`}
-        confirmLabel={Number(confirmToggleGroup?.is_active) ? 'تعطيل' : 'تفعيل'}
-        variant={Number(confirmToggleGroup?.is_active) ? 'warning' : 'info'}
-        onConfirm={toggleGroupActive} onCancel={() => setConfirmToggleGroup(null)} />
-
       <ConfirmDialog open={!!confirmDeleteGroup}
         title="حذف المجموعة"
         message={`حذف "${confirmDeleteGroup?.name}" نهائياً؟ سيتم إزالة جميع الطلاب والمحاضرات منها.`}
         confirmLabel="حذف" variant="danger"
         onConfirm={deleteGroup} onCancel={() => setConfirmDeleteGroup(null)} />
+
+      <ConfirmDialog open={!!confirmCompleteGroup}
+        title="إنهاء المجموعة"
+        message={
+          <span>
+            إنهاء مجموعة <strong>{confirmCompleteGroup?.name}</strong>؟
+            <br />
+            سيتم إشعار الطلاب، وإصدار الشهادات للمستحقين، ومنع التسكين وإضافة المحاضرات.
+            <br />
+            يمكنك التراجع لاحقاً بزر «إعادة فتح المجموعة».
+          </span>
+        }
+        confirmLabel="إنهاء المجموعة" variant="warning"
+        loading={groupActionLoading}
+        onConfirm={completeGroup} onCancel={() => setConfirmCompleteGroup(null)} />
+
+      <ConfirmDialog open={!!confirmReopenGroup}
+        title="إعادة فتح المجموعة"
+        message={
+          <span>
+            إعادة فتح مجموعة <strong>{confirmReopenGroup?.name}</strong>؟
+            <br />
+            ستعود المجموعة قابلة للتسكين وإضافة المحاضرات. الشهادات الصادرة تبقى كما هي.
+          </span>
+        }
+        confirmLabel="إعادة الفتح" variant="info"
+        loading={groupActionLoading}
+        onConfirm={reopenGroup} onCancel={() => setConfirmReopenGroup(null)} />
 
       <ConfirmDialog open={!!confirmRemoveStudent}
         title="حذف طالب من المجموعة"
@@ -1714,7 +2342,6 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
             <option value="pending">قيد الانتظار</option>
             <option value="active">نشطة</option>
-            <option value="completed">مكتملة</option>
             <option value="cancelled">ملغية</option>
           </select>
           <button onClick={batchUpdateStatus} disabled={batchLoading}
@@ -1787,9 +2414,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 )}
 
                 {/* Student list */}
+                <div className="w-full mt-2 flex items-center justify-between">
+                  <p className="text-xs font-bold" style={{ color: 'var(--text-muted)' }}>قائمة الحضور:</p>
+                  <ExportButton
+                    dataset="attendance"
+                    title={`تصدير حضور: ${attendanceModal.topic}`}
+                    query={{ lectureId: attendanceModal.lectureId }}
+                    variant="soft"
+                    label="تصدير الحضور"
+                  />
+                </div>
                 {attendanceStudents.length > 0 && (
                   <div className="w-full mt-2">
-                    <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>قائمة الحضور:</p>
                     <div className="max-h-48 overflow-y-auto space-y-1">
                       {attendanceStudents.map((s: any) => (
                         <div key={s.userId} className="flex items-center justify-between px-3 py-2 rounded-xl text-xs"

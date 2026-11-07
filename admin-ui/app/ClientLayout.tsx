@@ -6,13 +6,29 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '../lib/auth';
 import Sidebar from '../components/Sidebar';
 import AIAssistant from '../components/AIAssistant';
-import WhatsAppBanner from '../components/WhatsAppBanner';
+
+/** Top-level route → permission section required to open it. */
+const SECTION_BY_PATH: Record<string, string> = {
+  courses: 'courses',
+  proposals: 'proposals',
+  orders: 'orders',
+  students: 'students',
+  certificates: 'certificates',
+  financials: 'financials',
+  permissions: 'employees',
+  employees: 'employees',
+  settings: 'settings',
+};
 
 export default function ClientLayout({ children }: { children: ReactNode }) {
-  const { user, loading } = useAdminAuth();
+  const { user, loading, can } = useAdminAuth();
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === '/login';
+
+  const segment = pathname?.split('/')[1] || '';
+  const requiredSection = SECTION_BY_PATH[segment];
+  const canOpen = !requiredSection || can(requiredSection);
 
   useEffect(() => {
     if (!loading) {
@@ -20,9 +36,11 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
         router.push('/login');
       } else if (user && isLogin) {
         router.push('/');
+      } else if (user && !canOpen && pathname !== '/') {
+        router.push('/');
       }
     }
-  }, [user, loading, isLogin, router]);
+  }, [user, loading, isLogin, router, canOpen, pathname]);
 
   if (loading) {
     return (
@@ -34,6 +52,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
 
   if (!user && !isLogin) return null;
   if (user && isLogin) return null;
+  if (user && !canOpen && pathname !== '/') return null;
 
   if (isLogin) return <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>{children}</div>;
 
@@ -41,7 +60,6 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
       <Sidebar />
       <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
-        <WhatsAppBanner />
         {children}
       </main>
       <AIAssistant />

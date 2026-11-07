@@ -4,13 +4,19 @@ import { ReactNode, useEffect } from 'react';
 import { useAuth } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 import DashboardSidebar from '../../components/DashboardSidebar';
+import { SidebarProvider } from '../../components/SidebarContext';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && !user) router.push('/login');
+    if (loading) return;
+    if (!user) {
+      router.push('/login');
+      return;
+    }
+    if (user.role === 'instructor') router.push('/instructor');
   }, [user, loading, router]);
 
   if (loading) {
@@ -21,14 +27,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!user) return null;
+  if (!user || user.role === 'instructor') return null;
 
   return (
-    <div className="flex" style={{ minHeight: 'calc(100vh - 73px)' }}>
-      <DashboardSidebar />
-      <main className="flex-1 min-w-0 p-4 lg:p-6 overflow-x-hidden">
-        {children}
-      </main>
-    </div>
+    <SidebarProvider>
+      <div className="flex">
+        <DashboardSidebar />
+        <main className="flex-1 min-w-0 p-4 lg:p-6 pb-24 lg:pb-6 overflow-x-hidden lg:mr-[var(--sidebar-width)] transition-[margin] duration-300">
+          {children}
+        </main>
+      </div>
+    </SidebarProvider>
   );
 }

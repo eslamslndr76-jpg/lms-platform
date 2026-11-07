@@ -3,8 +3,9 @@ import { randomBytes } from 'crypto';
 import { createHash } from 'crypto';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE, STUDENT } from '../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE, STUDENT } from '../middleware/rbac';
 import { notifyGroupStudents } from '../services/notificationService';
+import { sendNotification, notifyGroupStudents as notifyGroupStudentsExt } from '../services/externalNotificationService';
 
 const router = Router();
 
@@ -21,15 +22,18 @@ function getQRData(lectureId: number, code: string): string {
 }
 
 // POST /api/attendance/:lectureId/start - Admin starts attendance session
-router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('groups', 'write'), async (req: Request, res: Response) => {
   try {
     const lectureId = Number(req.params.lectureId);
     const lecture = await sql(
-      'SELECT l.id, l.date, l.topic, l.group_id, g.name as group_name FROM lectures l JOIN groups g ON l.group_id=g.id WHERE l.id=?',
+      'SELECT l.id, l.date, l.topic, l.group_id, g.name as group_name, g.status as group_status, g.is_complete as group_is_complete, g.completed_at as group_completed_at, c.title_ar as course_name FROM lectures l JOIN groups g ON l.group_id=g.id JOIN courses c ON g.course_id=c.id WHERE l.id=?',
       lectureId,
     );
     if (lecture.rows.length === 0) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
     const lecRow = lecture.rows[0] as any;
+    if (lecRow.group_status === 'completed' || Number(lecRow.group_is_complete) || lecRow.group_completed_at) {
+      return res.status(400).json({ error: 'المجموعة منتهية — أعد فتحها أولاً قبل فتح الحضور' });
+    }
 
     const seed = randomBytes(16).toString('hex');
     const now = new Date();
@@ -41,18 +45,27 @@ router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), a
     );
 
     // Notify all students in the group
-    const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
+const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
     notifyGroupStudents(
       lecRow.group_id,
-      '📢 تم فتح باب الحضور!',
-      `باب الحضور مفتوح الآن لمحاضرة${topicText} — وجه الكاميرا نحو QR code أو أدخل الكود`,
+      '🎯 تم فتح باب الحضور!',
+      `يجب تسجيل حضورك الآن لمحاضرة${topicText} — اضغط هنا لتأكيد الحضور`,
       'success',
       '/my-courses',
-    ).catch(() => {});
+      ).catch(e => console.error('[Notify] attendance_opened in-app failed:', e.message));
 
     const nowSec = Math.floor(Date.now() / 1000);
     const code = generateCode(lectureId, seed, nowSec);
     const qrData = getQRData(lectureId, code);
+
+    // External notification (email + telegram)
+    await notifyGroupStudentsExt(lecRow.group_id, 'attendance_opened', {
+      courseTitle: (lecRow as any).course_name || '',
+      groupName: lecRow.group_name || '',
+      topic: lecRow.topic || '',
+      lectureId,
+      code,
+    }).catch(e => console.error('[Notify] attendance_opened failed:', e.message));
 
     res.json({
       seed,
@@ -92,7 +105,7 @@ router.get('/:lectureId/current', authMiddleware, async (req: Request, res: Resp
 });
 
 // POST /api/attendance/stop/:lectureId - Admin stops attendance session
-router.post('/stop/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.post('/stop/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('groups', 'write'), async (req: Request, res: Response) => {
   try {
     const lectureId = Number(req.params.lectureId);
     await sql('UPDATE lectures SET attendance_active=0 WHERE id=?', lectureId);
@@ -168,6 +181,22 @@ router.post('/mark', authMiddleware, requireRole(STUDENT), async (req: Request, 
       verifMethod, upperCode, ipAddress,
     );
 
+    // External notification (email + telegram)
+    const lecInfo = await sql(
+      'SELECT l.topic, g.name as group_name, c.title_ar as course_name FROM lectures l JOIN groups g ON l.group_id=g.id JOIN courses c ON g.course_id=c.id WHERE l.id=?',
+      lectureId,
+    );
+    if (lecInfo.rows.length > 0) {
+      const lecData = lecInfo.rows[0] as any;
+      
+      // External notification (email + telegram)
+      await sendNotification(userId, 'attendance_confirmed', {
+        courseTitle: lecData.course_name || '',
+        groupName: lecData.group_name || '',
+        topic: lecData.topic || '',
+      }).catch(e => console.error('[Notify] attendance_confirmed failed:', e.message));
+    }
+
     res.json({ success: true, message: '✅ تم تسجيل الحضور بنجاح' });
   } catch {
     res.status(500).json({ success: false, error: 'حدث خطأ أثناء تسجيل الحضور' });
@@ -206,7 +235,7 @@ router.get('/poll', authMiddleware, requireRole(STUDENT), async (req: Request, r
 });
 
 // GET /api/attendance/:lectureId - Admin attendance report
-router.get('/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.get('/:lectureId', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('groups', 'read'), async (req: Request, res: Response) => {
   try {
     const lectureId = Number(req.params.lectureId);
 

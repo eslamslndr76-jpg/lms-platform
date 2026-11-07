@@ -28,7 +28,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
   const [scrollY, setScrollY] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
 
-  // Parallax scroll effect
   useEffect(() => {
     const handleScroll = () => {
       if (containerRef.current) {
@@ -43,7 +42,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Entrance animation
   useEffect(() => {
     const timer = setTimeout(() => setIsVisible(true), 100);
     return () => clearTimeout(timer);
@@ -54,13 +52,13 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
       <div
         ref={containerRef}
         className="relative overflow-hidden"
-        style={{ height: '28rem', maxHeight: '40vh' }}
+        style={{ height: '28rem', maxHeight: '40vh', backgroundColor: 'var(--md-sys-color-surface-container)' }}
         aria-busy="true"
         aria-label="جاري تحميل صورة الكورس"
       >
-        <div className="absolute inset-0 skeleton" style={{ backgroundColor: 'var(--surface)' }} />
-        <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 h-1/2 bg-gradient-to-t from-black/60 to-transparent" />
+        <div className="absolute inset-0 skeleton" style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }} />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, transparent 100%)' }} />
+        <div className="absolute bottom-0 left-0 right-0 h-1/2" style={{ background: 'linear-gradient(0deg, rgba(0,0,0,0.4) 0%, transparent 100%)' }} />
       </div>
     );
   }
@@ -79,7 +77,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
       style={{ height: '28rem', maxHeight: '40vh' }}
       aria-labelledby="course-title"
     >
-      {/* Background Layer */}
       <div
         className="absolute inset-0 transition-all duration-700 ease-out will-change-transform"
         style={{
@@ -96,11 +93,10 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
             priority
             sizes="100vw"
             className="object-cover transition-all duration-700 ease-out"
-            style={{ filter: `brightness(0.9) saturate(1.1)` }}
+            style={{ filter: 'brightness(0.9) saturate(1.1)' }}
           />
         ) : (
           <>
-            {/* Animated gradient mesh */}
             <div
               className="absolute inset-0"
               style={{
@@ -112,7 +108,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
               }}
             />
 
-            {/* Floating decorative elements */}
             <div className="absolute inset-0" aria-hidden="true">
               {[1, 2, 3, 4, 5].map((i) => (
                 <div
@@ -131,11 +126,11 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
               ))}
             </div>
 
-            {/* Course initial letter */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
               <span
-                className="text-9xl md:text-[12rem] font-extrabold text-white/10"
+                className="text-9xl md:text-[12rem] font-extrabold"
                 style={{
+                  color: 'rgba(255,255,255,0.1)',
                   textShadow: `0 0 60px ${primaryColor}60, 0 0 120px ${secondaryColor}40`,
                   fontFamily: 'var(--font-sans)',
                 }}
@@ -147,7 +142,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
           </>
         )}
 
-        {/* Dark overlay for text readability */}
         <div
           className="absolute inset-0 transition-opacity duration-300"
           style={{
@@ -162,7 +156,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
         />
       </div>
 
-      {/* Floating particles */}
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         {[1, 2, 3, 4, 5, 6].map((i) => (
           <div
@@ -171,57 +164,61 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
             style={{
               left: `${[5, 15, 85, 90, 30, 70][i - 1]}%`,
               top: `${[20, 60, 30, 80, 10, 75][i - 1]}%`,
-              backgroundColor: i % 3 === 0 ? '#fbbf24' : 'rgba(255,255,255,0.6)',
+              backgroundColor: i % 3 === 0 ? 'var(--md-sys-color-primary)' : 'rgba(255,255,255,0.6)',
               opacity: [0.4, 0.3, 0.5, 0.2, 0.4, 0.3][i - 1],
               animationDelay: `${i * 1.2}s`,
               animationDuration: `${12 + i * 1.5}s`,
-              boxShadow: `0 0 20px ${i % 3 === 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)'}`,
+              boxShadow: `0 0 20px ${i % 3 === 0 ? 'var(--md-sys-color-primary)' : 'rgba(255,255,255,0.4)'}`,
             }}
           />
         ))}
       </div>
 
-      {/* Content Layer */}
       <div className="relative z-10 h-full flex flex-col">
-        {/* Top Bar - Back button & Featured badge */}
         <div className="flex items-start justify-between p-4 md:p-6">
-          {/* Back Button */}
           <a
             href="/courses"
-            className="group inline-flex items-center gap-2 px-4 py-2 rounded-xl glass-strong text-white text-sm font-medium transition-all duration-300 hover:scale-105 hover:bg-white/20 animate-fade-down stagger-1"
-            style={{ borderColor: 'rgba(255,255,255,0.2)' }}
+            className="group inline-flex items-center gap-2 px-4 py-2 rounded-full text-white text-sm font-medium transition-all duration-300 hover:scale-105 animate-fade-down stagger-1"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.2)',
+            }}
           >
-            <svg
-              className="w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
+            <span className="material-symbols-outlined w-5 h-5 transition-transform duration-300 group-hover:-translate-x-1" style={{ fontSize: '20px' }}>
+              arrow_forward
+            </span>
             <span>العودة للكورسات</span>
           </a>
 
-          {/* Featured Badge */}
           {Number(course.featured) === 1 && (
-            <span className="animate-fade-down stagger-2 inline-flex items-center gap-1.5 px-3 px-3 py-1.5 rounded-full text-xs font-bold text-white backdrop-blur-sm" style={{ backgroundColor: 'rgba(251,191,36,0.9)' }}>
-              <span aria-hidden="true">⭐</span>
+            <span
+              className="animate-fade-down stagger-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white"
+              style={{ backgroundColor: 'var(--md-sys-color-primary)', backdropFilter: 'blur(8px)' }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>star</span>
               مميز
             </span>
           )}
 
-          {/* Mode Badge */}
           {course.course_mode && (
-            <span className="animate-fade-down stagger-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold text-white glass-strong" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
+            <span
+              className="animate-fade-down stagger-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold"
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.15)',
+                backdropFilter: 'blur(12px)',
+                color: 'white',
+                border: '1px solid rgba(255,255,255,0.2)',
+              }}
+            >
               {course.course_mode === 'offline' ? (
                 <>
-                  <span aria-hidden="true">🏫</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>school</span>
                   حضوري
                 </>
               ) : (
                 <>
-                  <span aria-hidden="true">💻</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>computer</span>
                   أونلاين
                 </>
               )}
@@ -229,17 +226,20 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
           )}
         </div>
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col justify-end p-4 md:p-6 pb-8">
           <div className="max-w-4xl mx-auto w-full animate-slide-up" style={{ animationDelay: '0.3s' }}>
-            {/* Category Tag */}
             {course.category_name_ar && (
-              <span className="inline-block px-4 py-1.5 rounded-full text-xs font-extrabold tracking-wider mb-4 animate-fade-up stagger-3 glass-strong" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
+              <span
+                className="inline-block px-4 py-1.5 rounded-full text-xs font-extrabold tracking-wider mb-4 animate-fade-up stagger-3"
+                style={{
+                  backgroundColor: 'var(--md-sys-color-primary-container)',
+                  color: 'var(--md-sys-color-on-primary-container)',
+                }}
+              >
                 {course.category_name_ar}
               </span>
             )}
 
-            {/* Title */}
             <h1
               id="course-title"
               className="text-3xl md:text-4xl lg:text-5xl font-extrabold text-white leading-tight mb-4 animate-fade-up stagger-4 text-balance"
@@ -251,64 +251,70 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
               {course.title_ar}
             </h1>
 
-            {/* English Title */}
             {course.title_en && (
-              <p className="text-lg md:text-xl text-white/80 mb-6 animate-fade-up stagger-5 font-medium" style={{ fontFamily: 'var(--font-sans)' }}>
+              <p className="text-lg md:text-xl mb-6 animate-fade-up stagger-5 font-medium" style={{ color: 'rgba(255,255,255,0.8)', fontFamily: 'var(--font-sans)' }}>
                 {course.title_en}
               </p>
             )}
 
-            {/* Meta Info Row */}
             <div className="flex flex-wrap items-center gap-3 md:gap-5 mb-6 animate-fade-up stagger-6">
               {course.instructor && (
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl glass-strong text-white/90 text-sm font-medium" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
-                  <span aria-hidden="true">🧑‍🏫</span>
+                <span
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white/90 text-sm font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>person</span>
                   <span>{course.instructor}</span>
                 </span>
               )}
 
               {course.lecture_count && course.lecture_count > 0 && (
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl glass-strong text-white/90 text-sm font-medium" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
-                  <span aria-hidden="true">📚</span>
+                <span
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white/90 text-sm font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>menu_book</span>
                   <span>{course.lecture_count} محاضرة</span>
                 </span>
               )}
 
               {course.lecture_duration && course.lecture_duration > 0 && (
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl glass-strong text-white/90 text-sm font-medium" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
-                  <span aria-hidden="true">⏱</span>
+                <span
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white/90 text-sm font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>schedule</span>
                   <span>{course.lecture_duration} ساعة محتوى</span>
                 </span>
               )}
 
               {course.max_students && (
-                <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl glass-strong text-white/90 text-sm font-medium" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
-                  <span aria-hidden="true">👥</span>
+                <span
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-white/90 text-sm font-medium"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.15)', backdropFilter: 'blur(8px)', border: '1px solid rgba(255,255,255,0.2)' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>group</span>
                   <span>حد أقصى {course.max_students} طالب</span>
                 </span>
               )}
             </div>
 
-            {/* Slogan / Trust line */}
             <div className="flex items-center justify-center gap-3 md:gap-6 pt-4 animate-fade-up stagger-7" style={{ borderTop: '1px solid rgba(255,255,255,0.15)' }}>
-              <span className="flex items-center gap-2 text-white/70 text-sm font-medium" style={{ fontFamily: 'var(--font-sans)' }}>
-                <span aria-hidden="true">🏷️</span>
+              <span className="flex items-center gap-2 text-sm font-medium" style={{ color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-sans)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>label</span>
                 {sloganAr}
               </span>
-              <span className="flex items-center gap-2 text-white/70 text-sm font-medium" style={{ fontFamily: 'var(--font-sans)' }}>
-                <span aria-hidden="true">🤝</span>
+              <span className="flex items-center gap-2 text-sm font-medium" style={{ color: 'rgba(255,255,255,0.7)', fontFamily: 'var(--font-sans)' }}>
+                <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>handshake</span>
                 بالتعاون مع HIMS
               </span>
             </div>
           </div>
         </div>
 
-        {/* Bottom Gradient Fade */}
         <div
           className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-          style={{
-            background: `linear-gradient(180deg, transparent 0%, var(--bg) 100%)`,
-          }}
+          style={{ background: 'linear-gradient(180deg, transparent 0%, var(--md-sys-color-surface) 100%)' }}
           aria-hidden="true"
         />
       </div>
@@ -316,7 +322,6 @@ export function HeroBanner({ course, isLoading }: HeroBannerProps) {
   );
 }
 
-/* Mini Hero Banner for when used inline */
 export function MiniHeroBanner({
   course,
   className = '',
@@ -329,8 +334,8 @@ export function MiniHeroBanner({
 
   return (
     <div
-      className={`relative rounded-2xl overflow-hidden ${className}`}
-      style={{ height: '20rem', maxHeight: '320px' }}
+      className={`relative overflow-hidden ${className}`}
+      style={{ height: '20rem', maxHeight: '320px', borderRadius: '16px' }}
       aria-label={course.title_ar}
     >
       <div className="absolute inset-0" style={{ ...gradientStyle }}>
@@ -345,23 +350,41 @@ export function MiniHeroBanner({
             style={{ opacity: 0.9 }}
           />
         ) : null}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/50 via-black/30 to-transparent" />
+        <div className="absolute inset-0" style={{ background: 'linear-gradient(90deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 50%, transparent 100%)' }} />
       </div>
 
       <div className="relative z-10 h-full flex flex-col justify-end p-6">
         <div className="max-w-3xl">
           {course.category_name_ar && (
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white/90 mb-3 glass-strong" style={{ borderColor: 'rgba(255,255,255,0.2)' }}>
+            <span
+              className="inline-block px-3 py-1 rounded-full text-xs font-bold mb-3"
+              style={{ backgroundColor: 'var(--md-sys-color-secondary-container)', color: 'var(--md-sys-color-on-secondary-container)' }}
+            >
               {course.category_name_ar}
             </span>
           )}
           <h2 className="text-2xl md:text-3xl lg:text-4xl font-extrabold text-white mb-2 leading-tight" style={{ textShadow: '0 2px 10px rgba(0,0,0,0.3)' }}>
             {course.title_ar}
           </h2>
-          <div className="flex flex-wrap items-center gap-3 text-white/80 text-sm">
-            {course.instructor && <span className="flex items-center gap-1">🧑‍🏫 {course.instructor}</span>}
-            {course.lecture_count && <span className="flex items-center gap-1">📚 {course.lecture_count} محاضرة</span>}
-            {course.lecture_duration && <span className="flex items-center gap-1">⏱ {course.lecture_duration} ساعة</span>}
+          <div className="flex flex-wrap items-center gap-3 text-sm" style={{ color: 'rgba(255,255,255,0.8)' }}>
+            {course.instructor && (
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>person</span>
+                {course.instructor}
+              </span>
+            )}
+            {course.lecture_count && (
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>menu_book</span>
+                {course.lecture_count} محاضرة
+              </span>
+            )}
+            {course.lecture_duration && (
+              <span className="flex items-center gap-1">
+                <span className="material-symbols-outlined" style={{ fontSize: '16px' }}>schedule</span>
+                {course.lecture_duration} ساعة
+              </span>
+            )}
           </div>
         </div>
       </div>

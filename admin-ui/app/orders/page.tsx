@@ -8,7 +8,7 @@ import StatusBadge from '../../components/StatusBadge';
 import Modal from '../../components/Modal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Pagination from '../../components/Pagination';
-import ExportModal from '../../components/ExportModal';
+import ExportButton from '../../components/ExportButton';
 import Skeleton from '../../components/Skeleton';
 import { useToast } from '../../components/Toast';
 
@@ -22,7 +22,6 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedOrder, setSelectedOrder] = useState<any>(null);
-  const [exportOpen, setExportOpen] = useState(false);
   const [editForm, setEditForm] = useState({ amount: 0, notes_team: '', notes_student: '', payment_method: '', sender_phone: '' });
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<any>(null);
@@ -167,9 +166,7 @@ export default function OrdersPage() {
           <button onClick={openAddOrder} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
             + إضافة حجز
           </button>
-          <button onClick={() => setExportOpen(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
-            📥 تصدير
-          </button>
+          <ExportButton dataset="orders" title="تصدير الطلبات" query={{ status }} />
         </div>
       </div>
 
@@ -416,8 +413,6 @@ export default function OrdersPage() {
         loading={deleting}
       />
 
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)}
-        title="تصدير الطلبات" endpoint="/api/exports/orders" filename="orders" />
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../../lib/api';
 import StatusBadge from '../../../components/StatusBadge';
+import ExportButton from '../../../components/ExportButton';
 
 export default function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -74,7 +75,15 @@ export default function StudentDetailPage() {
       </div>
 
       <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
-        <h2 className="font-bold mb-4" style={{ color: 'var(--text)' }}>الطلبات ({student.orders?.length || 0})</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold" style={{ color: 'var(--text)' }}>الطلبات ({student.orders?.length || 0})</h2>
+          <ExportButton
+            dataset="orders"
+            title={`تصدير طلبات ${student.name}`}
+            query={{ studentId: id }}
+            variant="soft"
+          />
+        </div>
         <div className="space-y-2">
           {student.orders?.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد طلبات</p>}
           {student.orders?.map((o: any) => (
@@ -90,7 +99,15 @@ export default function StudentDetailPage() {
       </div>
 
       <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
-        <h2 className="font-bold mb-4" style={{ color: 'var(--text)' }}>المجموعات ({student.groups?.length || 0})</h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-bold" style={{ color: 'var(--text)' }}>المجموعات ({student.groups?.length || 0})</h2>
+          <ExportButton
+            dataset="enrollments"
+            title={`تصدير مجموعات ${student.name}`}
+            query={{ studentId: id }}
+            variant="soft"
+          />
+        </div>
         <div className="space-y-2">
           {student.groups?.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد مجموعات</p>}
           {student.groups?.map((g: any) => (

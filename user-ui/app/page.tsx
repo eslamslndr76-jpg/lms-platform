@@ -54,7 +54,7 @@ export default function HomePage() {
   const testimonials = [
     { name: 'أحمد علي', role: 'طالب — دبلوم التسويق', text: 'والله بجد تجربة تحفة! المحتوى جامد جدًا والمدربين شغل محترم. الشهادة بتاعة HIMS فتحتلي مجالات كتير في الشغل. أنصح أي حد يسجل.', rating: 5 },
     { name: 'سارة محمد', role: 'طالبة — برمجة وتطوير', text: 'بصراحة أنا كنت خايفة في الأول لكن النظام الأونلاين سهل ومريح أوي. وفريق الدعم متجاوب بجد معايا في أي مشكلة. تستاهلوا كل خير.', rating: 5 },
-    { name: 'محمود حسن', role: 'طالب — إدارة أعمال', text: 'الشهادة من المعهد العالي ده غير كل حاجة بجد. ضربت عصفورين بحجر — تعلمت واشتغلت في نفس المجال بعد ما خلصت. شكرًا لفريق نادي ريادة الاعمال على المجهود الجبار.', rating: 5 },
+    { name: 'محمود حسن', role: 'طالب — إدارة أعمال', text: 'الشهادة من المعهد العالي ده غير كل حاجة بجد. ضربت عصفورين بحجر — تعلمت واشتغلت في نفس المجال بعد ما خلصت. شكرًا لفريق وحدة التدريب و التطوير على المجهود الجبار.', rating: 5 },
     { name: 'نورا إبراهيم', role: 'طالبة — جرافيك ديزاين', text: 'الأسعار هنا معقولة جدًا مقارنة بباقي الأماكن، والمواد العلمية حلوة أوي. الحضور المباشر خلاني اشتغل على مشاريع حقيقية. ناقصة نجمة عشان نفسي يبقى فيه تنوع أكتر.', rating: 4 },
   ];
 
@@ -86,35 +86,33 @@ export default function HomePage() {
 
   /* ── Stats ── */
   const stats = [
-    { icon: '📚', value: courses.length, suffix: '+', label: 'برنامج تدريبي' },
-    { icon: '👨‍🎓', value: '+500', suffix: '', label: 'طالب مسجل' },
-    { icon: '🏆', value: '+50', suffix: '', label: 'شهادة معتمدة' },
-    { icon: '⭐', value: '4.8', suffix: '', label: 'تقييم الطلاب' },
+    { icon: 'menu_book', value: courses.length, suffix: '+', label: 'برنامج تدريبي' },
+    { icon: 'school', value: '+500', suffix: '', label: 'طالب مسجل' },
+    { icon: 'emoji_events', value: '+50', suffix: '', label: 'شهادة معتمدة' },
+    { icon: 'star', value: '4.8', suffix: '', label: 'تقييم الطلاب' },
   ];
 
   /* ── Benefits ── */
   const benefits = [
-    { icon: '🎓', title: 'شهادات معتمدة', desc: 'شهادات رسمية من المعهد العالي للعلوم الإدارية بالقطامية (HIMS) تفتحلك أبواب الشغل' },
-    { icon: '👨‍🏫', title: 'مدربون خبراء', desc: 'فريق نادي ريادة الاعمال يضم نخبة من المدربين المعتمدين ذوي الخبرة العملية في مجالاتهم' },
-    { icon: '💻', title: 'نظام مرن', desc: 'اختر بين الحضور المباشر أو الدراسة أونلاين — حسب ما يناسب جدولك' },
-    { icon: '💰', title: 'أسعار تنافسية', desc: 'برامج عالية الجودة بأسعار مناسبة مع إمكانية الدفع بالتقسيط' },
+    { icon: 'school', title: 'شهادات معتمدة', desc: 'شهادات رسمية من المعهد العالي للعلوم الإدارية بالقطامية (HIMS) تفتحلك أبواب الشغل' },
+    { icon: 'person', title: 'مدربون خبراء', desc: 'فريق وحدة التدريب و التطوير يضم نخبة من المدربين المعتمدين ذوي الخبرة العملية في مجالاتهم' },
+    { icon: 'computer', title: 'نظام مرن', desc: 'اختر بين الحضور المباشر أو الدراسة أونلاين — حسب ما يناسب جدولك' },
+    { icon: 'payments', title: 'أسعار تنافسية', desc: 'برامج عالية الجودة بأسعار مناسبة مع إمكانية الدفع بالتقسيط' },
   ];
 
   /* ── How It Works ── */
   const steps = [
-    { icon: '✍️', title: 'سجل حساب', desc: 'أنشئ حساب مجاني في دقائق' },
-    { icon: '🔍', title: 'اختر برنامجك', desc: 'تصفح البرامج واختر ما يناسبك' },
-    { icon: '🚀', title: 'ابدأ التعلم', desc: 'انطلق في رحلتك التعليمية' },
+    { icon: 'edit', title: 'سجل حساب', desc: 'أنشئ حساب مجاني في دقائق' },
+    { icon: 'search', title: 'اختر برنامجك', desc: 'تصفح البرامج واختر ما يناسبك' },
+    { icon: 'rocket_launch', title: 'ابدأ التعلم', desc: 'انطلق في رحلتك التعليمية' },
   ];
 
-
   return (
-    <div style={{ backgroundColor: 'var(--bg)' }}>
+    <div style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
       {/* ============================== */}
       {/*      1. HERO SECTION           */}
       {/* ============================== */}
       <section className="relative overflow-hidden min-h-[85vh] flex items-center">
-        {/* Animated gradient background */}
         <div className="absolute inset-0 pointer-events-none">
           <div
             className="absolute inset-0 opacity-[0.04]"
@@ -125,7 +123,6 @@ export default function HomePage() {
           />
         </div>
 
-        {/* Floating decorative circles */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden">
           <div className="absolute -top-20 -right-20 w-80 h-80 rounded-full opacity-[0.04] animate-float" style={{ background: primaryColor }} />
           <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full opacity-[0.03] animate-float" style={{ background: secondaryColor, animationDelay: '2s' }} />
@@ -134,7 +131,6 @@ export default function HomePage() {
           <div className="absolute top-1/2 right-1/3 w-3 h-3 rounded-full opacity-[0.06] animate-float" style={{ background: primaryColor, animationDelay: '0.5s' }} />
         </div>
 
-        {/* Dot grid */}
         <div className="absolute inset-0 bg-dots pointer-events-none" />
 
         <div className="max-w-6xl mx-auto px-4 py-20 md:py-28 w-full relative z-10">
@@ -145,135 +141,149 @@ export default function HomePage() {
               <div
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold mb-5"
                 style={{
-                  backgroundColor: `${primaryColor}12`,
-                  color: primaryColor,
-                  border: `1px solid ${primaryColor}20`,
+                  backgroundColor: 'var(--md-sys-color-primary-container)',
+                  color: 'var(--md-sys-color-on-primary-container)',
                 }}
               >
-                <span className="text-sm">✨</span>
-                <span>منصة تعليمية معتمدة رسميًا 🎯</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>auto_awesome</span>
+                <span>منصة تعليمية معتمدة رسميًا</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>gps_fixed</span>
               </div>
 
               {/* Main headline */}
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-black leading-[1.05] tracking-tight mb-4">
-                <span style={{ color: 'var(--text)' }}>طور </span>
-                <span
-                  className="bg-clip-text text-transparent"
-                  style={{ backgroundImage: heroGradient }}
-                >
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>طور </span>
+                <span style={{ color: 'var(--md-sys-color-primary)' }}>
                   مهاراتك
                 </span>
                 <br />
-                <span style={{ color: 'var(--text)' }}>وحقق </span>
-                <span
-                  className="bg-clip-text text-transparent"
-                  style={{ backgroundImage: heroGradient }}
-                >
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>وحقق </span>
+                <span style={{ color: 'var(--md-sys-color-primary)' }}>
                   طموحك
                 </span>
-                <span style={{ color: 'var(--text)' }}> 🚀</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}> </span>
+                <span className="material-symbols-outlined align-middle" style={{ color: 'var(--md-sys-color-primary)', fontSize: 48 }}>rocket_launch</span>
               </h1>
 
               {/* Description */}
-              <p className="text-base md:text-lg max-w-lg mb-6 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-base md:text-lg max-w-lg mb-6 leading-relaxed" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                 {sloganAr || 'نحو تعليم أفضل'}
                 <span className="mx-2">—</span>
                 <span className="text-sm">{sloganEn || 'Towards Better Learning'}</span>
               </p>
-              <p className="text-xs mb-8 leading-relaxed" style={{ color: 'var(--text-light)' }}>
-                هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
+              <p className="text-xs mb-8 leading-relaxed" style={{ color: 'var(--md-sys-color-outline)' }}>
+                هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
               </p>
 
               {/* CTA Buttons */}
               <div className="flex flex-wrap gap-3 mb-8">
                 <Link
                   href="/courses"
-                  className="relative group/btn px-7 py-3.5 rounded-xl text-white font-bold text-sm shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 active:translate-y-0 overflow-hidden"
-                  style={{ backgroundColor: primaryColor }}
+                  className="relative group/btn px-7 py-3.5 rounded-full font-bold text-sm shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-1 active:translate-y-0 overflow-hidden"
+                  style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}
                 >
                   <span className="relative z-10 flex items-center gap-2">
                     ابدأ التعلم الآن
-                    <span className="text-lg transition-transform duration-300 group-hover/btn:translate-x-1">←</span>
+                    <span className="material-symbols-outlined text-lg transition-transform duration-300 group-hover/btn:translate-x-1">arrow_forward</span>
                   </span>
                   <span
                     className="absolute inset-0 -translate-x-full group-hover/btn:translate-x-full transition-transform duration-700"
                     style={{ background: `linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent)` }}
                   />
                 </Link>
+                <Link
+                  href="/download"
+                  className="px-6 py-3.5 rounded-full font-bold text-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 hover:shadow-md flex items-center gap-2 border"
+                  style={{
+                    backgroundColor: 'var(--md-sys-color-surface-container-high)',
+                    borderColor: 'var(--md-sys-color-outline-variant)',
+                    color: 'var(--md-sys-color-on-surface)',
+                  }}
+                >
+                  <span className="material-symbols-outlined text-blue-600" style={{ fontSize: 20 }}>smartphone</span>
+                  <span>تطبيق الموبايل</span>
+                </Link>
                 {!authLoading && !user && (
                   <Link
                     href="/register"
-                    className="group px-7 py-3.5 rounded-xl font-bold text-sm border-2 transition-all duration-300 hover:-translate-y-1 active:translate-y-0 hover:shadow-md"
-                    style={{ borderColor: primaryColor, color: primaryColor }}
+                    className="group px-7 py-3.5 rounded-full font-bold text-sm border-2 transition-all duration-300 hover:-translate-y-1 active:translate-y-0 hover:shadow-md"
+                    style={{ borderColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-primary)' }}
                   >
                     <span className="flex items-center gap-2">
-                      🎯 أنشئ حساب مجاني
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>gps_fixed</span>
+                      أنشئ حساب مجاني
                     </span>
                   </Link>
                 )}
               </div>
 
               {/* Trust strip */}
-              <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--text-light)' }}>
-                <span className="flex items-center gap-1">✅ لا حاجة لبطاقة ائتمان</span>
-                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--text-light)' }} />
-                <span className="flex items-center gap-1">🎓 شهادات معتمدة</span>
-                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--text-light)' }} />
-                <span className="flex items-center gap-1">🚀 دعم فني متواصل</span>
+              <div className="flex items-center gap-3 text-xs" style={{ color: 'var(--md-sys-color-outline)' }}>
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+                  لا حاجة لبطاقة ائتمان
+                </span>
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--md-sys-color-outline)' }} />
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>school</span>
+                  شهادات معتمدة
+                </span>
+                <span className="w-1 h-1 rounded-full" style={{ backgroundColor: 'var(--md-sys-color-outline)' }} />
+                <span className="flex items-center gap-1">
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>support_agent</span>
+                  دعم فني متواصل
+                </span>
               </div>
             </div>
 
             {/* Right Column — Visual / Stats Grid */}
             <div className="hidden md:grid grid-cols-2 gap-4 animate-fade-up" style={{ animationDelay: '0.2s' }}>
-              {/* Big stat cards */}
-              <div className="col-span-2 rounded-3xl p-6 border relative overflow-hidden group"
-                style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+              <div className="col-span-2 rounded-md3-md p-6 border relative overflow-hidden group"
+                style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderColor: 'var(--md-sys-color-outline)' }}>
                 <div className="absolute inset-0 opacity-[0.03] pointer-events-none"
                   style={{
                     background: `radial-gradient(circle at 70% 30%, ${primaryColor} 0%, transparent 60%)`,
                   }}
                 />
                 <div className="relative z-10">
-                    <p className="text-sm font-bold mb-2" style={{ color: 'var(--text-muted)' }}>المنصة مقدمة من</p>
+                  <p className="text-sm font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>المنصة مقدمة من</p>
                   <div className="flex items-center gap-3">
                     <div
-                      className="relative w-14 h-14 rounded-xl overflow-hidden bg-white/80 dark:bg-white/10 border-2 flex-shrink-0"
-                      style={{ borderColor: `${primaryColor}30` }}
+                      className="relative w-14 h-14 rounded-md3-md overflow-hidden border-2 flex-shrink-0"
+                      style={{ borderColor: 'var(--md-sys-color-primary)', backgroundColor: 'var(--md-sys-color-surface-container-low)' }}
                     >
                       <img
-                        src="/partners/لوجو نادى ريادة الاعمال.png"
-                        alt="نادي ريادة الاعمال"
+                        src="/partners/unit-logo.png"
+                        alt="وحدة التدريب و التطوير"
                         className="absolute inset-0 w-full h-full object-contain p-1"
                       />
                     </div>
                     <div>
-                      <p className="font-bold text-sm" style={{ color: 'var(--text)' }}>نادي ريادة الاعمال</p>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>بالتعاون مع المعهد العالي للعلوم الإدارية (HIMS)</p>
+                      <p className="font-bold text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>وحدة التدريب و التطوير</p>
+                      <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>بالتعاون مع المعهد العالي للعلوم الإدارية (HIMS)</p>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Stats mini cards */}
               {stats.map((stat, i) => (
                 <div key={i}
-                  className="rounded-2xl p-4 border transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
-                  style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-                  <div className="text-2xl mb-2">{stat.icon}</div>
-                  <p className="text-2xl font-black" style={{ color: primaryColor }}>
+                  className="rounded-md3-md p-4 border transition-all duration-300 hover:-translate-y-1 hover:shadow-md"
+                  style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline)' }}>
+                  <span className="material-symbols-outlined text-2xl mb-2 block" style={{ color: 'var(--md-sys-color-primary)' }}>{stat.icon}</span>
+                  <p className="text-2xl font-black" style={{ color: 'var(--md-sys-color-primary)' }}>
                     {stat.value}{stat.suffix}
                   </p>
-                  <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{stat.label}</p>
+                  <p className="text-xs mt-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{stat.label}</p>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        {/* Wave divider */}
         <div className="absolute bottom-0 left-0 right-0 h-16 pointer-events-none"
           style={{
-            background: `linear-gradient(to top, var(--bg), transparent)`,
+            background: `linear-gradient(to top, var(--md-sys-color-surface), transparent)`,
           }} />
       </section>
 
@@ -282,13 +292,12 @@ export default function HomePage() {
       {/* ============================== */}
       <section className="max-w-6xl mx-auto px-4 mb-14">
         <div
-          className="relative rounded-3xl p-8 md:p-10 border text-center overflow-hidden"
+          className="relative rounded-md3-md p-8 md:p-10 border text-center overflow-hidden"
           style={{
-            backgroundColor: 'var(--card)',
-            borderColor: 'var(--border)',
+            backgroundColor: 'var(--md-sys-color-surface-container)',
+            borderColor: 'var(--md-sys-color-outline)',
           }}
         >
-          {/* Subtle background glow */}
           <div
             className="absolute -top-20 -right-20 w-64 h-64 rounded-full opacity-[0.03] pointer-events-none"
             style={{ background: `radial-gradient(circle, ${primaryColor}, transparent)` }}
@@ -298,34 +307,31 @@ export default function HomePage() {
             style={{ background: `radial-gradient(circle, ${secondaryColor}, transparent)` }}
           />
 
-          {/* Section heading with decorative lines */}
           <div className="flex items-center justify-center gap-4 mb-8">
             <div className="h-[1px] flex-1 max-w-[80px]" style={{ background: `linear-gradient(90deg, transparent, ${primaryColor}40)` }} />
             <div className="text-center">
-              <p className="text-[10px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--text-light)' }}>
+              <p className="text-[10px] font-bold tracking-[0.2em] uppercase" style={{ color: 'var(--md-sys-color-outline)' }}>
                 شركاؤنا في النجاح
               </p>
             </div>
             <div className="h-[1px] flex-1 max-w-[80px]" style={{ background: `linear-gradient(270deg, transparent, ${primaryColor}40)` }} />
           </div>
 
-          {/* Logo Grid */}
           <div className="flex flex-wrap items-center justify-center gap-5 md:gap-6">
             {[
               { src: '/partners/لوجو  hims.png', alt: 'HIMS' },
               { src: '/partners/لوجو X2.png', alt: 'X2' },
-              { src: '/partners/لوجو نادى ريادة الاعمال.png', alt: 'نادي ريادة الاعمال' },
+              { src: '/partners/unit-logo.png', alt: 'وحدة التدريب و التطوير' },
               { src: '/partners/لوجو وزارة التعليم العالي.png', alt: 'وزارة التعليم العالي' },
               { src: '/partners/لوجو اكادمية البحث العلمى و التكنولوجيا .png', alt: 'أكاديمية البحث العلمي والتكنولوجيا' },
             ].map((partner) => (
               <div key={partner.alt}
-                className="group relative w-[200px] h-[110px] rounded-2xl border overflow-hidden transition-all duration-500 hover:shadow-xl hover:-translate-y-1 hover:border-transparent"
+                className="group relative w-[200px] h-[110px] rounded-md3-md border overflow-hidden transition-all duration-500 hover:shadow-xl hover:-translate-y-1 hover:border-transparent"
                 style={{
-                  backgroundColor: 'var(--bg)',
-                  borderColor: 'var(--border)',
+                  backgroundColor: 'var(--md-sys-color-surface)',
+                  borderColor: 'var(--md-sys-color-outline)',
                 }}
               >
-                {/* Gradient hover bg */}
                 <div
                   className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
                   style={{
@@ -333,9 +339,8 @@ export default function HomePage() {
                   }}
                 />
 
-                {/* Premium gradient border on hover */}
                 <span
-                  className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                  className="absolute inset-0 rounded-md3-md opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
                   style={{
                     border: '1.5px solid transparent',
                     background: `linear-gradient(135deg, ${primaryColor}50, ${secondaryColor}30, ${primaryColor}50) border-box`,
@@ -345,15 +350,13 @@ export default function HomePage() {
                   }}
                 />
 
-                {/* Glow */}
                 <div
-                  className="absolute -inset-1 rounded-3xl opacity-0 group-hover:opacity-100 transition-all duration-500 blur-xl pointer-events-none"
+                  className="absolute -inset-1 rounded-md3-md opacity-0 group-hover:opacity-100 transition-all duration-500 blur-xl pointer-events-none"
                   style={{
                     background: `linear-gradient(135deg, ${primaryColor}15, ${secondaryColor}10)`,
                   }}
                 />
 
-                {/* Logo — fills the box with minimal padding */}
                 <div className="absolute inset-0 flex items-center justify-center p-3">
                   <img
                     src={partner.src}
@@ -366,8 +369,7 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Subtle bottom text */}
-          <p className="text-[10px] mt-6 opacity-30" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-[10px] mt-6 opacity-30" style={{ color: 'var(--md-sys-color-outline)' }}>
             — شراكتنا مع هذه المؤسسات تضمن لك أفضل تجربة تعليمية —
           </p>
         </div>
@@ -380,16 +382,17 @@ export default function HomePage() {
         <section className="max-w-6xl mx-auto px-4 mb-16">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-                ⭐ برامج مميزة
+              <h2 className="text-2xl font-black flex items-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>star</span>
+                برامج مميزة
               </h2>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>اختر من بين أفضل البرامج المتاحة</p>
+              <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>اختر من بين أفضل البرامج المتاحة</p>
             </div>
             <Link href="/courses"
-              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
-              style={{ backgroundColor: `${primaryColor}12`, color: primaryColor }}>
+              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-full transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+              style={{ backgroundColor: 'var(--md-sys-color-secondary-container)', color: 'var(--md-sys-color-on-secondary-container)' }}>
               عرض الكل
-              <span>←</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
@@ -401,9 +404,10 @@ export default function HomePage() {
           </div>
           <div className="mt-6 text-center sm:hidden">
             <Link href="/courses"
-              className="inline-flex items-center gap-1.5 text-sm font-bold px-5 py-3 rounded-xl transition-all duration-300"
-              style={{ backgroundColor: `${primaryColor}12`, color: primaryColor }}>
-              عرض جميع البرامج ←
+              className="inline-flex items-center gap-1.5 text-sm font-bold px-5 py-3 rounded-full transition-all duration-300"
+              style={{ backgroundColor: 'var(--md-sys-color-secondary-container)', color: 'var(--md-sys-color-on-secondary-container)' }}>
+              عرض جميع البرامج
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
             </Link>
           </div>
         </section>
@@ -420,28 +424,28 @@ export default function HomePage() {
         />
         <div className="max-w-6xl mx-auto px-4 relative">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-               لماذا تختار <span className="bg-clip-text text-transparent" style={{ backgroundImage: heroGradient }}>نادي ريادة الاعمال</span>؟
+            <h2 className="text-2xl font-black" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              لماذا تختار <span style={{ color: 'var(--md-sys-color-primary)' }}>وحدة التدريب و التطوير</span>؟
             </h2>
-            <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>نقدم لك تجربة تعليمية متكاملة تجمع بين الجودة والاعتماد الرسمي</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>نقدم لك تجربة تعليمية متكاملة تجمع بين الجودة والاعتماد الرسمي</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             {benefits.map((benefit, i) => (
               <div key={i}
-                className="group rounded-2xl p-5 border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-fade-up"
+                className="group rounded-md3-md p-5 border transition-all duration-300 hover:-translate-y-1 hover:shadow-lg animate-fade-up"
                 style={{
-                  backgroundColor: 'var(--card)',
-                  borderColor: 'var(--border)',
+                  backgroundColor: 'var(--md-sys-color-surface-container-low)',
+                  borderColor: 'var(--md-sys-color-outline)',
                   animationDelay: `${i * 0.08}s`,
                 }}>
                 <div
-                  className="w-11 h-11 rounded-xl flex items-center justify-center text-xl mb-3 transition-transform duration-300 group-hover:scale-110"
-                  style={{ backgroundColor: `${primaryColor}12` }}
+                  className="w-11 h-11 rounded-full flex items-center justify-center mb-3 transition-transform duration-300 group-hover:scale-110"
+                  style={{ backgroundColor: 'var(--md-sys-color-primary-container)' }}
                 >
-                  {benefit.icon}
+                  <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-on-primary-container)' }}>{benefit.icon}</span>
                 </div>
-                <h3 className="font-bold text-sm mb-1.5" style={{ color: 'var(--text)' }}>{benefit.title}</h3>
-                <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>{benefit.desc}</p>
+                <h3 className="font-bold text-sm mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>{benefit.title}</h3>
+                <p className="text-xs leading-relaxed" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{benefit.desc}</p>
               </div>
             ))}
           </div>
@@ -454,10 +458,11 @@ export default function HomePage() {
       {categories.length > 0 && (
         <section className="max-w-6xl mx-auto px-4 mb-16">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-              📂 الأقسام التعليمية
+            <h2 className="text-2xl font-black flex items-center justify-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>folder</span>
+              الأقسام التعليمية
             </h2>
-            <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>اختر من بين مجموعة متنوعة من التخصصات</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>اختر من بين مجموعة متنوعة من التخصصات</p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {categories.map((cat, i) => {
@@ -467,18 +472,17 @@ export default function HomePage() {
                 `linear-gradient(135deg, ${primaryColor}DD, ${secondaryColor}DD)`,
                 `linear-gradient(135deg, ${secondaryColor}DD, ${primaryColor}DD)`,
               ];
-              const icons = ['📊', '💻', '🎨', '📈', '🔧', '🏗️', '🩺', '📜'];
+              const icons = ['analytics', 'computer', 'palette', 'trending_up', 'build', 'domain', 'medical_services', 'description'];
               return (
                 <Link key={cat.id} href={`/courses?category=${cat.id}`}
-                  className="group relative rounded-2xl p-5 text-white overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up"
+                  className="group relative rounded-md3-md p-5 text-white overflow-hidden transition-all duration-300 hover:-translate-y-1 hover:shadow-xl animate-fade-up"
                   style={{
                     background: colors[i % colors.length],
                     animationDelay: `${i * 0.06}s`,
                   }}>
-                  {/* Decorative circle */}
                   <div className="absolute -bottom-4 -right-4 w-16 h-16 rounded-full opacity-20 transition-transform duration-500 group-hover:scale-150" style={{ backgroundColor: 'rgba(255,255,255,0.2)' }} />
                   <div className="relative z-10">
-                    <span className="text-2xl mb-2 block">{icons[i % icons.length]}</span>
+                    <span className="material-symbols-outlined text-2xl mb-2 block">{icons[i % icons.length]}</span>
                     <h3 className="font-bold text-sm">{cat.name_ar}</h3>
                     {cat.name_en && <p className="text-[10px] opacity-70 mt-0.5">{cat.name_en}</p>}
                   </div>
@@ -495,15 +499,15 @@ export default function HomePage() {
       <section className="mb-16">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-              🚀 ابدأ في ٣ خطوات بسيطة
+            <h2 className="text-2xl font-black flex items-center justify-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>rocket_launch</span>
+              ابدأ في ٣ خطوات بسيطة
             </h2>
-            <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>رحلة التعلم تبدأ بخطوة.. ابدأ الآن!</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>رحلة التعلم تبدأ بخطوة.. ابدأ الآن!</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {steps.map((step, i) => (
               <div key={i} className="relative animate-fade-up" style={{ animationDelay: `${i * 0.12}s` }}>
-                {/* Connector line */}
                 {i < steps.length - 1 && (
                   <div className="hidden md:block absolute top-10 right-full w-full h-0.5 opacity-20"
                     style={{
@@ -513,26 +517,26 @@ export default function HomePage() {
                 )}
                 <div className="text-center">
                   <div
-                    className="w-20 h-20 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg transition-transform duration-300 hover:scale-110"
+                    className="w-20 h-20 rounded-md3-md flex items-center justify-center mx-auto mb-4 shadow-lg transition-transform duration-300 hover:scale-110"
                     style={{
                       background: heroGradient,
                       boxShadow: `0 8px 30px ${primaryColor}30`,
                     }}
                   >
-                    {step.icon}
+                    <span className="material-symbols-outlined text-white" style={{ fontSize: 32 }}>{step.icon}</span>
                   </div>
                   <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-black mx-auto -mt-10 mb-3 relative z-10 border-2"
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black mx-auto -mt-10 mb-3 relative z-10 border-2"
                     style={{
-                      backgroundColor: 'var(--card)',
-                      borderColor: primaryColor,
-                      color: primaryColor,
+                      backgroundColor: 'var(--md-sys-color-surface)',
+                      borderColor: 'var(--md-sys-color-primary)',
+                      color: 'var(--md-sys-color-primary)',
                     }}
                   >
                     {i + 1}
                   </div>
-                  <h3 className="font-bold text-base mb-1" style={{ color: 'var(--text)' }}>{step.title}</h3>
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{step.desc}</p>
+                  <h3 className="font-bold text-base mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>{step.title}</h3>
+                  <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{step.desc}</p>
                 </div>
               </div>
             ))}
@@ -547,16 +551,17 @@ export default function HomePage() {
         <section className="max-w-6xl mx-auto px-4 mb-16">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-                📖 جميع البرامج
+              <h2 className="text-2xl font-black flex items-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>book</span>
+                جميع البرامج
               </h2>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{courses.length} برنامج تدريبي في مختلف المجالات</p>
+              <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{courses.length} برنامج تدريبي في مختلف المجالات</p>
             </div>
             <Link href="/courses"
-              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-xl transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
-              style={{ backgroundColor: `${primaryColor}12`, color: primaryColor }}>
+              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-bold px-4 py-2.5 rounded-full transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+              style={{ backgroundColor: 'var(--md-sys-color-secondary-container)', color: 'var(--md-sys-color-on-secondary-container)' }}>
               عرض الكل
-              <span>←</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
             </Link>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -569,10 +574,10 @@ export default function HomePage() {
           {courses.length > 6 && (
             <div className="mt-8 text-center">
               <Link href="/courses"
-                className="inline-flex items-center gap-2 px-7 py-3 rounded-xl text-white font-bold text-sm shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
-                style={{ backgroundColor: primaryColor }}>
+                className="inline-flex items-center gap-2 px-7 py-3 rounded-full font-bold text-sm shadow-lg transition-all duration-300 hover:shadow-xl hover:-translate-y-0.5 active:translate-y-0"
+                style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
                 عرض جميع البرامج ({courses.length})
-                <span>←</span>
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
               </Link>
             </div>
           )}
@@ -585,35 +590,32 @@ export default function HomePage() {
       <section className="mb-16">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-black" style={{ color: 'var(--text)' }}>
-              💬 ماذا يقول طلابنا؟
+            <h2 className="text-2xl font-black flex items-center justify-center gap-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              <span className="material-symbols-outlined" style={{ color: 'var(--md-sys-color-primary)' }}>comment</span>
+              ماذا يقول طلابنا؟
             </h2>
-            <p className="text-sm mt-2" style={{ color: 'var(--text-muted)' }}>آراء وتجارب حقيقية من طلابنا السابقين</p>
+            <p className="text-sm mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>آراء وتجارب حقيقية من طلابنا السابقين</p>
           </div>
           <div className="relative max-w-2xl mx-auto">
             <div
-              className="rounded-3xl p-6 md:p-8 border relative overflow-hidden transition-all duration-500"
-              style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+              className="rounded-md3-md p-6 md:p-8 border relative overflow-hidden transition-all duration-500"
+              style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderColor: 'var(--md-sys-color-outline)' }}
             >
-              {/* Quote mark */}
-              <div className="absolute -top-4 -right-2 text-6xl opacity-[0.06] font-black" style={{ color: primaryColor }}>❝</div>
+              <div className="absolute -top-4 -right-2 text-6xl opacity-[0.06] font-black" style={{ color: 'var(--md-sys-color-primary)' }}>❝</div>
 
-              {/* Stars */}
               <div className="flex gap-1 mb-4">
                 {[...Array(5)].map((_, i) => (
-                  <span key={i} className={`text-lg transition-all duration-300 ${i < testimonials[activeTestimonial].rating ? 'opacity-100' : 'opacity-20'}`}
-                    style={{ color: i < testimonials[activeTestimonial].rating ? '#f59e0b' : 'var(--text-light)' }}>
-                    ★
+                  <span key={i} className={`material-symbols-outlined text-lg transition-all duration-300 ${i < testimonials[activeTestimonial].rating ? 'opacity-100' : 'opacity-20'}`}
+                    style={{ color: i < testimonials[activeTestimonial].rating ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline)' }}>
+                    star
                   </span>
                 ))}
               </div>
 
-              {/* Text */}
-              <p className="text-sm md:text-base leading-relaxed mb-6 min-h-[60px] transition-opacity duration-500" style={{ color: 'var(--text)' }}>
+              <p className="text-sm md:text-base leading-relaxed mb-6 min-h-[60px] transition-opacity duration-500" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                 {testimonials[activeTestimonial].text}
               </p>
 
-              {/* Author */}
               <div className="flex items-center gap-3">
                 <div
                   className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
@@ -622,20 +624,19 @@ export default function HomePage() {
                   {testimonials[activeTestimonial].name.charAt(0)}
                 </div>
                 <div>
-                  <p className="font-bold text-sm" style={{ color: 'var(--text)' }}>{testimonials[activeTestimonial].name}</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{testimonials[activeTestimonial].role}</p>
+                  <p className="font-bold text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{testimonials[activeTestimonial].name}</p>
+                  <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{testimonials[activeTestimonial].role}</p>
                 </div>
               </div>
 
-              {/* Dots */}
               <div className="flex justify-center gap-2 mt-6">
                 {testimonials.map((_, i) => (
                   <button
                     key={i}
                     onClick={() => setActiveTestimonial(i)}
-                    className="w-2 h-2 rounded-full transition-all duration-500"
+                    className="h-2 rounded-full transition-all duration-500"
                     style={{
-                      backgroundColor: i === activeTestimonial ? primaryColor : 'var(--text-light)',
+                      backgroundColor: i === activeTestimonial ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline)',
                       width: i === activeTestimonial ? 24 : 8,
                     }}
                   />
@@ -651,15 +652,12 @@ export default function HomePage() {
       {/* ============================== */}
       <section className="max-w-6xl mx-auto px-4 mb-16">
         <div
-          className="relative rounded-3xl p-8 md:p-14 text-center text-white overflow-hidden"
+          className="relative rounded-md3-md p-8 md:p-14 text-center text-white overflow-hidden"
           style={{ background: heroGradient }}
         >
-          {/* Decorative elements */}
           <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-5 right-5 text-5xl md:text-7xl opacity-10 animate-float">🎓</div>
-            <div className="absolute bottom-5 left-5 text-5xl md:text-7xl opacity-10 animate-float" style={{ animationDelay: '2s' }}>📚</div>
-            <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-9xl opacity-5">✦</div>
-            {/* Grid pattern */}
+            <span className="material-symbols-outlined absolute top-5 right-5 opacity-10 animate-float" style={{ fontSize: 56 }}>school</span>
+            <span className="material-symbols-outlined absolute bottom-5 left-5 opacity-10 animate-float" style={{ fontSize: 56, animationDelay: '2s' }}>menu_book</span>
             <div className="absolute inset-0 opacity-[0.04]"
               style={{
                 backgroundImage: `radial-gradient(circle, #fff 0.5px, transparent 0.5px)`,
@@ -669,26 +667,35 @@ export default function HomePage() {
           </div>
 
           <div className="relative z-10 max-w-2xl mx-auto">
-            <h2 className="text-2xl md:text-4xl font-black mb-4">
-              ابدأ رحلتك التعليمية اليوم 🚀
+            <h2 className="text-2xl md:text-4xl font-black mb-4 flex items-center justify-center gap-2">
+              ابدأ رحلتك التعليمية اليوم
+              <span className="material-symbols-outlined" style={{ fontSize: 40 }}>rocket_launch</span>
             </h2>
             <p className="text-white/80 mb-8 max-w-lg mx-auto text-sm md:text-base leading-relaxed">
               انضم إلى أكثر من 500 طالب واستثمر في مستقبلك مع برامج معتمدة من المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <Link href="/courses"
-                className="px-7 py-3.5 rounded-xl bg-white font-black text-sm shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 active:translate-y-0"
+                className="px-7 py-3.5 rounded-full bg-white font-black text-sm shadow-xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 active:translate-y-0"
                 style={{ color: primaryColor }}>
                 سجل في برنامج الآن
               </Link>
+              <Link href="/download"
+                className="px-7 py-3.5 rounded-full font-bold text-sm bg-white/20 hover:bg-white/30 text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 active:translate-y-0 flex items-center gap-2 border border-white/30">
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
+                <span>تحميل التطبيق (APK)</span>
+              </Link>
               {!authLoading && !user && (
                 <Link href="/register"
-                  className="px-7 py-3.5 rounded-xl font-bold text-sm border-2 border-white/40 text-white transition-all duration-300 hover:bg-white/10 hover:-translate-y-1 active:translate-y-0">
-                  أنشئ حساب مجاني ←
+                  className="px-7 py-3.5 rounded-full font-bold text-sm border-2 border-white/40 text-white transition-all duration-300 hover:bg-white/10 hover:-translate-y-1 active:translate-y-0">
+                  أنشئ حساب مجاني
                 </Link>
               )}
             </div>
-            <p className="text-white/50 text-xs mt-5">✅ التسجيل مجاني — لا حاجة لبطاقة ائتمان</p>
+            <p className="text-white/50 text-xs mt-5 flex items-center justify-center gap-1">
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>check_circle</span>
+              التسجيل مجاني — لا حاجة لبطاقة ائتمان
+            </p>
           </div>
         </div>
       </section>

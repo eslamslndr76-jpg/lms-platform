@@ -1,9 +1,15 @@
 import { Router, Request, Response } from 'express';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import * as groupService from '../services/groupService';
 
 const router = Router();
+
+// All lecture endpoints are staff-only and follow the groups permission.
+router.use(authMiddleware, (req, res, next) => {
+  const action = req.method === 'GET' ? 'read' : 'write';
+  return requirePermission('groups', action)(req, res, next);
+});
 
 // GET /api/lectures/:groupId
 router.get('/:groupId', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {

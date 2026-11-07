@@ -3,13 +3,14 @@ import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 import { requireRole, STUDENT } from '../middleware/rbac';
 import * as groupService from '../services/groupService';
+import { sendNotification } from '../services/externalNotificationService';
 
 const router = Router();
 
 router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
     const { course_id, amount, receipt_url, payment_method, note_student, sender_phone } = req.body;
-    if (!course_id || !amount) return res.status(400).json({ error: 'Course ID and amount required' });
+    if (!course_id || amount === undefined || amount === null) return res.status(400).json({ error: 'Course ID and amount required' });
 
     const course = await sql('SELECT price FROM courses WHERE id=?', course_id);
     if (course.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
@@ -21,13 +22,29 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
         'INSERT INTO orders (user_id, course_id, amount, status, receipt_url, payment_method, notes_student, sender_phone) VALUES (?,?,?,\'pending\',?,?,?,?)',
         req.user!.userId, course_id, amount, receipt_url, payment_method || 'cash', note_student || null, sender_phone || null,
       );
-      return res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
+      const orderId = Number(result.lastInsertRowid);
+
+      const course = await sql('SELECT title_ar FROM courses WHERE id=?', course_id);
+      const courseTitle = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
+
+      // External notification (email + telegram)
+      await sendNotification(req.user!.userId, 'order_created', { courseTitle, amount: Number(amount), orderId }).catch(e => console.error('[Notify] order_created failed:', e.message));
+
+      return res.status(201).json({ id: orderId, status: 'pending' });
     }
     const result = await sql(
       'INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student, sender_phone) VALUES (?,?,?,\'pending\',?,?,?)',
       req.user!.userId, course_id, amount, payment_method || 'cash', note_student || null, sender_phone || null,
     );
-    res.status(201).json({ id: Number(result.lastInsertRowid), status: 'pending' });
+    const orderId = Number(result.lastInsertRowid);
+
+    const courseData = await sql('SELECT title_ar FROM courses WHERE id=?', course_id);
+    const courseTitle = courseData.rows.length > 0 ? (courseData.rows[0] as any).title_ar : '';
+
+    // External notification (email + telegram)
+    await sendNotification(req.user!.userId, 'order_created', { courseTitle, amount: Number(amount), orderId }).catch(e => console.error('[Notify] order_created failed:', e.message));
+
+    res.status(201).json({ id: orderId, status: 'pending' });
   } catch (err: any) {
     console.error('Order creation error:', err?.message || err);
     res.status(500).json({ error: 'فشل إنشاء الطلب، حاول مرة أخرى' });
@@ -78,12 +95,13 @@ router.get('/my/check/:courseId', authMiddleware, async (req: Request, res: Resp
     const hasPaidOrder = orders.rows.length > 0;
 
     const certs = await sql(
-      `SELECT id FROM certificates WHERE user_id=? AND course_id=? LIMIT 1`,
+      `SELECT id, serial_id FROM certificates WHERE user_id=? AND course_id=? LIMIT 1`,
       userId, courseId,
     );
     const hasCertificate = certs.rows.length > 0;
+    const serialId = hasCertificate ? (certs.rows[0] as any).serial_id : null;
 
-    res.json({ hasPaidOrder, hasCertificate });
+    res.json({ hasPaidOrder, hasCertificate, serialId });
   } catch (err: any) {
     console.error('Check order error:', err?.message || err);
     res.status(500).json({ error: 'فشل التحقق من حالة الشراء' });

@@ -42,7 +42,6 @@ export function FAQAccordion({
   const [filteredItems, setFilteredItems] = useState(items);
   const searchRef = useRef<HTMLInputElement>(null);
 
-  // Filter items based on search query
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredItems(items);
@@ -83,8 +82,8 @@ export function FAQAccordion({
           />
         ))}
         {searchable && filteredItems.length === 0 && searchQuery && (
-          <div className="text-center py-6 text-sm" style={{ color: 'var(--text-muted)' }}>
-            لا توجد نتائج لـ "{searchQuery}"
+          <div className="text-center py-6 text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            لا توجد نتائج لـ &quot;{searchQuery}&quot;
           </div>
         )}
       </div>
@@ -109,58 +108,52 @@ export function FAQAccordion({
 
   return (
     <section className={`space-y-4 ${className}`} aria-labelledby="faq-title">
-      {/* Header */}
       <div className="text-center mb-4 md:mb-8">
-        <h2 id="faq-title" className="text-2xl md:text-3xl font-extrabold mb-2 gradient-text">
+        <h2 id="faq-title" className="text-2xl md:text-3xl font-extrabold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           {title}
         </h2>
         {subtitle && (
-          <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-lg max-w-2xl mx-auto" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
             {subtitle}
           </p>
         )}
 
-        {/* Search */}
         {searchable && items.length > 5 && (
           <div className="mt-6 max-w-xl mx-auto">
             <div className="relative">
-              <svg
-                className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                style={{ color: 'var(--text-light)' }}
+              <span
+                className="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined"
+                style={{ color: 'var(--md-sys-color-on-surface-variant)', fontSize: '1.25rem' }}
                 aria-hidden="true"
               >
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
+                search
+              </span>
               <input
                 ref={searchRef}
                 type="search"
                 placeholder="ابحث في الأسئلة الشائعة..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-xl border text-base transition-all"
+                className="w-full pl-12 pr-4 py-3 rounded-full border text-base transition-all bg-[var(--md-sys-color-surface-container-low)]"
                 style={{
-                  backgroundColor: 'var(--bg)',
-                  borderColor: 'var(--border)',
-                  color: 'var(--text)',
+                  borderColor: 'var(--md-sys-color-outline)',
+                  color: 'var(--md-sys-color-on-surface)',
                 }}
                 aria-label="البحث في الأسئلة الشائعة"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 p-1 rounded-lg transition-colors"
-                  style={{ color: 'var(--text-muted)' }}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 p-1 rounded-full transition-colors"
+                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                   aria-label="مسح البحث"
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1.25rem' }}>close</span>
                 </button>
               )}
             </div>
             {searchQuery && (
-              <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-xs mt-2 text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                 تم العثور على {filteredItems.length} نتيجة
               </p>
             )}
@@ -168,7 +161,6 @@ export function FAQAccordion({
         )}
       </div>
 
-      {/* FAQ Items */}
       <div className="space-y-3" role="list">
         {filteredItems.map((item, index) => (
           <FAQItemComponent
@@ -187,16 +179,16 @@ export function FAQAccordion({
         ))}
 
         {searchable && filteredItems.length === 0 && searchQuery && (
-          <div className="text-center py-10 rounded-2xl glass-card animate-fade-up" style={{ borderColor: 'var(--glass-border)' }}>
-            <div className="text-5xl mb-3" aria-hidden="true">🔍</div>
-            <h3 className="font-bold mb-1" style={{ color: 'var(--text)' }}>لا توجد نتائج</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-              لم نتمكن من العثور على أسئلة تطابق "{searchQuery}"
+          <div className="text-center py-10 rounded-md3-md bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] animate-fade-up">
+            <span className="material-symbols-outlined mb-3 block" style={{ fontSize: '3rem', color: 'var(--md-sys-color-on-surface-variant)' }} aria-hidden="true">search_off</span>
+            <h3 className="font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>لا توجد نتائج</h3>
+            <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              لم نتمكن من العثور على أسئلة تطابق &quot;{searchQuery}&quot;
             </p>
             <button
               onClick={() => setSearchQuery('')}
-              className="mt-4 px-4 py-2 rounded-xl text-sm font-medium transition-all"
-              style={{ backgroundColor: 'var(--primary)', color: 'white' }}
+              className="mt-4 px-4 py-2 rounded-full text-sm font-medium transition-all bg-[var(--md-sys-color-primary)]"
+              style={{ color: 'var(--md-sys-color-on-primary)' }}
             >
               مسح البحث
             </button>
@@ -204,25 +196,22 @@ export function FAQAccordion({
         )}
 
         {items.length === 0 && !searchQuery && (
-          <div className="text-center py-10 rounded-2xl glass-card animate-fade-up" style={{ borderColor: 'var(--glass-border)' }}>
-            <div className="text-5xl mb-3" aria-hidden="true">❓</div>
-            <h3 className="font-bold mb-1" style={{ color: 'var(--text)' }}>لا توجد أسئلة متاحة</h3>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>سيتم إضافة الأسئلة الشائعة قريباً</p>
+          <div className="text-center py-10 rounded-md3-md bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)] animate-fade-up">
+            <span className="material-symbols-outlined mb-3 block" style={{ fontSize: '3rem', color: 'var(--md-sys-color-on-surface-variant)' }} aria-hidden="true">help</span>
+            <h3 className="font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>لا توجد أسئلة متاحة</h3>
+            <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>سيتم إضافة الأسئلة الشائعة قريباً</p>
           </div>
         )}
       </div>
 
-      {/* CTA */}
       <div className="mt-8 md:mt-12 text-center">
-        <div className="inline-flex items-center gap-3 px-6 py-4 rounded-2xl glass-strong" style={{ borderColor: 'var(--glass-border)' }}>
-          <span className="text-2xl" aria-hidden="true">💬</span>
+        <div className="inline-flex items-center gap-3 px-6 py-4 rounded-md3-md bg-[var(--md-sys-color-surface-container-high)] border border-[var(--md-sys-color-outline-variant)]">
+          <span className="material-symbols-outlined" style={{ fontSize: '1.5rem', color: 'var(--md-sys-color-primary)' }} aria-hidden="true">comment</span>
           <div className="text-right">
-            <p className="font-bold" style={{ color: 'var(--text)' }}>لم تجد إجابتك؟</p>
-            <p className="text-sm" style={{ color: 'var(--text-muted)' }}>فريق الدعم جاهز للمساعدة على مدار الساعة</p>
+            <p className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>لم تجد إجابتك؟</p>
+            <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>فريق الدعم جاهز للمساعدة على مدار الساعة</p>
           </div>
-          <button className="ml-auto px-4 py-2 rounded-xl text-sm font-bold text-white transition-all" style={{
-            background: `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`,
-          }}>
+          <button className="ml-auto px-4 py-2 rounded-full text-sm font-bold transition-all bg-[var(--md-sys-color-primary)]" style={{ color: 'var(--md-sys-color-on-primary)' }}>
             تواصل معنا
           </button>
         </div>
@@ -269,24 +258,21 @@ function FAQItemComponent({
 
   return (
     <article
-      className={`relative overflow-hidden rounded-2xl transition-all duration-500 animate-fade-up ${variant === 'card' ? 'glass-card' : 'glass-strong'}`}
+      className={`relative overflow-hidden rounded-md3-md transition-all duration-500 animate-fade-up bg-[var(--md-sys-color-surface-container)] border border-[var(--md-sys-color-outline-variant)]`}
       style={{
         animationDelay: `${Math.min(index * 0.05, 0.5)}s`,
-        borderColor: isOpen ? `${primaryColor}40` : 'var(--glass-border)',
-        boxShadow: isOpen ? `var(--shadow-lg), 0 0 30px ${primaryColor}10` : 'var(--shadow-md)',
-        background: variant === 'card' ? 'var(--gradient-card)' : 'var(--glass-bg-strong)',
+        borderColor: isOpen ? 'var(--md-sys-color-primary)' : undefined,
+        boxShadow: isOpen ? 'var(--shadow-lg)' : 'var(--shadow-md)',
       }}
       role="listitem"
     >
-      {/* Category Badge */}
       {showCategory && item.category && (
         <div className="absolute top-4 left-4 z-10" aria-hidden="true">
           <span
             className="px-3 py-1 rounded-full text-[10px] font-extrabold tracking-wider"
             style={{
-              backgroundColor: `${primaryColor}15`,
-              color: primaryColor,
-              border: `1px solid ${primaryColor}30`,
+              backgroundColor: 'var(--md-sys-color-secondary-container)',
+              color: 'var(--md-sys-color-on-secondary-container)',
             }}
           >
             {item.category}
@@ -294,55 +280,48 @@ function FAQItemComponent({
         </div>
       )}
 
-      {/* Question Button */}
       <button
         onClick={onToggle}
-        className="w-full p-5 md:p-6 flex items-start gap-4 text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--card)]"
+        className="w-full p-5 md:p-6 flex items-start gap-4 text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--md-sys-color-surface-container)]"
         aria-expanded={isOpen}
         aria-controls={`faq-answer-${item.id}`}
       >
-        {/* Question Number */}
         <div
-          className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center text-lg font-extrabold transition-all duration-300"
+          className="flex-shrink-0 w-10 h-10 rounded-md3-md flex items-center justify-center text-lg font-extrabold transition-all duration-300"
           style={{
-            background: isOpen
-              ? `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`
-              : 'var(--bg)',
-            color: isOpen ? 'white' : 'var(--text-muted)',
-            border: isOpen ? 'none' : '1px solid var(--border)',
+            backgroundColor: isOpen ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container-high)',
+            color: isOpen ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface-variant)',
           }}
           aria-hidden="true"
         >
           {isOpen ? (
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/></svg>
+            <span className="material-symbols-outlined" style={{ fontSize: '1.5rem' }}>check</span>
           ) : (
             index + 1
           )}
         </div>
 
-        {/* Question Text */}
         <div className="flex-1 min-w-0">
-          <h3 className="font-bold text-lg md:text-xl leading-relaxed" style={{ color: 'var(--text)' }}>
+          <h3 className="font-bold text-lg md:text-xl leading-relaxed" style={{ color: 'var(--md-sys-color-on-surface)' }}>
             {item.question}
           </h3>
+        </div>
 
-          {/* Chevron */}
-          <div className="flex-shrink-0 ml-2">
-            <svg
-              className={`w-6 h-6 transition-transform duration-300 ${isOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              style={{ color: 'var(--text-muted)' }}
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
+        <div className="flex-shrink-0 ml-2">
+          <span
+            className="material-symbols-outlined transition-transform duration-300"
+            style={{
+              transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              color: 'var(--md-sys-color-on-surface-variant)',
+              fontSize: '1.5rem',
+            }}
+            aria-hidden="true"
+          >
+            expand_more
+          </span>
         </div>
       </button>
 
-      {/* Answer Content */}
       <div
         id={`faq-answer-${item.id}`}
         className="overflow-hidden transition-all duration-500 ease-expo"
@@ -355,8 +334,8 @@ function FAQItemComponent({
         aria-label={`إجابة: ${item.question}`}
       >
         <div ref={contentRef} className="prose prose-ar max-w-none">
-          <div className="p-5 md:p-6 pt-0 rounded-xl" style={{ backgroundColor: 'rgba(0,0,0,0.02)' }}>
-            <div style={{ color: 'var(--text-secondary)', lineHeight: '1.8' }}>
+          <div className="p-5 md:p-6 pt-0 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+            <div style={{ color: 'var(--md-sys-color-on-surface-variant)', lineHeight: '1.8' }}>
               {item.answer.split('\n').map((paragraph, i) => (
                 <p key={i} className="mb-4 last:mb-0">
                   {paragraph}
@@ -364,50 +343,44 @@ function FAQItemComponent({
               ))}
             </div>
 
-            {/* Helpful Buttons */}
             {showHelpful && (
-              <div className="flex items-center gap-3 mt-6 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-                <span className="text-sm" style={{ color: 'var(--text-muted)' }}>هل كانت هذه الإجابة مفيدة؟</span>
+              <div className="flex items-center gap-3 mt-6 pt-4" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+                <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>هل كانت هذه الإجابة مفيدة؟</span>
                 <button
                   onClick={() => onHelpfulClick?.(item.id, 'yes')}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all"
                   style={{
-                    backgroundColor: 'rgba(22,163,74,0.1)',
-                    color: '#16a34a',
-                    border: '1px solid rgba(22,163,74,0.2)',
+                    backgroundColor: 'var(--md-sys-color-primary-container)',
+                    color: 'var(--md-sys-color-on-primary-container)',
                   }}
                 >
-                  <span aria-hidden="true">👍</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1rem' }} aria-hidden="true">thumb_up</span>
                   نعم ({item.helpful?.yes || 0})
                 </button>
                 <button
                   onClick={() => onHelpfulClick?.(item.id, 'no')}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all"
                   style={{
-                    backgroundColor: 'rgba(220,38,38,0.1)',
-                    color: '#dc2626',
-                    border: '1px solid rgba(220,38,38,0.2)',
+                    backgroundColor: 'var(--md-sys-color-secondary-container)',
+                    color: 'var(--md-sys-color-on-secondary-container)',
                   }}
                 >
-                  <span aria-hidden="true">👎</span>
+                  <span className="material-symbols-outlined" style={{ fontSize: '1rem' }} aria-hidden="true">thumb_down</span>
                   لا ({item.helpful?.no || 0})
                 </button>
               </div>
             )}
 
-            {/* Related FAQs */}
             {item.category && (
-              <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--border)' }}>
-                <span className="text-sm font-medium" style={{ color: 'var(--text-muted)' }}>أسئلة ذات صلة:</span>
+              <div className="mt-4 pt-4" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+                <span className="text-sm font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>أسئلة ذات صلة:</span>
                 <div className="flex flex-wrap gap-2 mt-2">
                   {['كيف يمكنني التسجيل؟', 'ما هي طرق الدفع؟', 'هل يوجد ضمان استرداد؟'].map((q, i) => (
                     <button
                       key={i}
-                      className="px-3 py-1.5 rounded-full text-xs font-medium transition-all"
+                      className="px-3 py-1.5 rounded-full text-xs font-medium transition-all bg-[var(--md-sys-color-surface-container-high)]"
                       style={{
-                        backgroundColor: 'var(--bg)',
-                        color: 'var(--text-secondary)',
-                        border: '1px solid var(--border)',
+                        color: 'var(--md-sys-color-on-surface)',
                       }}
                     >
                       {q}
@@ -420,7 +393,6 @@ function FAQItemComponent({
         </div>
       </div>
 
-      {/* Animated border */}
       <div
         className="absolute top-0 right-0 bottom-0 w-1 transition-all duration-500"
         style={{
@@ -465,36 +437,44 @@ function CompactFAQItem({
   }, [isOpen]);
 
   return (
-    <div className="rounded-xl overflow-hidden transition-all duration-300" style={{
-      backgroundColor: 'var(--bg)',
-      border: `1px solid ${isOpen ? `${primaryColor}40` : 'var(--border)'}`,
-      boxShadow: isOpen ? `var(--shadow-md), 0 0 20px ${primaryColor}10` : 'var(--shadow-sm)',
+    <div className="rounded-md3-md overflow-hidden transition-all duration-300 bg-[var(--md-sys-color-surface-container)]" style={{
+      border: `1px solid ${isOpen ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)'}`,
     }}>
       <button
         onClick={onToggle}
-        className="w-full p-3 flex items-center gap-3 text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)]"
+        className="w-full p-3 flex items-center gap-3 text-right focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)]"
         aria-expanded={isOpen}
       >
         <div
-          className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold"
+          className="flex-shrink-0 w-8 h-8 rounded-md3-md flex items-center justify-center text-sm font-bold"
           style={{
-            background: isOpen ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : 'var(--bg-elevated)',
-            color: isOpen ? 'white' : 'var(--text-muted)',
-            border: isOpen ? 'none' : '1px solid var(--border)',
+            backgroundColor: isOpen ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container-high)',
+            color: isOpen ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface-variant)',
           }}
         >
-          {isOpen ? '−' : '+'}
+          {isOpen ? (
+            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>remove</span>
+          ) : (
+            <span className="material-symbols-outlined" style={{ fontSize: '1rem' }}>add</span>
+          )}
         </div>
-        <h4 className="font-medium text-sm flex-1 truncate" style={{ color: 'var(--text)' }}>
+        <h4 className="font-medium text-sm flex-1 truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           {item.question}
         </h4>
-        <svg className={`flex-shrink-0 w-5 h-5 transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24" style={{ color: 'var(--text-muted)' }}>
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7"/>
-        </svg>
+        <span
+          className="material-symbols-outlined flex-shrink-0 transition-transform"
+          style={{
+            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+            fontSize: '1.25rem',
+          }}
+        >
+          expand_more
+        </span>
       </button>
 
       <div className="overflow-hidden transition-all duration-300" style={{ maxHeight: isOpen ? contentHeight : 0 }}>
-        <div ref={contentRef} className="px-3 pb-3 pr-11 text-sm" style={{ color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+        <div ref={contentRef} className="px-3 pb-3 pr-11 text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)', lineHeight: '1.7' }}>
           {item.answer}
         </div>
       </div>
@@ -514,28 +494,31 @@ function SidebarFAQItem({ item, isOpen, onToggle, primaryColor }: SidebarFAQItem
   return (
     <button
       onClick={onToggle}
-      className={`w-full p-3 rounded-xl text-right transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--primary)] ${isOpen ? 'bg-[var(--bg-elevated)]' : 'hover:bg-[var(--bg-elevated)]'}`}
-      style={{ border: `1px solid ${isOpen ? `${primaryColor}40` : 'var(--border)'}` }}
+      className={`w-full p-3 rounded-md3-md text-right transition-all duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] bg-[var(--md-sys-color-surface-container)]`}
+      style={{ border: `1px solid ${isOpen ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)'}` }}
       aria-expanded={isOpen}
     >
       <div className="flex items-start gap-2">
         <div
-          className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-xs font-bold"
+          className="flex-shrink-0 w-6 h-6 rounded-md3-md flex items-center justify-center text-xs font-bold"
           style={{
-            background: isOpen ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : 'var(--bg)',
-            color: isOpen ? 'white' : 'var(--text-muted)',
-            border: isOpen ? 'none' : '1px solid var(--border)',
+            backgroundColor: isOpen ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container-high)',
+            color: isOpen ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface-variant)',
           }}
         >
-          {isOpen ? '−' : '+'}
+          {isOpen ? (
+            <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>remove</span>
+          ) : (
+            <span className="material-symbols-outlined" style={{ fontSize: '0.75rem' }}>add</span>
+          )}
         </div>
-        <span className="font-medium text-sm flex-1 truncate" style={{ color: 'var(--text)' }}>
+        <span className="font-medium text-sm flex-1 truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           {item.question}
         </span>
       </div>
 
       {isOpen && (
-        <div className="mt-3 pr-8 text-sm animate-fade-up" style={{ color: 'var(--text-secondary)', lineHeight: '1.7' }}>
+        <div className="mt-3 pr-8 text-sm animate-fade-up" style={{ color: 'var(--md-sys-color-on-surface-variant)', lineHeight: '1.7' }}>
           {item.answer}
         </div>
       )}
@@ -570,21 +553,20 @@ export function FAQCategories({
         <button
           key={category.id}
           onClick={() => onCategoryChange(category.id)}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-300 flex items-center gap-2 ${activeCategory === category.id ? 'active' : ''}`}
+          className={`px-4 py-2 rounded-full text-sm font-medium transition-all duration-300 flex items-center gap-2 ${activeCategory === category.id ? 'active' : ''}`}
           style={{
-            backgroundColor: activeCategory === category.id ? `linear-gradient(135deg, ${primaryColor}, ${primaryColor}dd)` : 'var(--bg)',
-            color: activeCategory === category.id ? 'white' : 'var(--text-secondary)',
-            border: activeCategory === category.id ? 'none' : '1px solid var(--border)',
-            boxShadow: activeCategory === category.id ? `0 4px 15px ${primaryColor}30` : 'var(--shadow-sm)',
+            backgroundColor: activeCategory === category.id ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-surface-container)',
+            color: activeCategory === category.id ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface-variant)',
+            border: activeCategory === category.id ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
           }}
           role="tab"
           aria-selected={activeCategory === category.id}
         >
-          <span aria-hidden="true">{category.icon}</span>
+          <span className="material-symbols-outlined" style={{ fontSize: '1rem' }} aria-hidden="true">{category.icon}</span>
           <span>{category.name}</span>
           <span className="px-2 py-0.5 rounded-full text-[10px] font-bold" style={{
-            backgroundColor: activeCategory === category.id ? 'rgba(255,255,255,0.2)' : 'var(--bg-elevated)',
-            color: activeCategory === category.id ? 'white' : 'var(--text-muted)',
+            backgroundColor: activeCategory === category.id ? 'rgba(255,255,255,0.2)' : 'var(--md-sys-color-surface-container-high)',
+            color: activeCategory === category.id ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-on-surface-variant)',
           }}>
             {category.count}
           </span>

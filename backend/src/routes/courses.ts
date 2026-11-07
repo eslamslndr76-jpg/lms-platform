@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware, optionalAuth } from '../middleware/auth';
-import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
+import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../middleware/rbac';
+import * as announcementService from '../services/announcementService';
 
 const router = Router();
 
@@ -77,7 +78,34 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
   }
 });
 
-router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+// ──────────────────────────────────────────────
+// New-course announcements (edit-plan.md §7)
+// ──────────────────────────────────────────────
+
+// GET /api/courses/:id/announcement — preview text + whether it was sent before
+router.get('/:id/announcement', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('courses', 'read'), async (req: Request, res: Response) => {
+  try {
+    res.json(await announcementService.getAnnouncementPreview(Number(req.params.id)));
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to build announcement' });
+  }
+});
+
+// POST /api/courses/:id/announce — manual send (staff-reviewed text)
+router.post('/:id/announce', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('courses', 'write'), async (req: Request, res: Response) => {
+  try {
+    const result = await announcementService.sendCourseAnnouncement(Number(req.params.id), {
+      title: req.body?.title,
+      body: req.body?.body,
+      force: Boolean(req.body?.force),
+    });
+    res.json({ message: 'Announcement sent', ...result });
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to send announcement' });
+  }
+});
+
+router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('courses', 'write'), async (req: Request, res: Response) => {
   try {
     const { title_ar, title_en, description, price, category_id, image_url, max_students, lecture_count, lecture_duration, instructor, materials_url, course_mode, featured, enable_direct_purchase, auto_assign, enable_mobile_sticky_cta } = req.body;
     if (!title_ar || !title_en) return res.status(400).json({ error: 'Arabic and English titles required' });
@@ -86,13 +114,19 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       title_ar, title_en, description || '', price || 0, category_id || null, image_url || null, max_students || 30, lecture_count || 0, lecture_duration || 0, instructor || '', materials_url || null, course_mode || 'online', featured ? 1 : 0, enable_direct_purchase !== undefined ? (enable_direct_purchase ? 1 : 0) : 1, auto_assign !== undefined ? (auto_assign ? 1 : 0) : 1, enable_mobile_sticky_cta !== undefined ? (enable_mobile_sticky_cta ? 1 : 0) : 1,
     );
-    res.status(201).json({ id: Number(result.lastInsertRowid) });
+    const courseId = Number(result.lastInsertRowid);
+    // A course created as published (is_active defaults to 1) triggers the
+    // automatic announcement when the option is enabled.
+    if (req.body?.is_active !== 0) {
+      void announcementService.maybeAutoAnnounceCourse(courseId);
+    }
+    res.status(201).json({ id: courseId });
   } catch {
     res.status(500).json({ error: 'Failed to create course' });
   }
 });
 
-router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('courses', 'write'), async (req: Request, res: Response) => {
   try {
     const allowed = ['title_ar', 'title_en', 'description', 'price', 'category_id', 'image_url', 'max_students', 'lecture_count', 'lecture_duration', 'instructor', 'materials_url', 'course_mode', 'is_active', 'featured', 'enable_direct_purchase', 'enable_mobile_sticky_cta', 'auto_assign', 'prevent_overlap'];
     const sets: string[] = [];
@@ -104,8 +138,13 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Req
       }
     }
     if (sets.length === 0) return res.status(400).json({ error: 'No fields to update' });
+    const before = await sql('SELECT is_active FROM courses WHERE id=?', req.params.id);
+    const wasActive = Number((before.rows[0] as any)?.is_active || 0);
     params.push(req.params.id);
     await sql(`UPDATE courses SET ${sets.join(', ')} WHERE id=?`, ...params);
+    if (req.body?.is_active !== undefined && !wasActive && Number(req.body.is_active) === 1) {
+      void announcementService.maybeAutoAnnounceCourse(Number(req.params.id));
+    }
     res.json({ message: 'Course updated' });
   } catch {
     res.status(500).json({ error: 'Failed to update course' });

@@ -34,51 +34,55 @@ interface Category {
 /* ─── Skeleton Component ─── */
 function CoursesPageSkeleton() {
   return (
-    <div style={{ backgroundColor: 'var(--bg)' }}>
+    <div style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
       {/* Hero Skeleton */}
       <div
         className="relative overflow-hidden pb-16"
-        style={{ backgroundColor: 'var(--surface)' }}
+        style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}
       >
         <div className="max-w-6xl mx-auto px-4 pt-12 md:pt-16">
-          <div className="skeleton h-5 w-48 rounded-lg mb-4" />
-          <div className="skeleton h-12 w-96 rounded-xl mb-3" />
-          <div className="skeleton h-6 w-64 rounded-lg mb-6" />
-          <div className="skeleton h-14 w-full max-w-lg rounded-2xl mb-6" />
+          <div className="skeleton h-5 w-48 mb-4" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
+          <div className="skeleton h-12 w-96 mb-3" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
+          <div className="skeleton h-6 w-64 mb-6" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
+          <div className="skeleton h-14 w-full max-w-lg mb-6" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
           <div className="flex gap-3">
-            <div className="skeleton h-16 w-32 rounded-2xl" />
-            <div className="skeleton h-16 w-32 rounded-2xl" />
-            <div className="skeleton h-16 w-32 rounded-2xl" />
+            <div className="skeleton h-16 w-32" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
+            <div className="skeleton h-16 w-32" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
+            <div className="skeleton h-16 w-32" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
           </div>
         </div>
       </div>
       {/* Filters Skeleton */}
       <div className="max-w-6xl mx-auto px-4 -mt-6 mb-8">
-        <div className="skeleton h-12 w-full rounded-2xl" />
+        <div className="skeleton h-12 w-full" style={{ borderRadius: 'var(--md-sys-shape-corner-full)' }} />
+      </div>
+      {/* Linear Progress */}
+      <div className="max-w-6xl mx-auto px-4 mb-6">
+        <div className="w-full h-1 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}><div className="h-full rounded-full animate-pulse" style={{ width: '40%', backgroundColor: 'var(--md-sys-color-primary)' }} /></div>
       </div>
       {/* Grid Skeleton */}
       <div className="max-w-6xl mx-auto px-4 pb-12">
-        <div className="skeleton h-7 w-40 rounded-lg mb-6" />
+        <div className="skeleton h-7 w-40 mb-6" style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }} />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {[...Array(6)].map((_, i) => (
             <div
               key={i}
-              className="rounded-2xl overflow-hidden animate-pulse"
-              style={{ backgroundColor: 'var(--card)' }}
+              className="overflow-hidden animate-pulse"
+              style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-small)' }}
             >
-              <div className="skeleton h-48 w-full rounded-none" />
+              <div className="skeleton h-48 w-full" style={{ borderRadius: 0 }} />
               <div className="p-4 space-y-3">
-                <div className="skeleton h-4 w-20 rounded-lg" />
-                <div className="skeleton h-5 w-full rounded-lg" />
-                <div className="skeleton h-4 w-3/4 rounded-lg" />
+                <div className="skeleton h-4 w-20" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
+                <div className="skeleton h-5 w-full" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
+                <div className="skeleton h-4 w-3/4" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
                 <div className="flex gap-4">
-                  <div className="skeleton h-4 w-24 rounded-lg" />
-                  <div className="skeleton h-4 w-20 rounded-lg" />
+                  <div className="skeleton h-4 w-24" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
+                  <div className="skeleton h-4 w-20" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
                 </div>
-                <div className="skeleton h-2 w-full rounded-full mt-2" />
+                <div className="skeleton h-2 w-full mt-2" style={{ borderRadius: 'var(--md-sys-shape-corner-full)' }} />
                 <div className="flex justify-between pt-2">
-                  <div className="skeleton h-5 w-16 rounded-lg" />
-                  <div className="skeleton h-4 w-20 rounded-lg" />
+                  <div className="skeleton h-5 w-16" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
+                  <div className="skeleton h-4 w-20" style={{ borderRadius: 'var(--md-sys-shape-corner-extra-small)' }} />
                 </div>
               </div>
             </div>
@@ -95,24 +99,33 @@ function ErrorDisplay({ message, onRetry }: { message: string; onRetry: () => vo
   return (
     <div
       className="min-h-[60vh] flex items-center justify-center px-4"
-      style={{ backgroundColor: 'var(--bg)' }}
+      style={{ backgroundColor: 'var(--md-sys-color-surface)' }}
     >
       <div className="text-center max-w-md">
-        <div className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center text-3xl"
-          style={{ backgroundColor: `${primaryColor}15` }}>
-          ⚠️
+        <div
+          className="w-20 h-20 mx-auto mb-6 rounded-full flex items-center justify-center"
+          style={{ backgroundColor: 'var(--md-sys-color-error-container)' }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 36, color: 'var(--md-sys-color-on-error-container)' }}>
+            error
+          </span>
         </div>
-        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--text)' }}>
+        <h2 className="text-xl font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           تعذر تحميل الكورسات
         </h2>
-        <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+        <p className="text-sm mb-6" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
           {message}
         </p>
         <button
           onClick={onRetry}
-          className="px-6 py-3 rounded-xl text-white font-bold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
-          style={{ backgroundColor: primaryColor }}
+          className="inline-flex items-center gap-2 px-6 py-3 text-sm font-bold transition-all"
+          style={{
+            backgroundColor: 'var(--md-sys-color-primary)',
+            color: 'var(--md-sys-color-on-primary)',
+            borderRadius: 'var(--md-sys-shape-corner-full)',
+          }}
         >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
           إعادة المحاولة
         </button>
       </div>
@@ -125,17 +138,22 @@ function EmptyState({ search, category }: { search: string; category: string | n
   const { primaryColor } = useBranding();
   return (
     <div className="col-span-full py-16 text-center">
-      <div className="text-5xl mb-4">
-        {search ? '🔍' : '📭'}
+      <div
+        className="w-20 h-20 mx-auto mb-5 rounded-full flex items-center justify-center"
+        style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}
+      >
+        <span className="material-symbols-outlined" style={{ fontSize: 40, color: 'var(--md-sys-color-on-surface-variant)' }}>
+          {search ? 'search_off' : 'inbox'}
+        </span>
       </div>
-      <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--text)' }}>
+      <h3 className="text-lg font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
         {search
           ? `لا توجد نتائج لـ "${search}"`
           : category
           ? 'لا توجد كورسات في هذا القسم حالياً'
           : 'لا توجد كورسات متاحة حالياً'}
       </h3>
-      <p className="text-sm mb-6" style={{ color: 'var(--text-muted)' }}>
+      <p className="text-sm mb-6" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
         {search
           ? 'حاول البحث بكلمات أخرى أو تصفح جميع الكورسات'
           : 'ترقبوا قريباً كورسات جديدة ومميزة'}
@@ -143,9 +161,14 @@ function EmptyState({ search, category }: { search: string; category: string | n
       {search && (
         <Link
           href="/courses"
-          className="px-5 py-2.5 rounded-xl text-white font-bold shadow-md hover:shadow-lg transition-all"
-          style={{ backgroundColor: primaryColor }}
+          className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold transition-all"
+          style={{
+            backgroundColor: 'var(--md-sys-color-primary)',
+            color: 'var(--md-sys-color-on-primary)',
+            borderRadius: 'var(--md-sys-shape-corner-full)',
+          }}
         >
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>menu_book</span>
           عرض جميع الكورسات
         </Link>
       )}
@@ -214,10 +237,10 @@ export default function CoursesPage() {
   /* ── Stats ── */
   const stats = useMemo(
     () => [
-      { icon: '📚', value: courses.length, label: 'كورس متاح' },
-      { icon: '🧑‍🏫', value: new Set(courses.filter((c) => c.instructor).map((c) => c.instructor)).size, label: 'مدرب' },
-      { icon: '📂', value: categories.length, label: 'قسم' },
-      { icon: '💻', value: new Set(courses.filter((c) => c.course_mode).map((c) => c.course_mode)).size, label: 'نوع تدريب' },
+      { icon: 'menu_book', value: courses.length, label: 'كورس متاح' },
+      { icon: 'person', value: new Set(courses.filter((c) => c.instructor).map((c) => c.instructor)).size, label: 'مدرب' },
+      { icon: 'folder', value: categories.length, label: 'قسم' },
+      { icon: 'computer', value: new Set(courses.filter((c) => c.course_mode).map((c) => c.course_mode)).size, label: 'نوع تدريب' },
     ],
     [courses, categories],
   );
@@ -234,7 +257,7 @@ export default function CoursesPage() {
   const heroGradient = `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`;
 
   return (
-    <div style={{ backgroundColor: 'var(--bg)' }}>
+    <div style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
       {/* ==================== HERO ==================== */}
       <section className="relative overflow-hidden">
         {/* Animated Background */}
@@ -260,27 +283,27 @@ export default function CoursesPage() {
         />
 
         <div
-          className="relative border-b"
-          style={{ borderColor: 'var(--border)' }}
+          className="relative"
+          style={{ borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}
         >
           <div className="max-w-6xl mx-auto px-4 pt-10 pb-14 md:pt-14 md:pb-16">
             {/* Badge */}
             <div
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold mb-4 animate-fade-down"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold mb-4 animate-fade-down"
               style={{
-                backgroundColor: `${primaryColor}12`,
-                color: primaryColor,
-                border: `1px solid ${primaryColor}20`,
+                backgroundColor: 'var(--md-sys-color-primary-container)',
+                color: 'var(--md-sys-color-on-primary-container)',
+                borderRadius: 'var(--md-sys-shape-corner-full)',
               }}
             >
-              <span>✨</span>
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>auto_awesome</span>
               <span>اكتشف مسارك التعليمي</span>
             </div>
 
             {/* Headline */}
             <h1
               className="text-3xl md:text-5xl lg:text-6xl font-black leading-[1.1] tracking-tight mb-4 animate-fade-up"
-              style={{ color: 'var(--text)' }}
+              style={{ color: 'var(--md-sys-color-on-surface)' }}
             >
               <span>ابدأ رحلة </span>
               <span
@@ -297,7 +320,7 @@ export default function CoursesPage() {
             {/* Subtitle */}
             <p
               className="text-base md:text-lg max-w-xl mb-6 animate-fade-up"
-              style={{ animationDelay: '0.1s', color: 'var(--text-muted)' }}
+              style={{ animationDelay: '0.1s', color: 'var(--md-sys-color-on-surface-variant)' }}
             >
               {sloganAr || 'نحو تعليم أفضل'}
               <span className="mx-2">—</span>
@@ -307,28 +330,32 @@ export default function CoursesPage() {
             {/* Disclaimer */}
             <p
               className="text-xs mb-6 animate-fade-up opacity-80"
-              style={{ animationDelay: '0.15s', color: 'var(--text-light)' }}
+              style={{ animationDelay: '0.15s', color: 'var(--md-sys-color-outline)' }}
             >
-              الكورس مقدم من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
+              الكورس مقدم من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
             </p>
 
-            {/* Search Bar */}
+            {/* Search Bar — M3 Outlined Text Field Pattern */}
             <div
               className="relative max-w-lg animate-fade-up"
               style={{ animationDelay: '0.2s' }}
             >
               <div
-                className="relative flex items-center rounded-2xl border-2 overflow-hidden transition-all duration-300"
+                className="relative flex items-center transition-all duration-200"
                 style={{
-                  backgroundColor: 'var(--surface)',
-                  borderColor: searchQuery ? primaryColor : 'var(--border)',
+                  backgroundColor: 'var(--md-sys-color-surface)',
+                  border: `1px solid ${searchQuery ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline)'}`,
+                  borderRadius: 'var(--md-sys-shape-corner-extra-small)',
                   boxShadow: searchQuery
-                    ? `0 0 0 4px ${primaryColor}15, var(--shadow-md)`
-                    : 'var(--shadow-sm)',
+                    ? `0 0 0 1px var(--md-sys-color-primary)`
+                    : 'none',
                 }}
               >
-                <span className="px-4 text-lg" style={{ color: 'var(--text-light)' }}>
-                  🔍
+                <span
+                  className="px-4 flex items-center"
+                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>search</span>
                 </span>
                 <input
                   ref={searchInputRef}
@@ -337,7 +364,7 @@ export default function CoursesPage() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="flex-1 py-3.5 bg-transparent text-sm outline-none"
-                  style={{ color: 'var(--text)' }}
+                  style={{ color: 'var(--md-sys-color-on-surface)' }}
                 />
                 {searchQuery && (
                   <button
@@ -345,10 +372,10 @@ export default function CoursesPage() {
                       setSearchQuery('');
                       searchInputRef.current?.focus();
                     }}
-                    className="px-3 text-sm font-bold transition-opacity hover:opacity-70"
-                    style={{ color: 'var(--text-light)' }}
+                    className="px-3 flex items-center transition-opacity hover:opacity-70"
+                    style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                   >
-                    ✕
+                    <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
                   </button>
                 )}
               </div>
@@ -362,23 +389,26 @@ export default function CoursesPage() {
               {stats.map((stat, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl border"
+                  className="flex items-center gap-2 px-4 py-2.5"
                   style={{
-                    backgroundColor: 'var(--card)',
-                    borderColor: 'var(--border)',
+                    backgroundColor: 'var(--md-sys-color-surface-container-low)',
+                    border: '1px solid var(--md-sys-color-outline-variant)',
+                    borderRadius: 'var(--md-sys-shape-corner-extra-small)',
                   }}
                 >
-                  <span className="text-lg">{stat.icon}</span>
-                  <div>
+                  <span className="material-symbols-outlined" style={{ fontSize: 20, color: 'var(--md-sys-color-primary)' }}>
+                    {stat.icon}
+                  </span>
+                  <div className="flex items-baseline gap-1">
                     <span
                       className="text-sm font-extrabold"
-                      style={{ color: primaryColor }}
+                      style={{ color: 'var(--md-sys-color-primary)' }}
                     >
                       {stat.value}
                     </span>
                     <span
-                      className="text-[10px] mr-1.5"
-                      style={{ color: 'var(--text-light)' }}
+                      className="text-[10px]"
+                      style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                     >
                       {stat.label}
                     </span>
@@ -392,7 +422,7 @@ export default function CoursesPage() {
 
       {/* ==================== FILTERS + GRID ==================== */}
       <section className="max-w-6xl mx-auto px-4 pb-16">
-        {/* Category Filters */}
+        {/* Category Filters — M3 Chips */}
         <div className="mt-6 mb-6">
           <div
             className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none"
@@ -401,26 +431,28 @@ export default function CoursesPage() {
             {/* All */}
             <button
               onClick={() => setSelectedCategory(null)}
-              className="flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 border"
+              className="flex-shrink-0 px-4 py-2 text-xs font-bold transition-all duration-200"
               style={{
-                backgroundColor: selectedCategory === null ? primaryColor : 'var(--card)',
-                color: selectedCategory === null ? '#fff' : 'var(--text)',
-                borderColor: selectedCategory === null ? primaryColor : 'var(--border)',
+                backgroundColor: selectedCategory === null ? 'var(--md-sys-color-primary-container)' : 'transparent',
+                color: selectedCategory === null ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                border: selectedCategory === null ? 'none' : '1px solid var(--md-sys-color-outline)',
+                borderRadius: 'var(--md-sys-shape-corner-full)',
               }}
             >
               الكل
             </button>
 
-            {/* Category Pills */}
+            {/* Category Chips */}
             {categories.map((cat) => (
               <button
                 key={cat.id}
                 onClick={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)}
-                className="flex-shrink-0 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 border whitespace-nowrap"
+                className="flex-shrink-0 px-4 py-2 text-xs font-bold transition-all duration-200 whitespace-nowrap"
                 style={{
-                  backgroundColor: selectedCategory === cat.id ? primaryColor : 'var(--card)',
-                  color: selectedCategory === cat.id ? '#fff' : 'var(--text)',
-                  borderColor: selectedCategory === cat.id ? primaryColor : 'var(--border)',
+                  backgroundColor: selectedCategory === cat.id ? 'var(--md-sys-color-primary-container)' : 'transparent',
+                  color: selectedCategory === cat.id ? 'var(--md-sys-color-on-primary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                  border: selectedCategory === cat.id ? 'none' : '1px solid var(--md-sys-color-outline)',
+                  borderRadius: 'var(--md-sys-shape-corner-full)',
                 }}
               >
                 {cat.name_ar}
@@ -432,7 +464,7 @@ export default function CoursesPage() {
         {/* Results Bar */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
-            <h2 className="text-lg font-bold" style={{ color: 'var(--text)' }}>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>
               {searchQuery
                 ? `نتائج البحث عن "${searchQuery}"`
                 : selectedCategory
@@ -440,37 +472,46 @@ export default function CoursesPage() {
                 : 'جميع الكورسات'}
             </h2>
             <span
-              className="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold"
+              className="px-2.5 py-0.5 text-[10px] font-extrabold"
               style={{
-                backgroundColor: `${primaryColor}12`,
-                color: primaryColor,
+                backgroundColor: 'var(--md-sys-color-primary-container)',
+                color: 'var(--md-sys-color-on-primary-container)',
+                borderRadius: 'var(--md-sys-shape-corner-extra-small)',
               }}
             >
               {filteredCourses.length}
             </span>
           </div>
 
-          {/* View Toggle */}
-          <div className="flex items-center gap-1 p-1 rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+          {/* View Toggle — M3 Segmented Button */}
+          <div
+            className="flex items-center p-0.5"
+            style={{
+              borderRadius: 'var(--md-sys-shape-corner-full)',
+              border: '1px solid var(--md-sys-color-outline)',
+            }}
+          >
             <button
               onClick={() => setViewMode('grid')}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+              className="flex items-center justify-center px-3 py-1.5 transition-all duration-200"
               style={{
-                backgroundColor: viewMode === 'grid' ? primaryColor : 'transparent',
-                color: viewMode === 'grid' ? '#fff' : 'var(--text-light)',
+                backgroundColor: viewMode === 'grid' ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                color: viewMode === 'grid' ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                borderRadius: 'var(--md-sys-shape-corner-full)',
               }}
             >
-              ▦
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>grid_view</span>
             </button>
             <button
               onClick={() => setViewMode('list')}
-              className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+              className="flex items-center justify-center px-3 py-1.5 transition-all duration-200"
               style={{
-                backgroundColor: viewMode === 'list' ? primaryColor : 'transparent',
-                color: viewMode === 'list' ? '#fff' : 'var(--text-light)',
+                backgroundColor: viewMode === 'list' ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                color: viewMode === 'list' ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                borderRadius: 'var(--md-sys-shape-corner-full)',
               }}
             >
-              ☰
+              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>view_list</span>
             </button>
           </div>
         </div>
@@ -489,14 +530,16 @@ export default function CoursesPage() {
             {filteredCourses.map((course, i) => (
               <div key={course.id} className={viewMode === 'list' ? 'animate-fade-up' : 'animate-fade-up'}>
                 {viewMode === 'list' ? (
-                  /* ── List View Card ── */
+                  /* ── List View Card — M3 styling ── */
                   <Link
                     href={`/courses/${course.id}`}
-                    className="group block"
+                    className="group block outline-none focus-visible:ring-2 focus-visible:ring-[var(--md-sys-color-primary)] focus-visible:ring-offset-2 rounded-[var(--md-sys-shape-corner-medium)]"
                   >
                     <div
-                      className="flex gap-4 rounded-2xl overflow-hidden border transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
+                      className="md3-card flex gap-4 overflow-hidden transition-all duration-200"
+                      style={{
+                        border: '1px solid var(--md-sys-color-outline-variant)',
+                      }}
                     >
                       {/* Thumbnail */}
                       <div className="w-28 h-28 md:w-36 md:h-36 flex-shrink-0 overflow-hidden">
@@ -504,48 +547,62 @@ export default function CoursesPage() {
                           <img
                             src={course.image_url}
                             alt={course.title_ar}
-                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                           />
                         ) : (
                           <div
-                            className="w-full h-full flex items-center justify-center text-white text-3xl font-black"
-                            style={{ background: heroGradient }}
+                            className="w-full h-full flex items-center justify-center"
+                            style={{ backgroundColor: 'var(--md-sys-color-primary-container)' }}
                           >
-                            {course.title_ar.charAt(0)}
+                            <span
+                              className="material-symbols-outlined"
+                              style={{ fontSize: 40, color: 'var(--md-sys-color-on-primary-container)' }}
+                            >
+                              school
+                            </span>
                           </div>
                         )}
                       </div>
 
                       {/* Details */}
-                      <div className="flex-1 py-3 pl-4 pr-1 flex flex-col justify-center gap-1">
+                      <div className="flex-1 py-3 pl-4 pr-1 flex flex-col justify-center gap-1.5 min-w-0">
                         {course.category_name_ar && (
                           <span
-                            className="text-[10px] px-2 py-0.5 rounded-lg font-bold self-start"
-                            style={{ backgroundColor: `${secondaryColor}12`, color: secondaryColor }}
+                            className="text-[11px] px-2.5 h-6 inline-flex items-center font-bold self-start"
+                            style={{
+                              backgroundColor: 'var(--md-sys-color-secondary-container)',
+                              color: 'var(--md-sys-color-on-secondary-container)',
+                              borderRadius: 'var(--md-sys-shape-corner-extra-small)',
+                            }}
                           >
                             {course.category_name_ar}
                           </span>
                         )}
                         <h3
-                          className="font-bold text-sm line-clamp-1 group-hover:text-[var(--primary)] transition-colors"
-                          style={{ color: 'var(--text)' }}
+                          className="font-bold text-sm line-clamp-1 group-hover:text-[var(--md-sys-color-primary)] transition-colors duration-200"
+                          style={{ color: 'var(--md-sys-color-on-surface)' }}
                         >
                           {course.title_ar}
                         </h3>
                         {course.instructor && (
-                          <span className="text-[11px]" style={{ color: 'var(--text-light)' }}>
-                            🧑‍🏫 {course.instructor}
+                          <span className="text-[11px] flex items-center gap-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person</span>
+                            {course.instructor}
                           </span>
                         )}
                         <div className="flex items-center justify-between mt-1">
                           <span
-                            className="text-sm font-extrabold"
-                            style={{ color: primaryColor }}
+                            className="text-sm font-bold"
+                            style={{ color: 'var(--md-sys-color-primary)' }}
                           >
-                            {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : '🎯 مجاني'}
+                            {course.price > 0 ? `${course.price.toLocaleString()} ج.م` : 'مجاني'}
                           </span>
-                          <span className="text-[10px] font-medium" style={{ color: 'var(--text-muted)' }}>
-                            عرض التفاصيل ←
+                          <span
+                            className="text-[11px] font-medium flex items-center gap-1 transition-all duration-200 group-hover:gap-2"
+                            style={{ color: 'var(--md-sys-color-primary)' }}
+                          >
+                            عرض التفاصيل
+                            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>arrow_forward</span>
                           </span>
                         </div>
                       </div>
@@ -563,29 +620,42 @@ export default function CoursesPage() {
       {/* ==================== CTA ==================== */}
       {courses.length > 0 && (
         <section
-          className="border-t"
-          style={{ borderColor: 'var(--border)', backgroundColor: 'var(--surface)' }}
+          style={{
+            borderTop: '1px solid var(--md-sys-color-outline-variant)',
+            backgroundColor: 'var(--md-sys-color-surface-container-low)',
+          }}
         >
           <div className="max-w-6xl mx-auto px-4 py-12 text-center">
-            <h2 className="text-xl md:text-2xl font-bold mb-3" style={{ color: 'var(--text)' }}>
-              🎯 لم تجد ما تبحث عنه؟
+            <h2 className="text-xl md:text-2xl font-bold mb-3" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              <span className="material-symbols-outlined align-middle mx-1" style={{ fontSize: 28, color: 'var(--md-sys-color-primary)' }}>gps_fixed</span>
+              لم تجد ما تبحث عنه؟
             </h2>
-            <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-sm mb-6 max-w-md mx-auto" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               تواصل معنا وسنساعدك في اختيار المسار التعليمي المناسب لك
             </p>
             <div className="flex flex-wrap justify-center gap-3">
               <a
                 href="tel:+201234567890"
-                className="px-5 py-2.5 rounded-xl text-white font-bold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5"
-                style={{ backgroundColor: primaryColor }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold transition-all"
+                style={{
+                  backgroundColor: 'var(--md-sys-color-primary)',
+                  color: 'var(--md-sys-color-on-primary)',
+                  borderRadius: 'var(--md-sys-shape-corner-full)',
+                }}
               >
-                📞 اتصل بنا
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>call</span>
+                اتصل بنا
               </a>
               <Link
                 href="/"
-                className="px-5 py-2.5 rounded-xl font-bold border-2 transition-all hover:-translate-y-0.5"
-                style={{ borderColor: primaryColor, color: primaryColor }}
+                className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-bold transition-all"
+                style={{
+                  border: '1px solid var(--md-sys-color-outline)',
+                  color: 'var(--md-sys-color-primary)',
+                  borderRadius: 'var(--md-sys-shape-corner-full)',
+                }}
               >
+                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
                 العودة للرئيسية
               </Link>
             </div>

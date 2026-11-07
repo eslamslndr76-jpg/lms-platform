@@ -191,6 +191,8 @@ export default function CourseDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [purchased, setPurchased] = useState<boolean | null>(null);
+  const [hasCertificate, setHasCertificate] = useState(false);
+  const [certSerialId, setCertSerialId] = useState('');
   const [cartLoading, setCartLoading] = useState(false);
 
   const heroGradient = `linear-gradient(135deg, ${primaryColor} 0%, ${secondaryColor} 100%)`;
@@ -206,8 +208,12 @@ export default function CourseDetailPage() {
         // Check enrollment status if authenticated
         if (token) {
           api(`/api/orders/my/check/${courseId}`)
-            .then((checkData) => setPurchased(Boolean(checkData.hasPaidOrder)))
-            .catch(() => setPurchased(false));
+            .then((checkData) => {
+              setPurchased(Boolean(checkData.hasPaidOrder));
+              setHasCertificate(Boolean(checkData.hasCertificate));
+              setCertSerialId(checkData.serialId || '');
+            })
+            .catch(() => { setPurchased(false); setHasCertificate(false); });
         }
       })
       .catch((err) => {
@@ -584,13 +590,23 @@ export default function CourseDetailPage() {
                     <p className="text-sm font-bold" style={{ color: 'var(--text)' }}>
                       أنت مسجل في هذا الكورس
                     </p>
-                    <Link
-                      href="/dashboard"
-                      className="block w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
-                      style={{ background: heroGradient }}
-                    >
-                      الذهاب للوحة التحكم
-                    </Link>
+                    {hasCertificate ? (
+                      <Link
+                        href={`/verify?serial=${certSerialId}`}
+                        className="block w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                        style={{ background: heroGradient }}
+                      >
+                        🎓 عرض شهادتك
+                      </Link>
+                    ) : (
+                      <Link
+                        href="/dashboard"
+                        className="block w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl"
+                        style={{ background: heroGradient }}
+                      >
+                        الذهاب للوحة التحكم
+                      </Link>
+                    )}
                   </div>
                 ) : (
                   <>
@@ -650,7 +666,7 @@ export default function CourseDetailPage() {
             لديك استفسار عن هذا الكورس؟
           </h2>
           <p className="text-xs md:text-sm mb-5 max-w-md mx-auto" style={{ color: 'var(--text-muted)' }}>
-            فريق {systemName || 'نادي ريادة الاعمال'} جاهز للإجابة على جميع أسئلتك
+            فريق {systemName || 'وحدة التدريب و التطوير'} جاهز للإجابة على جميع أسئلتك
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <a
@@ -677,7 +693,7 @@ export default function CourseDetailPage() {
         style={{ borderColor: 'var(--border)', backgroundColor: 'var(--bg)' }}
       >
         <p className="text-[10px] md:text-xs leading-relaxed" style={{ color: 'var(--text-light)' }}>
-          هذه المنصة مقدمة من نادي ريادة الاعمال بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
+          هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
         </p>
       </div>
 

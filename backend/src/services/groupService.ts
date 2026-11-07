@@ -1,14 +1,99 @@
+import crypto from 'crypto';
 import { sql } from '../db/helpers';
 import { createNotification } from './notificationService';
+import { sendNotification, notifyGroupStudents as notifyGroupStudentsExt } from './externalNotificationService';
+import { openSurveyWindow, resetSurveyWindow } from './surveyService';
 
 const DAY_NAMES_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
 function formatRow(r: any): any {
   const out = { ...r };
-  for (const k of ['id', 'course_id', 'is_active', 'is_complete', 'max_students', 'sort_order']) {
-    if (out[k] !== undefined) out[k] = Number(out[k]);
+  for (const k of ['id', 'course_id', 'is_active', 'is_complete', 'max_students', 'sort_order', 'place_id', 'place_capacity']) {
+    if (out[k] !== undefined && out[k] !== null) out[k] = Number(out[k]);
   }
   return out;
+}
+
+// ──────────────────────────────────────────────
+// Places (rooms) — capacity is a hard limit
+// ──────────────────────────────────────────────
+
+interface PlaceInfo {
+  id: number;
+  name: string;
+  capacity: number;
+  is_active: number;
+}
+
+async function loadPlace(placeId: number): Promise<PlaceInfo | null> {
+  const result = await sql('SELECT id, name, capacity, is_active FROM places WHERE id=?', placeId);
+  if (result.rows.length === 0) return null;
+  const row = result.rows[0] as any;
+  return {
+    id: Number(row.id),
+    name: row.name,
+    capacity: Number(row.capacity),
+    is_active: Number(row.is_active),
+  };
+}
+
+async function getStudentCount(groupId: number): Promise<number> {
+  const result = await sql('SELECT COUNT(*) as cnt FROM group_students WHERE group_id=?', groupId);
+  return Number(result.rows[0]?.cnt || 0);
+}
+
+/**
+ * The hard capacity of a group: the room capacity when the group is linked to a
+ * place (never above it), otherwise the group's own max_students.
+ */
+async function getGroupCapacity(groupId: number): Promise<{
+  max: number | null;
+  place: PlaceInfo | null;
+  groupName: string;
+  students: number;
+}> {
+  const result = await sql(
+    `SELECT g.name, g.max_students, p.id as place_id, p.name as place_name,
+            p.capacity as place_capacity, p.is_active as place_active
+     FROM groups g LEFT JOIN places p ON g.place_id=p.id WHERE g.id=?`,
+    groupId,
+  );
+  if (result.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+  const row = result.rows[0] as any;
+  const place: PlaceInfo | null = row.place_id == null
+    ? null
+    : {
+        id: Number(row.place_id),
+        name: row.place_name,
+        capacity: Number(row.place_capacity),
+        is_active: Number(row.place_active),
+      };
+  const own = row.max_students == null ? null : Number(row.max_students);
+  const max = place ? (own == null ? place.capacity : Math.min(own, place.capacity)) : own;
+  return {
+    max,
+    place,
+    groupName: row.name,
+    students: await getStudentCount(groupId),
+  };
+}
+
+/**
+ * Reject an assignment that would push the group over its capacity.
+ * `adding` is the number of students the caller intends to insert.
+ */
+async function assertCapacity(groupId: number, adding: number): Promise<void> {
+  const capacity = await getGroupCapacity(groupId);
+  if (capacity.max != null && capacity.students + adding > capacity.max) {
+    const remaining = Math.max(capacity.max - capacity.students, 0);
+    const where = capacity.place ? ` في المكان "${capacity.place.name}"` : '';
+    throw {
+      status: 400,
+      message: remaining === 0
+        ? `المجموعة "${capacity.groupName}" ممتلئة (السعة ${capacity.max}${where}) — لا يمكن إضافة طلاب جدد`
+        : `السعة المتاحة${where} ${remaining} طالب فقط، والمطلوب إضافة ${adding}`,
+    };
+  }
 }
 
 function getDayFromDate(dateStr: string): string {
@@ -28,8 +113,23 @@ function getDayNameFromDate(dateStr: string): string {
 // ──────────────────────────────────────────────
 
 async function groupHasStarted(groupId: number): Promise<boolean> {
-  const result = await sql('SELECT COUNT(*) as cnt FROM lectures WHERE group_id=?', groupId);
+  const result = await sql(
+    'SELECT COUNT(*) as cnt FROM lectures WHERE group_id=? AND is_completed=1',
+    groupId,
+  );
   return Number(result.rows[0].cnt) > 0;
+}
+
+async function isStudentInCourseGroup(studentId: number, courseId: number, excludeGroupId?: number): Promise<{ inGroup: boolean; groupName?: string }> {
+  let query = `SELECT g.name FROM group_students gs JOIN groups g ON gs.group_id=g.id WHERE gs.user_id=? AND g.course_id=?`;
+  const params: any[] = [studentId, courseId];
+  if (excludeGroupId) { query += ' AND gs.group_id!=?'; params.push(excludeGroupId); }
+  query += ' LIMIT 1';
+  const result = await sql(query, ...params);
+  if (result.rows.length > 0) {
+    return { inGroup: true, groupName: (result.rows[0] as any).name };
+  }
+  return { inGroup: false };
 }
 
 async function checkPendingExists(courseId: number, excludeGroupId?: number): Promise<boolean> {
@@ -55,47 +155,18 @@ async function checkPreventOverlap(courseId: number, excludeGroupId?: number): P
 // Status helpers
 // ──────────────────────────────────────────────
 async function recalcStatus(groupId: number): Promise<void> {
-  // Read old state before update
-  const old = await sql('SELECT is_complete, course_id FROM groups WHERE id=?', groupId);
-  const wasComplete = old.rows.length > 0 ? Number((old.rows[0] as any).is_complete) : 0;
-  const courseId = old.rows.length > 0 ? Number((old.rows[0] as any).course_id) : null;
+  const old = await sql('SELECT is_complete, status FROM groups WHERE id=?', groupId);
+  if (old.rows.length === 0) return;
+  const row = old.rows[0] as any;
 
-  const lec = await sql(
-    'SELECT COUNT(*) as total, SUM(is_completed) as done FROM lectures WHERE group_id=?',
-    groupId,
-  );
+  // Completion (and cancellation) are explicit admin decisions. Lectures,
+  // attendance or edits must never complete or reopen a group on their own.
+  if (row.status === 'cancelled' || row.status === 'completed' || Number(row.is_complete)) return;
+
+  const lec = await sql('SELECT COUNT(*) as total FROM lectures WHERE group_id=?', groupId);
   const total = Number(lec.rows[0].total);
-  const done = Number(lec.rows[0].done || 0);
-  const isComplete = total > 0 && done === total ? 1 : 0;
-  const status = total === 0 ? 'pending' : isComplete ? 'completed' : 'active';
-  await sql(
-    'UPDATE groups SET is_complete=?, status=? WHERE id=?',
-    isComplete, status, groupId,
-  );
-
-  // Auto-create next group when transitioning to completed and prevent_overlap is ON
-  if (isComplete && !wasComplete && courseId) {
-    const course = await sql('SELECT prevent_overlap, instructor, max_students FROM courses WHERE id=?', courseId);
-    if (course.rows.length > 0 && Number((course.rows[0] as any).prevent_overlap)) {
-      // Deactivate the completed group
-      await sql('UPDATE groups SET is_active=0 WHERE id=?', groupId);
-
-      // Create a new pending group
-      const groupCount = await sql(
-        "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
-        courseId,
-      );
-      const nextNum = Number(groupCount.rows[0].cnt) + 1;
-      const instructor = (course.rows[0] as any).instructor || '';
-      const maxStudents = (course.rows[0] as any).max_students || null;
-
-      await sql(
-        `INSERT INTO groups (course_id, name, instructor_name, max_students, status, is_active)
-         VALUES (?,?,?,?,'pending',1)`,
-        courseId, `مجموعة ${nextNum}`, instructor, maxStudents,
-      );
-    }
-  }
+  const status = total === 0 ? 'pending' : 'active';
+  await sql('UPDATE groups SET status=?, is_active=1 WHERE id=?', status, groupId);
 
   // Sync start_date from earliest lecture
   const dates = await sql(
@@ -106,6 +177,136 @@ async function recalcStatus(groupId: number): Promise<void> {
   if (firstDate) {
     await sql('UPDATE groups SET start_date=? WHERE id=?', firstDate, groupId);
   }
+}
+
+/**
+ * When completion unlocks a new round for the course (prevent_overlap), open a
+ * fresh pending group so new students have a place to be assigned.
+ */
+async function createNextGroupIfNeeded(courseId: number): Promise<number | null> {
+  const course = await sql('SELECT prevent_overlap, instructor, max_students FROM courses WHERE id=?', courseId);
+  if (course.rows.length === 0 || !Number((course.rows[0] as any).prevent_overlap)) return null;
+
+  const groupCount = await sql(
+    "SELECT COUNT(*) as cnt FROM groups WHERE course_id=? AND name LIKE 'مجموعة%'",
+    courseId,
+  );
+  const nextNum = Number(groupCount.rows[0].cnt) + 1;
+  const instructor = (course.rows[0] as any).instructor || '';
+  const maxStudents = (course.rows[0] as any).max_students || null;
+
+  const created = await sql(
+    `INSERT INTO groups (course_id, name, instructor_name, max_students, status, is_active)
+     VALUES (?,?,?,?,'pending',1)`,
+    courseId, `مجموعة ${nextNum}`, instructor, maxStudents,
+  );
+  return Number(created.lastInsertRowid);
+}
+
+/** Groups that are officially finished accept no new students and no new lectures. */
+async function assertGroupOpen(groupId: number, action: string): Promise<void> {
+  const result = await sql('SELECT name, status, is_complete, completed_at FROM groups WHERE id=?', groupId);
+  if (result.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+  const row = result.rows[0] as any;
+  if (row.status === 'completed' || Number(row.is_complete) || row.completed_at) {
+    throw {
+      status: 400,
+      message: `المجموعة "${row.name}" منتهية — أعد فتحها أولاً قبل ${action}`,
+    };
+  }
+}
+
+// ──────────────────────────────────────────────
+// Auto-issue certificates when group completes
+// ──────────────────────────────────────────────
+async function autoIssueCertificates(groupId: number, courseId: number): Promise<number> {
+  // 1. Read certificate settings
+  let certSettings: any = { autoIssue: true, requireAttendance: true, minAttendancePercent: 80 };
+  try {
+    const result = await sql("SELECT value FROM system_settings WHERE key='certificate'");
+    if (result.rows.length > 0) {
+      certSettings = { ...certSettings, ...JSON.parse(result.rows[0].value as string) };
+    }
+  } catch { /* use defaults */ }
+
+  if (!certSettings.autoIssue) {
+    console.log('[Certificate] Auto-issue is disabled in settings');
+    return 0;
+  }
+
+  // 2. Get all students in this group who have paid orders for this course
+  const studentsResult = await sql(
+    `SELECT DISTINCT gs.user_id
+     FROM group_students gs
+     JOIN orders o ON o.user_id = gs.user_id AND o.course_id = ?
+     WHERE gs.group_id = ? AND o.status = 'paid'`,
+    courseId, groupId,
+  );
+
+  const students = studentsResult.rows as any[];
+  console.log(`[Certificate] Auto-issue: ${students.length} eligible students in group ${groupId}`);
+
+  // 3. Get total lectures in this group
+  const totalResult = await sql(
+    'SELECT COUNT(*) as total FROM lectures WHERE group_id=?',
+    groupId,
+  );
+  const totalLectures = Number(totalResult.rows[0].total);
+
+  // 4. Process each student
+  let issuedCount = 0;
+  for (const row of students) {
+    const userId = row.user_id;
+
+    // Check if certificate already exists
+    const exists = await sql(
+      'SELECT id FROM certificates WHERE user_id=? AND course_id=?',
+      userId, courseId,
+    );
+    if (exists.rows.length > 0) {
+      console.log(`[Certificate] Student ${userId} already has certificate for course ${courseId}`);
+      continue;
+    }
+
+    // Check attendance if required
+    if (certSettings.requireAttendance && totalLectures > 0) {
+      const attendedResult = await sql(
+        `SELECT COUNT(*) as attended
+         FROM lecture_attendance la
+         JOIN lectures l ON la.lecture_id = l.id
+         WHERE l.group_id = ? AND la.user_id = ? AND la.attended = 1`,
+        groupId, userId,
+      );
+      const attended = Number(attendedResult.rows[0].attended);
+      const percent = (attended / totalLectures) * 100;
+
+      if (percent < (certSettings.minAttendancePercent || 80)) {
+        console.log(`[Certificate] Student ${userId} attendance ${Math.round(percent)}% < ${certSettings.minAttendancePercent || 80}% — skipped`);
+        continue;
+      }
+    }
+
+    // Issue certificate
+    const serialId = crypto.randomBytes(8).toString('hex').toUpperCase();
+    await sql(
+      'INSERT INTO certificates (user_id, course_id, serial_id) VALUES (?,?,?)',
+      userId, courseId, serialId,
+    );
+
+    // Get course title for notification
+    const courseData = await sql('SELECT title_ar FROM courses WHERE id=?', courseId);
+    const courseTitle = courseData.rows.length > 0 ? (courseData.rows[0] as any).title_ar : '';
+
+    // Send notification
+    await sendNotification(userId, 'certificate_issued', { courseTitle, serialId })
+      .catch(e => console.error('[Notify] certificate_issued failed:', e.message));
+
+    issuedCount++;
+    console.log(`[Certificate] Issued certificate ${serialId} for student ${userId} in course ${courseId}`);
+  }
+
+  console.log(`[Certificate] Auto-issue complete: ${issuedCount} certificates issued for group ${groupId}`);
+  return issuedCount;
 }
 
 // ──────────────────────────────────────────────
@@ -127,7 +328,7 @@ async function enrich(group: any): Promise<any> {
   group.lecture_progress = { total, done };
   const cnt = await sql('SELECT COUNT(*) as cnt FROM group_students WHERE group_id=?', group.id);
   group.student_count = Number(cnt.rows[0].cnt);
-  group.has_started = all.length > 0;
+  group.has_started = all.some((l: any) => Number(l.is_completed));
   return group;
 }
 
@@ -146,7 +347,12 @@ async function addHistory(userId: number, groupId: number, action: string, moved
 // ──────────────────────────────────────────────
 
 export async function getGroups(courseId?: number): Promise<any[]> {
-  let query = `SELECT g.*, c.title_ar as course_name FROM groups g JOIN courses c ON g.course_id=c.id`;
+  let query = `SELECT g.*, c.title_ar as course_name, p.name as place_name, p.capacity as place_capacity,
+                      p.is_active as place_is_active, u.name as completed_by_name
+               FROM groups g
+               JOIN courses c ON g.course_id=c.id
+               LEFT JOIN places p ON g.place_id=p.id
+               LEFT JOIN users u ON g.completed_by=u.id`;
   const params: unknown[] = [];
   if (courseId) { query += ' WHERE g.course_id=?'; params.push(courseId); }
   query += ' ORDER BY g.created_at DESC';
@@ -156,11 +362,163 @@ export async function getGroups(courseId?: number): Promise<any[]> {
 
 export async function getGroupById(id: number): Promise<any | null> {
   const result = await sql(
-    'SELECT g.*, c.title_ar as course_name FROM groups g JOIN courses c ON g.course_id=c.id WHERE g.id=?',
+    `SELECT g.*, c.title_ar as course_name, p.name as place_name, p.capacity as place_capacity,
+            p.is_active as place_is_active, u.name as completed_by_name
+     FROM groups g
+     JOIN courses c ON g.course_id=c.id
+     LEFT JOIN places p ON g.place_id=p.id
+     LEFT JOIN users u ON g.completed_by=u.id
+     WHERE g.id=?`,
     id,
   );
   if (result.rows.length === 0) return null;
   return enrich(result.rows[0] as any);
+}
+
+// ──────────────────────────────────────────────
+// Manual group completion (edit-plan.md §4.2)
+// ──────────────────────────────────────────────
+
+/**
+ * Officially finish a group. This is the only way a group becomes completed:
+ * it opens the post-course flow (survey / instructor evaluation / final report
+ * in later phases), stops new assignments, issues certificates to eligible
+ * students and notifies the students. Reversible with `reopenGroup`.
+ */
+export async function completeGroup(
+  groupId: number,
+  adminId?: number,
+): Promise<{ students: number; certificates: number }> {
+  const result = await sql(
+    `SELECT g.id, g.name, g.status, g.is_complete, g.completed_at, g.course_id,
+            g.instructor_user_id, c.title_ar as course_title
+     FROM groups g JOIN courses c ON g.course_id=c.id WHERE g.id=?`,
+    groupId,
+  );
+  if (result.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+  const group = result.rows[0] as any;
+
+  if (group.status === 'cancelled') {
+    throw { status: 400, message: 'لا يمكن إنهاء مجموعة ملغية — أعد تفعيلها أولاً' };
+  }
+  if (group.status === 'completed' || Number(group.is_complete) || group.completed_at) {
+    throw { status: 400, message: 'المجموعة منتهية بالفعل' };
+  }
+
+  const lectures = await sql('SELECT COUNT(*) as total FROM lectures WHERE group_id=?', groupId);
+  if (Number(lectures.rows[0].total) === 0) {
+    throw { status: 400, message: 'أضف محاضرة واحدة على الأقل قبل إنهاء المجموعة' };
+  }
+
+  await sql(
+    `UPDATE groups SET is_complete=1, status='completed', is_active=0,
+            completed_at=datetime('now'), completed_by=?, instructor_eval_opened_at=datetime('now') WHERE id=?`,
+    adminId ?? null, groupId,
+  );
+
+  const studentsResult = await sql('SELECT user_id FROM group_students WHERE group_id=?', groupId);
+  const studentIds = studentsResult.rows.map((r: any) => Number(r.user_id));
+
+  // In-app notification through the existing notification system (bell).
+  for (const userId of studentIds) {
+    await createNotification(
+      userId,
+      'انتهت مجموعتك',
+      `انتهت مجموعة "${group.name}" في كورس "${group.course_title}" — شكراً لمشاركتك!`,
+      'success',
+      '/my-courses',
+    ).catch(e => console.error('[Notify] group_completed in-app failed:', e.message));
+  }
+  // Email + Telegram (same optional channels as the rest of the platform).
+  await notifyGroupStudentsExt(groupId, 'group_completed', {
+    courseTitle: group.course_title || '',
+    groupName: group.name || '',
+  }).catch(e => console.error('[Notify] group_completed failed:', e.message));
+
+  // Open the post-course survey window and invite the students to fill it in.
+  await openSurveyWindow(groupId).catch(e =>
+    console.error('[Survey] Failed to open survey window for group', groupId, ':', e.message),
+  );
+  for (const userId of studentIds) {
+    await createNotification(
+      userId,
+      'قيّم دورتك',
+      `رأيك في مجموعة "${group.name}" يساعدنا على التحسين — يستغرق نحو دقيقتين فقط.`,
+      'info',
+      `/survey/${groupId}`,
+    ).catch(e => console.error('[Notify] survey_opened in-app failed:', e.message));
+  }
+  await notifyGroupStudentsExt(groupId, 'survey_opened', {
+    groupId,
+    courseTitle: group.course_title || '',
+    groupName: group.name || '',
+  }).catch(e => console.error('[Notify] survey_opened failed:', e.message));
+
+  // The group's linked instructor account is invited to evaluate its students.
+  if (group.instructor_user_id) {
+    const instructorId = Number(group.instructor_user_id);
+    await createNotification(
+      instructorId,
+      'تقييم الطلاب متاح',
+      `تم فتح تقييم طلاب مجموعة "${group.name}" في كورس "${group.course_title}".`,
+      'info',
+      '/instructor',
+    ).catch(e => console.error('[Notify] instructor_eval_opened in-app failed:', e.message));
+    await sendNotification(instructorId, 'instructor_eval_opened', {
+      groupId,
+      courseTitle: group.course_title || '',
+      groupName: group.name || '',
+    }).catch(e => console.error('[Notify] instructor_eval_opened failed:', e.message));
+  }
+
+  const certificates = await autoIssueCertificates(groupId, Number(group.course_id)).catch(e => {
+    console.error('[Certificate] Auto-issue failed for group', groupId, ':', e.message);
+    return 0;
+  });
+
+  await createNextGroupIfNeeded(Number(group.course_id)).catch(e =>
+    console.error('[Groups] Next group creation failed:', e.message),
+  );
+
+  return { students: studentIds.length, certificates };
+}
+
+/** Undo an official completion so the group can run again (certificates stay). */
+export async function reopenGroup(groupId: number): Promise<void> {
+  const result = await sql('SELECT name, status, is_complete, completed_at FROM groups WHERE id=?', groupId);
+  if (result.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+  const group = result.rows[0] as any;
+  if (group.status !== 'completed' && !Number(group.is_complete) && !group.completed_at) {
+    throw { status: 400, message: 'المجموعة غير منتهية' };
+  }
+
+  const lectures = await sql('SELECT COUNT(*) as total FROM lectures WHERE group_id=?', groupId);
+  const status = Number(lectures.rows[0].total) === 0 ? 'pending' : 'active';
+  await sql(
+    `UPDATE groups SET is_complete=0, status=?, is_active=1, completed_at=NULL, completed_by=NULL,
+            instructor_eval_opened_at=NULL WHERE id=?`,
+    status, groupId,
+  );
+  // The survey belongs to the completed run: reopening closes it. Answers that
+  // were already submitted are kept untouched.
+  await resetSurveyWindow(groupId).catch(e =>
+    console.error('[Survey] Failed to reset survey window for group', groupId, ':', e.message),
+  );
+}
+
+/** An instructor account is an active user whose role is `instructor`. */
+async function loadInstructorAccount(
+  userId: number,
+): Promise<{ id: number; name: string }> {
+  const result = await sql(
+    `SELECT u.id, u.name FROM users u JOIN roles r ON u.role_id=r.id
+     WHERE u.id=? AND u.is_active=1 AND r.name='instructor'`,
+    userId,
+  );
+  if (result.rows.length === 0) {
+    throw { status: 400, message: 'حساب المحاضر غير موجود أو غير مفعّل' };
+  }
+  return result.rows[0] as any;
 }
 
 export async function createGroup(data: {
@@ -169,17 +527,46 @@ export async function createGroup(data: {
   zoom_link?: string;
   end_date?: string;
   instructor_name?: string;
+  instructor_user_id?: number | null;
   location?: string;
+  place_id?: number | null;
   max_students?: number | null;
   status?: string;
 }): Promise<number> {
   const {
-    course_id, name, zoom_link, end_date, instructor_name, location, max_students, status,
+    course_id, name, zoom_link, end_date, instructor_name, instructor_user_id,
+    location, place_id, max_students, status,
   } = data;
   if (!name) throw { status: 400, message: 'Group name required' };
 
+  // A linked instructor account owns the display name.
+  let instructorAccount: { id: number; name: string } | null = null;
+  if (instructor_user_id != null) {
+    instructorAccount = await loadInstructorAccount(Number(instructor_user_id));
+  }
+
+  // A group linked to a place can never exceed that place's capacity.
+  let place: PlaceInfo | null = null;
+  if (place_id != null && place_id !== undefined) {
+    const courseMode = await sql('SELECT course_mode FROM courses WHERE id=?', course_id);
+    if (courseMode.rows.length > 0 && (courseMode.rows[0] as any).course_mode !== 'offline') {
+      throw { status: 400, message: 'اختيار المكان متاح للمجموعات الأوفلاين فقط' };
+    }
+    place = await loadPlace(Number(place_id));
+    if (!place) throw { status: 400, message: 'المكان المحدد غير موجود' };
+    if (!place.is_active) throw { status: 400, message: `المكان "${place.name}" غير مفعّل` };
+  }
+  const requestedMax = max_students == null || Number(max_students) <= 0 ? null : Number(max_students);
+  if (place && requestedMax != null && requestedMax > place.capacity) {
+    throw {
+      status: 400,
+      message: `سعة المجموعة لا يمكن أن تتجاوز سعة المكان "${place.name}" (${place.capacity})`,
+    };
+  }
+  const effectiveMax = place ? (requestedMax == null ? place.capacity : requestedMax) : requestedMax;
+
   // Auto-fill instructor from course if not provided
-  let instructor = instructor_name || '';
+  let instructor = instructorAccount?.name || instructor_name || '';
   if (!instructor) {
     const course = await sql('SELECT instructor FROM courses WHERE id=?', course_id);
     if (course.rows.length > 0) instructor = (course.rows[0] as any).instructor || '';
@@ -189,15 +576,19 @@ export async function createGroup(data: {
   const hasPending = await checkPendingExists(course_id);
   if (hasPending) throw { status: 400, message: 'يوجد مجموعة قيد الانتظار بالفعل لهذا الكورس' };
 
-  const groupStatus = ['active', 'completed', 'cancelled'].includes(status || '') ? status : 'pending';
+  if (status === 'completed') {
+    throw { status: 400, message: 'لا يمكن إنشاء مجموعة منتهية — استخدم زر "إنهاء المجموعة" بعد إضافتها' };
+  }
+  const groupStatus = ['active', 'cancelled'].includes(status || '') ? status : 'pending';
   const hasOverlap = await checkPreventOverlap(course_id);
   const isActive = hasOverlap ? 0 : 1;
 
   const result = await sql(
-    `INSERT INTO groups (course_id, name, zoom_link, end_date, instructor_name, location, max_students, status, is_active)
-     VALUES (?,?,?,?,?,?,?,?,?)`,
+    `INSERT INTO groups (course_id, name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, status, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
     course_id, name, zoom_link || null, end_date || null,
-    instructor, location || null, max_students || null, groupStatus, isActive,
+    instructor, instructorAccount?.id ?? null,
+    location || place?.name || null, place?.id ?? null, effectiveMax, groupStatus, isActive,
   );
   return Number(result.lastInsertRowid);
 }
@@ -207,40 +598,128 @@ export async function updateGroup(id: number, data: {
   zoom_link?: string;
   end_date?: string;
   instructor_name?: string;
+  instructor_user_id?: number | null;
   location?: string;
+  place_id?: number | null;
   max_students?: number | null;
   is_active?: number;
   status?: string;
 }): Promise<void> {
-  // Prevent activating if another active group exists in the same course
-  if (data.is_active !== undefined && Number(data.is_active)) {
-    const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
-    if (grp.rows.length > 0) {
-      const courseId = Number(grp.rows[0].course_id);
-      const hasOverlap = await checkPreventOverlap(courseId, id);
-      if (hasOverlap) {
-        throw { status: 400, message: 'يوجد مجموعة نشطة بالفعل لهذا الكورس، قم بتعطيلها أولاً' };
-      }
-    }
+  if (data.status === 'completed') {
+    throw { status: 400, message: 'لا يمكن تعيين الحالة "مكتملة" يدوياً — استخدم زر "إنهاء المجموعة"' };
   }
-
-  // Prevent setting to pending if another pending group exists
-  if (data.status === 'pending') {
-    const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
-    if (grp.rows.length > 0) {
-      const courseId = Number(grp.rows[0].course_id);
-      const hasPending = await checkPendingExists(courseId, id);
-      if (hasPending) {
-        throw { status: 400, message: 'يوجد مجموعة قيد الانتظار بالفعل لهذا الكورس' };
-      }
-    }
+  const currentGroup = await sql('SELECT status, is_complete, completed_at FROM groups WHERE id=?', id);
+  if (currentGroup.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+  const currentRow = currentGroup.rows[0] as any;
+  if ((currentRow.status === 'completed' || Number(currentRow.is_complete) || currentRow.completed_at) && data.status !== undefined) {
+    throw { status: 400, message: 'المجموعة منتهية — أعد فتحها أولاً قبل تغيير حالتها' };
   }
 
   const sets: string[] = [];
   const params: any[] = [];
-  const fields: (keyof typeof data)[] = ['name', 'zoom_link', 'end_date', 'instructor_name', 'location', 'max_students', 'is_active', 'status'];
+
+  // Changing the place must respect both the new room's capacity and the
+  // students already registered in this group.
+  let effectivePlaceCapacity: number | null = null;
+  let effectivePlaceName = '';
+  const changingPlace = data.place_id !== undefined;
+  if (changingPlace) {
+    const current = await sql(
+      `SELECT g.place_id, c.course_mode FROM groups g
+       JOIN courses c ON g.course_id=c.id WHERE g.id=?`,
+      id,
+    );
+    if (current.rows.length === 0) throw { status: 404, message: 'المجموعة غير موجودة' };
+    const currentPlaceId = (current.rows[0] as any).place_id;
+    const nextPlaceId = data.place_id == null ? null : Number(data.place_id);
+
+    if (nextPlaceId != null && nextPlaceId !== Number(currentPlaceId)) {
+      if ((current.rows[0] as any).course_mode !== 'offline') {
+        throw { status: 400, message: 'اختيار المكان متاح للمجموعات الأوفلاين فقط' };
+      }
+      const place = await loadPlace(nextPlaceId);
+      if (!place) throw { status: 400, message: 'المكان المحدد غير موجود' };
+      if (!place.is_active) throw { status: 400, message: `المكان "${place.name}" غير مفعّل` };
+      const students = await getStudentCount(id);
+      if (students > place.capacity) {
+        throw {
+          status: 400,
+          message: `لا يمكن اختيار المكان "${place.name}" لأن سعته ${place.capacity} وعدد المسجلين في المجموعة ${students}`,
+        };
+      }
+      effectivePlaceCapacity = place.capacity;
+      effectivePlaceName = place.name;
+    } else if (nextPlaceId != null) {
+      const place = await loadPlace(nextPlaceId);
+      if (place) {
+        effectivePlaceCapacity = place.capacity;
+        effectivePlaceName = place.name;
+      }
+    }
+  } else {
+    // Even without touching place_id, a max_students update must respect the
+    // capacity of the place the group is already linked to.
+    const current = await sql(
+      `SELECT p.capacity as place_capacity, p.name as place_name
+       FROM groups g LEFT JOIN places p ON g.place_id=p.id WHERE g.id=?`,
+      id,
+    );
+    if (current.rows.length > 0 && (current.rows[0] as any).place_capacity != null) {
+      effectivePlaceCapacity = Number((current.rows[0] as any).place_capacity);
+      effectivePlaceName = (current.rows[0] as any).place_name || '';
+    }
+  }
+
+  if (data.max_students !== undefined && effectivePlaceCapacity != null) {
+    const requested = data.max_students == null ? null : Number(data.max_students);
+    if (requested != null && requested > effectivePlaceCapacity) {
+      throw {
+        status: 400,
+        message: `سعة المجموعة لا يمكن أن تتجاوز سعة المكان "${effectivePlaceName}" (${effectivePlaceCapacity})`,
+      };
+    }
+    if (requested != null && requested < (await getStudentCount(id))) {
+      throw {
+        status: 400,
+        message: `لا يمكن تقليل سعة المجموعة إلى ${requested} وعدد المسجلين الحالي أكبر`,
+      };
+    }
+  }
+
+  if (data.instructor_user_id !== undefined) {
+    if (data.instructor_user_id == null) {
+      sets.push('instructor_user_id=?');
+      params.push(null);
+    } else {
+      const account = await loadInstructorAccount(Number(data.instructor_user_id));
+      sets.push('instructor_user_id=?', 'instructor_name=?');
+      params.push(account.id, account.name);
+    }
+  }
+
+  const fields: (keyof typeof data)[] = ['name', 'zoom_link', 'end_date', 'instructor_name', 'location', 'place_id', 'max_students', 'is_active', 'status'];
   for (const f of fields) {
-    if (data[f] !== undefined) { sets.push(`${f}=?`); params.push(data[f]); }
+    if (data[f] !== undefined) {
+      if (f === 'place_id') {
+        sets.push('place_id=?');
+        params.push(data.place_id == null ? null : Number(data.place_id));
+        // Picking a place fills the group capacity with the room capacity.
+        if (data.max_students === undefined && effectivePlaceCapacity != null) {
+          sets.push('max_students=?');
+          params.push(effectivePlaceCapacity);
+        }
+        continue;
+      }
+      sets.push(`${f}=?`); params.push(data[f]);
+    }
+  }
+  if (data.place_id !== undefined && effectivePlaceCapacity != null && data.location === undefined) {
+    sets.push('location=?');
+    params.push(effectivePlaceName);
+  }
+  if (data.status !== undefined && data.is_active === undefined) {
+    const isActive = ['active', 'pending'].includes(data.status!) ? 1 : 0;
+    sets.push('is_active=?'); params.push(isActive);
   }
   if (sets.length === 0) return;
   params.push(id);
@@ -271,43 +750,24 @@ export async function batchDeleteGroups(ids: number[]): Promise<number> {
   return deleted;
 }
 
-export async function batchToggleGroups(ids: number[], isActive: boolean): Promise<number> {
-  let updated = 0;
-  const val = isActive ? 1 : 0;
-  for (const id of ids) {
-    try {
-      // Only check overlap when activating
-      if (val) {
-        const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
-        if (grp.rows.length > 0) {
-          const courseId = Number(grp.rows[0].course_id);
-          const hasOverlap = await checkPreventOverlap(courseId, id);
-          if (hasOverlap) continue; // skip — another active group exists
-        }
-      }
-      await sql('UPDATE groups SET is_active=? WHERE id=?', val, id);
-      updated++;
-    } catch { /* skip */ }
-  }
-  return updated;
-}
-
 export async function batchUpdateGroupStatus(ids: number[], status: string): Promise<number> {
-  if (!['active', 'completed', 'cancelled', 'pending'].includes(status)) {
+  if (status === 'completed') {
+    throw { status: 400, message: 'لا يمكن تعيين الحالة "مكتملة" يدوياً — استخدم زر "إنهاء المجموعة"' };
+  }
+  if (!['active', 'cancelled', 'pending'].includes(status)) {
     throw { status: 400, message: `Invalid status: ${status}` };
   }
+  const isActive = ['active', 'pending'].includes(status) ? 1 : 0;
   let updated = 0;
   for (const id of ids) {
     try {
-      // Skip if this would create duplicate pending
-      if (status === 'pending') {
-        const grp = await sql('SELECT course_id FROM groups WHERE id=?', id);
-        if (grp.rows.length > 0) {
-          const hasPending = await checkPendingExists(Number(grp.rows[0].course_id), id);
-          if (hasPending) continue;
-        }
+      const current = await sql('SELECT status, is_complete, completed_at FROM groups WHERE id=?', id);
+      if (current.rows.length > 0) {
+        const row = current.rows[0] as any;
+        if (row.status === 'completed' || Number(row.is_complete) || row.completed_at) continue;
       }
-      await sql('UPDATE groups SET status=? WHERE id=?', status, id);
+      await sql('UPDATE groups SET status=?, is_active=? WHERE id=?', status, isActive, id);
+      await recalcStatus(id);
       updated++;
     } catch { /* skip */ }
   }
@@ -339,8 +799,22 @@ export async function getGroupStudents(groupId: number): Promise<any[]> {
 }
 
 export async function addStudentsToGroup(groupId: number, userIds: number[], movedBy?: number): Promise<number> {
+  await assertGroupOpen(groupId, 'إضافة طلاب');
   const hasStarted = await groupHasStarted(groupId);
   if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل — تمتلك محاضرات مسجلة' };
+
+  const capacity = await getGroupCapacity(groupId);
+  if (capacity.students >= (capacity.max ?? Infinity)) {
+    const where = capacity.place ? ` في المكان "${capacity.place.name}"` : '';
+    throw {
+      status: 400,
+      message: `المجموعة "${capacity.groupName}" ممتلئة (السعة ${capacity.max}${where}) — لا يمكن إضافة طلاب جدد`,
+    };
+  }
+
+  // Get course_id for duplicate check
+  const grpInfo = await sql('SELECT course_id FROM groups WHERE id=?', groupId);
+  const courseGroupId = grpInfo.rows.length > 0 ? Number((grpInfo.rows[0] as any).course_id) : null;
 
   let added = 0;
   for (const userId of userIds) {
@@ -349,15 +823,39 @@ export async function addStudentsToGroup(groupId: number, userIds: number[], mov
       groupId, userId,
     );
     if (exists.rows.length === 0) {
+      // Check if student is already in another group for the same course
+      if (courseGroupId) {
+        const dupCheck = await isStudentInCourseGroup(userId, courseGroupId, groupId);
+        if (dupCheck.inGroup) {
+          console.log(`Skipping user ${userId}: already in group "${dupCheck.groupName}" for course ${courseGroupId}`);
+          continue;
+        }
+      }
+      if (capacity.max != null && capacity.students + added >= capacity.max) {
+        const where = capacity.place ? ` في المكان "${capacity.place.name}"` : '';
+        throw {
+          status: 400,
+          message: `تمت إضافة ${added} طالب ثم امتلأت سعة المجموعة (${capacity.max}${where}). لم يُضف بقية الطلاب`,
+        };
+      }
       await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, userId);
       await addHistory(userId, groupId, 'assigned', movedBy);
       // Get group info for notification
-      const grp = await sql('SELECT name, course_id FROM groups WHERE id=?', groupId);
+      const grp = await sql('SELECT name, course_id, instructor_name, location, start_date, end_date FROM groups WHERE id=?', groupId);
       if (grp.rows.length > 0) {
         const g = grp.rows[0] as any;
         const course = await sql('SELECT title_ar FROM courses WHERE id=?', g.course_id);
         const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
         await createNotification(userId, 'تم إضافتك إلى مجموعة', `تم إضافتك إلى مجموعة "${g.name}" في كورس "${courseName}"`, 'success', `/dashboard`);
+        // External notification (email + telegram)
+        await sendNotification(userId, 'assigned_to_group', {
+          courseTitle: courseName,
+          groupName: g.name || '',
+          instructor: g.instructor_name || undefined,
+          location: g.location || undefined,
+          startDate: g.start_date || undefined,
+          endDate: g.end_date || undefined,
+        }).catch(e => console.error('[Notify] assigned_to_group failed:', e.message));
       }
       added++;
     }
@@ -366,11 +864,25 @@ export async function addStudentsToGroup(groupId: number, userIds: number[], mov
 }
 
 export async function removeStudentFromGroup(groupId: number, userId: number, movedBy?: number): Promise<void> {
+  // Get group info before removal for notification
+  const grp = await sql('SELECT name, course_id FROM groups WHERE id=?', groupId);
   await sql('DELETE FROM group_students WHERE group_id=? AND user_id=?', groupId, userId);
   await addHistory(userId, groupId, 'removed', movedBy);
+  // External notification (email + telegram)
+  if (grp.rows.length > 0) {
+    const g = grp.rows[0] as any;
+    const course = await sql('SELECT title_ar FROM courses WHERE id=?', g.course_id);
+    const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
+    await sendNotification(userId, 'removed_from_group', {
+      courseTitle: courseName,
+      groupName: g.name || '',
+    }).catch(e => console.error('[Notify] removed_from_group failed:', e.message));
+  }
 }
 
 export async function moveStudent(sourceGroupId: number, userId: number, targetGroupId: number, movedBy?: number): Promise<void> {
+  await assertGroupOpen(sourceGroupId, 'نقل الطالب من هذه المجموعة');
+  await assertGroupOpen(targetGroupId, 'النقل إلى هذه المجموعة');
   // Verify source group exists
   const src = await sql('SELECT course_id FROM groups WHERE id=?', sourceGroupId);
   if (src.rows.length === 0) throw { status: 404, message: 'Source group not found' };
@@ -396,6 +908,21 @@ export async function moveStudent(sourceGroupId: number, userId: number, targetG
   await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', targetGroupId, userId);
   await addHistory(userId, sourceGroupId, 'moved_from', movedBy);
   await addHistory(userId, targetGroupId, 'moved_to', movedBy);
+
+  // External notification (email + telegram)
+  const srcGrp = await sql('SELECT name, course_id FROM groups WHERE id=?', sourceGroupId);
+  const tgtGrp = await sql('SELECT name FROM groups WHERE id=?', targetGroupId);
+  if (srcGrp.rows.length > 0 && tgtGrp.rows.length > 0) {
+    const srcName = (srcGrp.rows[0] as any).name || '';
+    const tgtName = (tgtGrp.rows[0] as any).name || '';
+    const course = await sql('SELECT title_ar FROM courses WHERE id=?', (srcGrp.rows[0] as any).course_id);
+    const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
+    await sendNotification(userId, 'moved_to_group', {
+      courseTitle: courseName,
+      oldGroupName: srcName,
+      newGroupName: tgtName,
+    }).catch(e => console.error('[Notify] moved_to_group failed:', e.message));
+  }
 }
 
 // ──────────────────────────────────────────────
@@ -404,10 +931,12 @@ export async function moveStudent(sourceGroupId: number, userId: number, targetG
 
 export async function getMyGroups(userId: number): Promise<any[]> {
   const result = await sql(
-    `SELECT g.*, c.id as course_id, c.title_ar, c.title_en, c.image_url
+    `SELECT g.*, c.id as course_id, c.title_ar, c.title_en, c.image_url,
+            p.name as place_name, p.capacity as place_capacity
      FROM group_students gs
      JOIN groups g ON gs.group_id=g.id
      JOIN courses c ON g.course_id=c.id
+     LEFT JOIN places p ON g.place_id=p.id
      WHERE gs.user_id=?
      ORDER BY g.created_at DESC`,
     userId,
@@ -468,16 +997,18 @@ export async function autoAssignStudent(studentId: number, courseId: number): Pr
     maxStudents = Math.min(maxStudents, Number(course.rows[0].max_students));
   }
 
-  // Find an available group (active, has capacity, no lecture started yet)
+  // Find an available group (active, has capacity, no lecture completed yet).
+  // The effective capacity is the room capacity when the group is linked to a
+  // place (never above it), otherwise the group's own max_students.
   const avail = await sql(
     `SELECT g.id FROM groups g
+     LEFT JOIN places p ON g.place_id=p.id
      WHERE g.course_id=? AND g.is_active=1 AND g.status IN ('pending','active')
-     AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) < COALESCE(g.max_students, ?)
-     AND (
-       (SELECT MIN(date) FROM lectures WHERE group_id=g.id AND date IS NOT NULL) IS NULL
-       OR
-       (SELECT MIN(date) FROM lectures WHERE group_id=g.id AND date IS NOT NULL) >= date('now')
-     )
+     AND (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) <
+         CASE WHEN p.capacity IS NOT NULL
+              THEN MIN(COALESCE(g.max_students, p.capacity), p.capacity)
+              ELSE COALESCE(g.max_students, ?) END
+     AND (SELECT COUNT(*) FROM lectures WHERE group_id=g.id AND is_completed=1) = 0
      ORDER BY (SELECT COUNT(*) FROM group_students WHERE group_id=g.id) ASC
      LIMIT 1`,
     courseId, maxStudents,
@@ -505,11 +1036,24 @@ export async function autoAssignStudent(studentId: number, courseId: number): Pr
   await addHistory(studentId, groupId, 'auto_assigned');
 
   // Notify student
-  const grp = await sql('SELECT name FROM groups WHERE id=?', groupId);
+  const grp = await sql('SELECT name, course_id, instructor_name, location, start_date, end_date FROM groups WHERE id=?', groupId);
   const groupName = grp.rows.length > 0 ? (grp.rows[0] as any).name : '';
   const crs = await sql('SELECT title_ar FROM courses WHERE id=?', courseId);
   const courseName = crs.rows.length > 0 ? (crs.rows[0] as any).title_ar : '';
   await createNotification(studentId, 'تم تسكينك في مجموعة', `تم إضافتك إلى مجموعة "${groupName}" في كورس "${courseName}"`, 'success', '/dashboard');
+
+  // External notification (email + telegram)
+  if (grp.rows.length > 0) {
+    const g = grp.rows[0] as any;
+    await sendNotification(studentId, 'assigned_to_group', {
+      courseTitle: courseName,
+      groupName: g.name || '',
+      instructor: g.instructor_name || undefined,
+      location: g.location || undefined,
+      startDate: g.start_date || undefined,
+      endDate: g.end_date || undefined,
+    }).catch(e => console.error('[Notify] assigned_to_group (auto) failed:', e.message));
+  }
 
   return { assigned: true, groupId };
 }
@@ -564,32 +1108,76 @@ export async function getUnassignedByCourse(courseId: number): Promise<any[]> {
 }
 
 export async function batchAssignStudents(userIds: number[], groupId: number, movedBy?: number): Promise<number> {
+  await assertGroupOpen(groupId, 'تسكين الطلاب');
   const hasStarted = await groupHasStarted(groupId);
   if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل' };
+
+  const capacity = await getGroupCapacity(groupId);
+  if (capacity.students >= (capacity.max ?? Infinity)) {
+    const where = capacity.place ? ` في المكان "${capacity.place.name}"` : '';
+    throw {
+      status: 400,
+      message: `المجموعة "${capacity.groupName}" ممتلئة (السعة ${capacity.max}${where}) — لا يمكن إضافة طلاب جدد`,
+    };
+  }
+
+  // Get course_id for duplicate check
+  const grpInfo = await sql('SELECT course_id FROM groups WHERE id=?', groupId);
+  const courseGroupId = grpInfo.rows.length > 0 ? Number((grpInfo.rows[0] as any).course_id) : null;
 
   let assigned = 0;
   for (const userId of userIds) {
     try {
       const exists = await sql('SELECT 1 FROM group_students WHERE group_id=? AND user_id=?', groupId, userId);
       if (exists.rows.length === 0) {
+        // Check if student is already in another group for the same course
+        if (courseGroupId) {
+          const dupCheck = await isStudentInCourseGroup(userId, courseGroupId, groupId);
+          if (dupCheck.inGroup) {
+            console.log(`Skipping user ${userId}: already in group "${dupCheck.groupName}" for course ${courseGroupId}`);
+            continue;
+          }
+        }
+        if (capacity.max != null && capacity.students + assigned >= capacity.max) {
+          const where = capacity.place ? ` في المكان "${capacity.place.name}"` : '';
+          throw {
+            status: 400,
+            message: `تم تسكين ${assigned} طالب ثم امتلأت سعة المجموعة (${capacity.max}${where}). لم يُسكن بقية الطلاب`,
+          };
+        }
         await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, userId);
         await addHistory(userId, groupId, 'batch_assigned', movedBy);
         assigned++;
       }
-    } catch { /* skip duplicate */ }
+    } catch (err: any) {
+      if (err?.status === 400) throw err;
+      /* skip duplicate */
+    }
   }
   return assigned;
 }
 
 export async function assignStudentToGroup(userId: number, groupId: number, movedBy?: number): Promise<void> {
+  await assertGroupOpen(groupId, 'تسكين الطالب');
   const hasStarted = await groupHasStarted(groupId);
   if (hasStarted) throw { status: 400, message: 'لا يمكن التسكين في مجموعة بدأت بالفعل' };
+
+  // Check if student is already in another group for the same course
+  const grpInfo = await sql('SELECT course_id FROM groups WHERE id=?', groupId);
+  if (grpInfo.rows.length > 0) {
+    const courseGroupId = Number((grpInfo.rows[0] as any).course_id);
+    const dupCheck = await isStudentInCourseGroup(userId, courseGroupId, groupId);
+    if (dupCheck.inGroup) {
+      throw { status: 400, message: `الطالب مسجل بالفعل في مجموعة "${dupCheck.groupName}" لهذا الكورس` };
+    }
+  }
 
   const exists = await sql(
     'SELECT 1 FROM group_students WHERE group_id=? AND user_id=?',
     groupId, userId,
   );
   if (exists.rows.length > 0) throw { status: 400, message: 'Student already in this group' };
+  await assertCapacity(groupId, 1);
   await sql('INSERT INTO group_students (group_id, user_id) VALUES (?,?)', groupId, userId);
   await addHistory(userId, groupId, 'assigned', movedBy);
 }
@@ -641,6 +1229,7 @@ export async function addLecture(groupId: number, data: {
   zoom_link?: string;
 }): Promise<number> {
   if (!data.date) throw { status: 400, message: 'Lecture date required' };
+  await assertGroupOpen(groupId, 'إضافة محاضرة');
 
   // Enforce date ordering — new lecture must be >= last lecture's date
   const lastDate = await sql(
@@ -661,6 +1250,25 @@ export async function addLecture(groupId: number, data: {
     data.topic || '', data.location || '', data.zoom_link || null, nextSort,
   );
   await recalcStatus(groupId);
+
+  // External notification to all group students (email + telegram)
+  const grp = await sql('SELECT name, course_id FROM groups WHERE id=?', groupId);
+  if (grp.rows.length > 0) {
+    const g = grp.rows[0] as any;
+    const course = await sql('SELECT title_ar FROM courses WHERE id=?', g.course_id);
+    const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
+    await notifyGroupStudentsExt(groupId, 'lecture_added', {
+      courseTitle: courseName,
+      groupName: g.name || '',
+      topic: data.topic || '',
+      date: data.date || '',
+      timeFrom: data.time_from || undefined,
+      timeTo: data.time_to || undefined,
+      location: data.location || undefined,
+      zoomLink: data.zoom_link || undefined,
+    }).catch(e => console.error('[Notify] lecture_added failed:', e.message));
+  }
+
   return Number(result.lastInsertRowid);
 }
 
@@ -746,6 +1354,23 @@ export async function toggleLectureComplete(groupId: number, lectureId: number):
     newVal, newVal ? new Date().toISOString() : null, lectureId,
   );
   await recalcStatus(groupId);
+
+  // External notification when lecture is completed (email + telegram)
+  if (newVal) {
+    const lec = await sql('SELECT topic FROM lectures WHERE id=?', lectureId);
+    const grp = await sql('SELECT name, course_id FROM groups WHERE id=?', groupId);
+    if (lec.rows.length > 0 && grp.rows.length > 0) {
+      const g = grp.rows[0] as any;
+      const course = await sql('SELECT title_ar FROM courses WHERE id=?', g.course_id);
+      const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
+      await notifyGroupStudentsExt(groupId, 'lecture_completed', {
+        courseTitle: courseName,
+        groupName: g.name || '',
+        topic: (lec.rows[0] as any).topic || '',
+      }).catch(e => console.error('[Notify] lecture_completed failed:', e.message));
+    }
+  }
+
   return newVal;
 }
 

@@ -6,33 +6,27 @@ import { useState } from 'react';
 import { useAdminAuth } from '../lib/auth';
 import { useDarkMode } from './DarkModeProvider';
 import { useBranding } from './BrandingProvider';
+import NotificationBell from './NotificationBell';
 
 const allSections = [
   { href: '/', label: 'لوحة التحكم', section: 'dashboard', icon: '📊' },
   { href: '/courses', label: 'الكورسات', section: 'courses', icon: '📚' },
+  { href: '/proposals', label: 'مقترحات الكورسات', section: 'proposals', icon: '📝' },
   { href: '/orders', label: 'الطلبات', section: 'orders', icon: '📋' },
   { href: '/students', label: 'الطلاب', section: 'students', icon: '👥' },
   { href: '/certificates', label: 'الشهادات', section: 'certificates', icon: '🎓' },
   { href: '/financials', label: 'المالية', section: 'financials', icon: '💰' },
-  { href: '/employees', label: 'الموظفين', section: 'employees', icon: '🔐' },
+  { href: '/permissions', label: 'المستخدمون والصلاحيات', section: 'employees', icon: '🔐' },
   { href: '/settings', label: 'الإعدادات', section: 'settings', icon: '⚙️' },
 ];
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, logout } = useAdminAuth();
+  const { user, logout, can } = useAdminAuth();
   const { dark, toggle: toggleDark } = useDarkMode();
   const { systemName, logoHeader } = useBranding();
   const [open, setOpen] = useState(false);
   const isActive = (href: string) => pathname === href || (href !== '/' && pathname?.startsWith(href + '/'));
-
-  const canView = (section: string) => {
-    if (!user) return false;
-    if (user.role === 'admin') return true;
-    if (section === 'dashboard') return true;
-    if (section === 'students' || section === 'employees' || section === 'settings') return false;
-    return true;
-  };
 
   return (
     <>
@@ -51,13 +45,16 @@ export default function Sidebar() {
             ✕
           </button>
         </div>
-        <div className="px-4 pb-2 -mt-1">
-          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>{user?.name} · {user?.role}</p>
+        <div className="px-4 pb-2 -mt-1 flex items-center justify-between gap-2">
+          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
+            {user?.name} · {user?.role === 'admin' ? 'مدير النظام' : user?.role === 'employee' ? 'موظف' : user?.role}
+          </p>
+          <NotificationBell />
         </div>
 
         <nav className="p-2 space-y-1">
           {allSections.map((item) => {
-            if (!canView(item.section)) return null;
+            if (!can(item.section)) return null;
             return (
               <Link key={item.href} href={item.href!} onClick={() => setOpen(false)}
                 className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${isActive(item.href!) ? 'font-medium shadow-sm' : 'hover:bg-[var(--bg)]'}`}

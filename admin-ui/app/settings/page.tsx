@@ -7,7 +7,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'ai' | 'autogroup' | 'whatsapp'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -36,12 +36,40 @@ export default function SettingsPage() {
     curlInput: '',
   });
 
-  const [waStatus, setWaStatus] = useState<{ connected: boolean; ready: boolean; phone: string | null; uptime: number; messagesSent: number; messagesFailed: number } | null>(null);
-  const [waQR, setWaQR] = useState<string | null>(null);
-  const [waQRAvailable, setWaQRAvailable] = useState(false);
-  const [waQRAge, setWaQRAge] = useState<number>(0);
-  const [waLoading, setWaLoading] = useState(false);
-  const [waAction, setWaAction] = useState('');
+  // Notification Settings
+  const [notifForm, setNotifForm] = useState({
+    smtpUser: '', smtpPass: '', smtpFrom: '',
+    telegramBotToken: '', telegramBotUsername: '',
+  });
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifTesting, setNotifTesting] = useState('');
+  const [notifTestEmail, setNotifTestEmail] = useState('');
+
+  // Certificate Settings
+  const [certSettings, setCertSettings] = useState({
+    autoIssue: true,
+    requireAttendance: true,
+    minAttendancePercent: 80,
+    certificateTitle: 'شهادة إتمام',
+    certificateTitleEn: 'Certificate of Completion',
+    directorName: '',
+    directorTitle: 'مدير وحدة التدريب و التطوير',
+    footerText: 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
+  });
+  const [certSaving, setCertSaving] = useState(false);
+
+  // Survey Settings (edit-plan.md §4.4)
+  const [surveySettings, setSurveySettings] = useState({ openDays: 30, reminder1Days: 2, reminder2Days: 5 });
+  const [surveySaving, setSurveySaving] = useState(false);
+  const [surveyLoading, setSurveyLoading] = useState(false);
+
+  // Places (training rooms)
+  const [places, setPlaces] = useState<any[]>([]);
+  const [placesLoading, setPlacesLoading] = useState(false);
+  const [placeModal, setPlaceModal] = useState(false);
+  const [placeId, setPlaceId] = useState<number | null>(null);
+  const [placeForm, setPlaceForm] = useState({ name: '', capacity: '' });
+  const [placeSaving, setPlaceSaving] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -64,6 +92,12 @@ export default function SettingsPage() {
         // ai-settings may be 403 for employees — ignore silently
       }
       try {
+        const p = await api('/api/places');
+        if (Array.isArray(p)) setPlaces(p);
+      } catch {
+        // places may be unavailable for restricted roles — ignore silently
+      }
+      try {
         const ag = await api('/api/settings/auto-group');
         if (ag && ag.threshold) setThreshold(ag.threshold);
       } catch {
@@ -72,65 +106,6 @@ export default function SettingsPage() {
       setLoading(false);
     })();
   }, []);
-
-  const fetchWAStatus = async () => {
-    try {
-      const status = await api('/api/whatsapp/status');
-      setWaStatus(status);
-    } catch {
-      setWaStatus(null);
-    }
-  };
-
-  const fetchWAQR = async () => {
-    try {
-      const data = await api('/api/whatsapp/bot/qr');
-      setWaQRAvailable(data.available);
-      setWaQR(data.qr || null);
-      setWaQRAge(data.age || 0);
-    } catch (err: any) {
-      setWaQRAvailable(false);
-      setWaQR(null);
-      setWaQRAge(0);
-      const msg = err.message || '';
-      if (msg.includes('503') || msg.includes('failed') || msg.includes('timeout')) {
-        setWaAction('⚠️ البوت غير متصل حالياً. تحقق من تشغيل خدمة الواتساب.');
-        setTimeout(() => setWaAction(''), 6000);
-      }
-    }
-  };
-
-  const loadWhatsApp = async () => {
-    setWaLoading(true);
-    await Promise.all([fetchWAStatus(), fetchWAQR()]);
-    setWaLoading(false);
-  };
-
-  useEffect(() => {
-    if (tab !== 'whatsapp') return;
-    const interval = setInterval(async () => {
-      if (waStatus?.connected) return;
-      await fetchWAStatus();
-      await fetchWAQR();
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [tab, waStatus?.connected]);
-
-  const handleWALogout = async () => {
-    if (!confirm('هل أنت متأكد من فصل الاتصال؟ سيظهر QR جديد لإعادة الاتصال.')) return;
-    setWaAction('جاري فصل الاتصال...');
-    try {
-      await api('/api/whatsapp/bot/logout', { method: 'POST', body: JSON.stringify({}) });
-      setWaAction('تم الفصل. جاري إعادة الاتصال...');
-      setTimeout(async () => {
-        await loadWhatsApp();
-        setWaAction('');
-      }, 5000);
-    } catch {
-      setWaAction('فشل فصل الاتصال');
-      setTimeout(() => setWaAction(''), 3000);
-    }
-  };
 
   const retry = () => {
     setError('');
@@ -208,6 +183,131 @@ export default function SettingsPage() {
     }
     setThresholdSaving(false);
     setTimeout(() => setMsg(''), 3000);
+  };
+
+  // ─── Notification Settings Functions ────────────
+  const loadNotification = async () => {
+    try {
+      const data = await api('/api/settings/notification');
+      if (data && typeof data === 'object') {
+        setNotifForm({
+          smtpUser: data.smtpUser || '',
+          smtpPass: '',
+          smtpFrom: data.smtpFrom || '',
+          telegramBotToken: '',
+          telegramBotUsername: data.telegramBotUsername || '',
+        });
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'notification') loadNotification();
+  }, [tab]);
+
+  const saveNotification = async () => {
+    setNotifSaving(true);
+    try {
+      await api('/api/settings/notification', { method: 'PUT', body: JSON.stringify(notifForm) });
+      setMsg('تم حفظ إعدادات الإشعارات');
+    } catch {
+      setMsg('فشل حفظ إعدادات الإشعارات');
+    }
+    setNotifSaving(false);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const testEmail = async () => {
+    const email = notifTestEmail || notifForm.smtpUser;
+    if (!email) { setMsg('أدخل بريد إلكتروني للاختبار'); setTimeout(() => setMsg(''), 3000); return; }
+    setNotifTesting('email');
+    try {
+      await api('/api/settings/notification/test-email', { method: 'POST', body: JSON.stringify({ testEmail: email }) });
+      setMsg('تم إرسال إيميل الاختبار — تحقق من صندوق الوارد');
+    } catch (err: any) {
+      setMsg(err.message || 'فشل إرسال إيميل الاختبار');
+    }
+    setNotifTesting('');
+    setTimeout(() => setMsg(''), 5000);
+  };
+
+  const testTelegram = async () => {
+    setNotifTesting('telegram');
+    try {
+      const res = await api('/api/settings/notification/test-telegram', { method: 'POST' });
+      setMsg(res.message || 'تم اختبار تيليجرام');
+    } catch (err: any) {
+      setMsg(err.message || 'فشل اختبار تيليجرام');
+    }
+    setNotifTesting('');
+    setTimeout(() => setMsg(''), 5000);
+  };
+
+  // ─── Certificate Settings Functions ────────────
+  const loadCertificateSettings = async () => {
+    try {
+      const data = await api('/api/settings/certificate');
+      if (data && typeof data === 'object') {
+        setCertSettings(prev => ({ ...prev, ...data }));
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'certificates') loadCertificateSettings();
+  }, [tab]);
+
+  const saveCertificateSettings = async () => {
+    setCertSaving(true);
+    try {
+      await api('/api/settings/certificate', { method: 'PUT', body: JSON.stringify(certSettings) });
+      setMsg('تم حفظ إعدادات الشهادة');
+    } catch {
+      setMsg('فشل حفظ إعدادات الشهادة');
+    }
+    setCertSaving(false);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  // ── Survey settings (edit-plan.md §4.4) ──────────────────────
+  const loadSurveySettings = async () => {
+    setSurveyLoading(true);
+    try {
+      const data = await api('/api/settings/survey');
+      if (data && typeof data === 'object') {
+        setSurveySettings(prev => ({ ...prev, ...data }));
+      }
+    } catch {
+      // keep defaults
+    } finally {
+      setSurveyLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === 'survey') loadSurveySettings();
+  }, [tab]);
+
+  const saveSurveySettings = async () => {
+    if (surveySaving) return;
+    setSurveySaving(true);
+    try {
+      const res: any = await api('/api/settings/survey', {
+        method: 'PUT',
+        body: JSON.stringify(surveySettings),
+      });
+      if (res?.settings) setSurveySettings(prev => ({ ...prev, ...res.settings }));
+      setMsg('تم حفظ إعدادات الاستبيان');
+    } catch (err: any) {
+      setMsg(err?.message || 'فشل حفظ إعدادات الاستبيان');
+    } finally {
+      setSurveySaving(false);
+      setTimeout(() => setMsg(''), 3000);
+    }
   };
 
   const PROVIDER_DEFAULTS: Record<string, { name: string; apiUrl: string; models: string[]; placeholder: string }> = {
@@ -382,6 +482,90 @@ export default function SettingsPage() {
     })();
   };
 
+  // ─── Places (rooms) ────────────
+  const loadPlaces = async () => {
+    setPlacesLoading(true);
+    try {
+      const data = await api('/api/places');
+      if (Array.isArray(data)) setPlaces(data);
+    } catch {
+      setMsg('فشل تحميل الأماكن');
+      setTimeout(() => setMsg(''), 3000);
+    }
+    setPlacesLoading(false);
+  };
+
+  const openAddPlace = () => {
+    setPlaceId(null);
+    setPlaceForm({ name: '', capacity: '' });
+    setPlaceModal(true);
+  };
+
+  const startEditPlace = (place: any) => {
+    setPlaceId(place.id);
+    setPlaceForm({ name: place.name, capacity: String(place.capacity) });
+    setPlaceModal(true);
+  };
+
+  const savePlace = async () => {
+    if (placeSaving) return;
+    const name = placeForm.name.trim();
+    const capacity = Number(placeForm.capacity || 0);
+    if (!name) { setMsg('اسم المكان مطلوب'); setTimeout(() => setMsg(''), 3000); return; }
+    if (!Number.isInteger(capacity) || capacity <= 0) {
+      setMsg('السعة يجب أن تكون رقماً أكبر من صفر');
+      setTimeout(() => setMsg(''), 3000);
+      return;
+    }
+    setPlaceSaving(true);
+    try {
+      if (placeId) {
+        await api(`/api/places/${placeId}`, {
+          method: 'PUT', body: JSON.stringify({ name, capacity }),
+        });
+        setMsg('تم تحديث المكان');
+      } else {
+        await api('/api/places', {
+          method: 'POST', body: JSON.stringify({ name, capacity }),
+        });
+        setMsg('تم إضافة المكان');
+      }
+      setPlaceModal(false);
+      setPlaceId(null);
+      setPlaceForm({ name: '', capacity: '' });
+      await loadPlaces();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل حفظ المكان');
+    }
+    setPlaceSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const togglePlaceActive = async (place: any) => {
+    try {
+      await api(`/api/places/${place.id}`, {
+        method: 'PUT', body: JSON.stringify({ is_active: place.is_active ? 0 : 1 }),
+      });
+      setMsg(place.is_active ? 'تم تعطيل المكان' : 'تم تفعيل المكان');
+      await loadPlaces();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل تغيير حالة المكان');
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const deletePlace = async (place: any) => {
+    if (!confirm(`تأكيد حذف المكان "${place.name}"؟ سيُعطَّل فقط إذا كان مستخدماً في مجموعات.`)) return;
+    try {
+      const res = await api(`/api/places/${place.id}`, { method: 'DELETE' });
+      setMsg(res.message || 'تم حذف المكان');
+      await loadPlaces();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل حذف المكان');
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
   if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={retry} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
 
@@ -392,11 +576,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'ai', 'autogroup', 'whatsapp'] as const).map(t => (
-          <button key={t} onClick={() => { setTab(t); if (t === 'whatsapp') loadWhatsApp(); }}
+        {(['branding', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : 'الواتساب'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : '⭐ الاستبيان'}
           </button>
         ))}
       </div>
@@ -520,6 +704,90 @@ export default function SettingsPage() {
         </div>
       )}
 
+      {/* Places (rooms) */}
+      {tab === 'places' && (
+        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📍 الأماكن (القاعات)</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>أضف أماكن التدريب وحدد سعتها. تُستخدم الأماكن في المجموعات الأوفلاين فقط، والسعة حد أقصى صارم للتسكين.</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={loadPlaces} disabled={placesLoading}
+                className="px-4 py-2 rounded-xl text-sm border disabled:opacity-50"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                {placesLoading ? 'جاري التحديث...' : '🔄 تحديث'}
+              </button>
+              <button onClick={openAddPlace}
+                className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة مكان</button>
+            </div>
+          </div>
+
+          {places.length === 0 && !placesLoading && (
+            <div className="text-center py-10 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-3xl mb-2">🏫</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد أماكن بعد. أضف أول مكان لتبدأ ربط المجموعات الأوفلاين به.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {places.map((place: any) => (
+              <div key={place.id} className="flex items-center justify-between gap-3 p-3 rounded-xl flex-wrap" style={{ backgroundColor: 'var(--bg)' }}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xl">📍</span>
+                  <div className="min-w-0">
+                    <p className="font-medium truncate" style={{ color: 'var(--text)' }}>{place.name}</p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      السعة: {place.capacity} طالب
+                      {place.groups_count > 0 ? ` • مستخدم في ${place.groups_count} مجموعة` : ' • غير مستخدم'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-[11px] px-2 py-1 rounded-lg ${place.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+                    {place.is_active ? 'مفعّل' : 'معطّل'}
+                  </span>
+                  <button onClick={() => startEditPlace(place)}
+                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">تعديل</button>
+                  <button onClick={() => togglePlaceActive(place)}
+                    className="text-xs px-2 py-1 rounded-lg border"
+                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                    {place.is_active ? 'تعطيل' : 'تفعيل'}
+                  </button>
+                  <button onClick={() => deletePlace(place)}
+                    className="text-red-500 text-xs px-1">حذف</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            ℹ️ المكان المستخدم في مجموعات سابقة لا يُحذف نهائياً — يُعطَّل فقط ليختفي من قائمة المجموعات الجديدة ويبقى في المجموعات القديمة.
+          </p>
+
+          <Modal open={placeModal} onClose={() => { setPlaceModal(false); setPlaceId(null); }} title={placeId ? 'تعديل المكان' : 'إضافة مكان جديد'}>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم المكان</label>
+                <input placeholder="مثال: قاعة التدريب الكبرى" value={placeForm.name}
+                  onChange={e => setPlaceForm({ ...placeForm, name: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للعدد (السعة)</label>
+                <input type="number" min="1" inputMode="numeric" placeholder="مثال: 30" value={placeForm.capacity}
+                  onChange={e => setPlaceForm({ ...placeForm, capacity: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <button onClick={savePlace} disabled={placeSaving}
+                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium disabled:opacity-50">
+                {placeSaving ? 'جاري الحفظ...' : 'حفظ'}
+              </button>
+            </div>
+          </Modal>
+        </div>
+      )}
+
       {/* Auto-Group Threshold */}
       {tab === 'autogroup' && (
         <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
@@ -538,121 +806,289 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* WhatsApp Bot */}
-      {tab === 'whatsapp' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>إدارة الـ WhatsApp Bot</h2>
-
-          {/* Status Card */}
-          <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text)' }}>حالة الاتصال</h3>
-              <button onClick={loadWhatsApp} disabled={waLoading}
-                className="px-3 py-1.5 rounded-lg text-xs border"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                {waLoading ? 'جاري...' : '🔄 تحديث'}
+      {/* Notification Settings */}
+      {tab === 'notification' && (
+        <div className="space-y-4">
+          {/* SMTP Settings */}
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📧 إعدادات البريد الإلكتروني (SMTP)</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>إعدادات الخادم لإرسال الإشعارات والرموز عبر البريد الإلكتروني.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>اسم المستخدم (البريد)</label>
+                <input value={notifForm.smtpUser} onChange={e => setNotifForm(p => ({ ...p, smtpUser: e.target.value }))}
+                  placeholder="your-email@gmail.com"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>كلمة المرور (App Password)</label>
+                <input type="password" value={notifForm.smtpPass} onChange={e => setNotifForm(p => ({ ...p, smtpPass: e.target.value }))}
+                  placeholder="••••••••••"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الاسم المعروض (From)</label>
+                <input value={notifForm.smtpFrom} onChange={e => setNotifForm(p => ({ ...p, smtpFrom: e.target.value }))}
+                  placeholder="&quot;وحدة التدريب و التطوير&quot; &lt;your-email@gmail.com&gt;"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button onClick={saveNotification} disabled={notifSaving}
+                className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                {notifSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+              </button>
+              <button onClick={testEmail} disabled={notifTesting === 'email'}
+                className="px-4 py-2.5 rounded-xl text-sm border font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                {notifTesting === 'email' ? 'جاري الإرسال...' : '📧 اختبار الإيميل'}
               </button>
             </div>
-
-            {waStatus ? (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded-full ${waStatus.connected ? 'bg-green-500' : 'bg-red-500'}`} />
-                  <span className="text-sm font-medium" style={{ color: 'var(--text)' }}>
-                    {waStatus.connected ? 'متصل' : 'غير متصل'}
-                  </span>
-                  {waStatus.ready && (
-                    <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">جاهز</span>
-                  )}
-                </div>
-                {waStatus.phone && (
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    📱 رقم الاتصال: <span className="font-mono font-bold" style={{ color: 'var(--text)' }}>{waStatus.phone}</span>
-                  </p>
-                )}
-                <div className="flex gap-4 text-xs" style={{ color: 'var(--text-muted)' }}>
-                  <span>⏱ التشغيل: {Math.floor(waStatus.uptime / 3600)}h {Math.floor((waStatus.uptime % 3600) / 60)}m</span>
-                  <span>📤 مرسل: {waStatus.messagesSent}</span>
-                  <span>❌ فاشل: {waStatus.messagesFailed}</span>
-                </div>
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>جاري التحقق من الحالة...</p>
-            )}
+            <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>للحصول على App Password (Gmail):</strong></p>
+              <ul className="mt-1 space-y-1 list-disc list-inside">
+                <li>افتح حساب Google → Security → 2-Step Verification (فعّلها)</li>
+                <li>ثم Security → App passwords → أنشئ كلمة مرور جديدة</li>
+                <li>انسخ الكود (16 حرف) وضعه في حقل كلمة المرور</li>
+              </ul>
+            </div>
           </div>
 
-          {/* QR Code Section */}
-          <div className="rounded-xl p-4" style={{ backgroundColor: 'var(--bg)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-bold text-sm" style={{ color: 'var(--text)' }}>كود الاتصال (QR)</h3>
-              <button onClick={fetchWAQR} disabled={waLoading}
-                className="px-3 py-1.5 rounded-lg text-xs border"
-                style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
-                🔄 تحديث QR
+          {/* Telegram Settings */}
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📱 إعدادات تيليجرام (Telegram Bot)</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>إعدادات بوت تيليجرام لإرسال الإشعارات والرموز. أنشئ بوت عبر @BotFather على تيليجرام.</p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Bot Token</label>
+                <input type="password" value={notifForm.telegramBotToken} onChange={e => setNotifForm(p => ({ ...p, telegramBotToken: e.target.value }))}
+                  placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Bot Username</label>
+                <input value={notifForm.telegramBotUsername} onChange={e => setNotifForm(p => ({ ...p, telegramBotUsername: e.target.value }))}
+                  placeholder="MyBot_username"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 pt-2">
+              <button onClick={saveNotification} disabled={notifSaving}
+                className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                {notifSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+              </button>
+              <button onClick={testTelegram} disabled={notifTesting === 'telegram'}
+                className="px-4 py-2.5 rounded-xl text-sm border font-medium disabled:opacity-50"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                {notifTesting === 'telegram' ? 'جاري الفحص...' : '📱 اختبار تيليجرام'}
               </button>
             </div>
+            <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>لإنشاء بوت تيليجرام:</strong></p>
+              <ul className="mt-1 space-y-1 list-disc list-inside">
+                <li>افتح تيليجرام → ابحث عن @BotFather → /newbot</li>
+                <li>أدخل اسم البوت ثم username فريد</li>
+                <li>انسخ الـ Token وضعه في الحقل أعلاه</li>
+                <li>لربط حساب مستخدم: المستخدم يفتح https://t.me/&lt;username&gt;?start=&lt;userId&gt;</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
-            {waQRAvailable && waQR ? (
-              <div className="flex flex-col items-center gap-3">
-                <p className="text-xs text-center" style={{ color: 'var(--text-muted)' }}>
-                  افتح واتساب → الأجهزة المرتبطة → ربط برقم الهاتف → امسح الكود
-                </p>
-                <div className="p-3 bg-white rounded-xl" style={{ border: '4px solid #25D366' }}>
-                  <img src={waQR} alt="WhatsApp QR" className="w-64 h-64" />
+      {/* Certificate Settings */}
+      {tab === 'certificates' && (
+        <div className="space-y-4">
+          {/* Auto-Issue Settings */}
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>🎓 إعدادات الإصدار التلقائي</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تحكم في شروط إصدار الشهادات التلقائية عند اكتمال المجموعة.</p>
+            </div>
+
+            <div className="space-y-4">
+              {/* Auto Issue Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <div>
+                  <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>الإصدار التلقائي</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>إصدار شهادة تلقائياً عند اكتمال جميع المحاضرات في المجموعة</p>
                 </div>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>🔄 يتحدث تلقائياً كل 8 ثوانٍ{waQRAge > 0 ? ` • عمر الكود: ${waQRAge}ث` : ''}</p>
+                <button onClick={() => setCertSettings(p => ({ ...p, autoIssue: !p.autoIssue }))}
+                  className={`w-12 h-6 rounded-full relative transition-colors ${certSettings.autoIssue ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${certSettings.autoIssue ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </button>
               </div>
-            ) : (
-              <div className="text-center py-6">
-                {waStatus?.connected ? (
-                  <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
-                    ✅ البوت متصل — لا حاجة لـ QR<br />
-                    <span className="text-xs">لفصل الاتصال والاتصال برقم جديد، اضغط "فصل الاتصال"</span>
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    <p className="text-sm" style={{ color: '#dc2626' }}>
-                      ❌ لا يمكن الاتصال بخدمة الواتساب
-                    </p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                      تأكد من أن البوت يعمل على الخادم ثم اضغط "تحديث QR"
-                    </p>
-                    <button
-                      onClick={fetchWAQR}
-                      className="mt-2 px-4 py-2 rounded-xl text-xs font-medium text-white"
-                      style={{ backgroundColor: '#25D366' }}
-                    >
-                      🔄 إعادة المحاولة
-                    </button>
+
+              {/* Require Attendance Toggle */}
+              <div className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <div>
+                  <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>الحضور个人ي مطلوب</p>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>اشتراط حضور الطالب个人ياً (بالـ QR) للحصول على الشهادة</p>
+                </div>
+                <button onClick={() => setCertSettings(p => ({ ...p, requireAttendance: !p.requireAttendance }))}
+                  className={`w-12 h-6 rounded-full relative transition-colors ${certSettings.requireAttendance ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
+                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${certSettings.requireAttendance ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+
+              {/* Min Attendance Percentage */}
+              {certSettings.requireAttendance && (
+                <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
+                    الحد الأدنى لنسبة الحضور个人ي
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input type="range" min="0" max="100" step="5"
+                      value={certSettings.minAttendancePercent}
+                      onChange={e => setCertSettings(p => ({ ...p, minAttendancePercent: Number(e.target.value) }))}
+                      className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
+                      style={{ backgroundColor: 'var(--border)' }} />
+                    <span className="text-lg font-bold min-w-[50px] text-center" style={{ color: 'var(--primary)' }}>
+                      {certSettings.minAttendancePercent}%
+                    </span>
                   </div>
-                )}
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    الطالب لازم يكون حضر على الأقل {certSettings.minAttendancePercent}% من المحاضرات个人ياً
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Certificate Design Settings */}
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>🎨 تصميم الشهادة</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تخصيص النصوص والتوقيعات التي تظهر في الشهادة.</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان الشهادة (عربي)</label>
+                <input value={certSettings.certificateTitle}
+                  onChange={e => setCertSettings(p => ({ ...p, certificateTitle: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان الشهادة (إنجليزي)</label>
+                <input value={certSettings.certificateTitleEn}
+                  onChange={e => setCertSettings(p => ({ ...p, certificateTitleEn: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم المدير (للتوقيع)</label>
+                <input value={certSettings.directorName}
+                  onChange={e => setCertSettings(p => ({ ...p, directorName: e.target.value }))}
+                  placeholder="أحمد حسن"
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>منصب المدير</label>
+                <input value={certSettings.directorTitle}
+                  onChange={e => setCertSettings(p => ({ ...p, directorTitle: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص التذييل القانوني</label>
+              <textarea value={certSettings.footerText}
+                onChange={e => setCertSettings(p => ({ ...p, footerText: e.target.value }))}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm h-20"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+
+            <button onClick={saveCertificateSettings} disabled={certSaving}
+              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              {certSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+            </button>
+          </div>
+
+          {/* Info Box */}
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="p-4 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>📋 ملاحظات مهمة:</strong></p>
+              <ul className="mt-2 space-y-1 list-disc list-inside">
+                <li>الإصدار التلقائي يعمل عند اكتمال جميع المحاضرات في المجموعة (.Admin يضغط "إتمام" على كل محاضرة)</li>
+                <li>الإصدار اليدوي من صفحة "الشهادات" يعمل بدون شروط حضور أو إكمال</li>
+                <li>الإشعارات تُرسل تلقائياً عند إصدار الشهادة (بريد + تيليجرام)</li>
+                <li>الطالب يقدر يحمّل الشهادة كـ PDF من لوحة التحكم</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Survey Settings */}
+      {tab === 'survey' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>⭐ إعدادات استبيان الطالب</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                يُفتح الاستبيان تلقائياً بعد إنهاء المجموعة، ويُرسل تذكيران فقط للطلاب الذين لم يجيبوا.
+              </p>
+            </div>
+
+            {surveyLoading ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin h-6 w-6 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>مدة فتح الاستبيان (أيام)</label>
+                  <input type="number" min={1} max={365} value={surveySettings.openDays}
+                    onChange={e => setSurveySettings(p => ({ ...p, openDays: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>يُغلق تلقائياً بعدها — يمكن للأدمن تمديدها لكل مجموعة.</p>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>التذكير الأول بعد (أيام)</label>
+                  <input type="number" min={0} max={60} value={surveySettings.reminder1Days}
+                    onChange={e => setSurveySettings(p => ({ ...p, reminder1Days: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>يُرسل لغير المجيبين فقط.</p>
+                </div>
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>التذكير الثاني بعد (أيام)</label>
+                  <input type="number" min={1} max={120} value={surveySettings.reminder2Days}
+                    onChange={e => setSurveySettings(p => ({ ...p, reminder2Days: Number(e.target.value) }))}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>لا يُرسل أي تذكير بعد التذكير الثاني.</p>
+                </div>
               </div>
             )}
+
+            <button onClick={saveSurveySettings} disabled={surveySaving || surveyLoading}
+              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              {surveySaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+            </button>
           </div>
 
-          {/* Action buttons */}
-          <div className="flex gap-3">
-            {waStatus?.connected && (
-              <button onClick={handleWALogout}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-500 hover:bg-red-600 transition-colors">
-                ⏏ فصل الاتصال
-              </button>
-            )}
-          </div>
-
-          {waAction && (
-            <div className="px-4 py-3 rounded-xl text-sm animate-slide-up" style={{ backgroundColor: '#dbeafe', color: '#1e40af' }}>
-              {waAction}
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>📋 كيف يعمل الاستبيان؟</strong></p>
+              <ul className="mt-2 space-y-1 list-disc list-inside">
+                <li>يُفتح بعد إنهاء المجموعة، ويُرسل إشعار فوري «قيّم دورتك» لكل الطلاب.</li>
+                <li>إجابة واحدة لكل طالب ولا يمكن تعديلها بعد الإرسال، والحفظ التلقائي أثناء الملء.</li>
+                <li>المشاركة اختيارية ولا تؤثر على الشهادة.</li>
+                <li>بند «مكان البرنامج» يظهر في المجموعات الأوفلاين فقط.</li>
+                <li>مفتاح «إظهار اسمي وبياناتي للإدارة» مفعّل افتراضياً ويستطيع الطالب إطفاءه.</li>
+                <li>المحاضر لا يرى أسماء الطلاب ولا نتائج الاستبيان في كل الأحوال.</li>
+              </ul>
             </div>
-          )}
-
-          <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
-            <p><strong>ملاحظات:</strong></p>
-            <ul className="mt-1 space-y-1 list-disc list-inside">
-              <li>الـ QR يظهر فقط عند عدم وجود اتصال أو بعد فصل الاتصال</li>
-              <li>لحماية الاتصال، لا تشارك صورة الـ QR مع أي شخص</li>
-              <li>يمكن تجديد الاتصال بالضغط على "فصل الاتصال" ثم مسح الـ QR الجديد</li>
-            </ul>
           </div>
         </div>
       )}

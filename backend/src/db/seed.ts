@@ -10,13 +10,126 @@ async function execSQL(sql: string) {
   await execute(sql);
 }
 
+/**
+ * Default permission matrix for the built-in employee role. Account, role and
+ * settings management stay admin-only, so `employees`/`settings` are absent.
+ */
+const DEFAULT_EMPLOYEE_PERMISSIONS: Record<string, string> = {
+  dashboard: 'read',
+  courses: 'read,write',
+  categories: 'read,write',
+  orders: 'read,write',
+  students: 'read,write',
+  groups: 'read,write',
+  proposals: 'read,write',
+  places: 'read,write',
+  certificates: 'read,write',
+  financials: 'read',
+};
+
+/** The untouched permissions shipped before the permission matrix existed. */
+const LEGACY_EMPLOYEE_PERMISSIONS: Record<string, string> = {
+  courses: 'read,write',
+  orders: 'read,write',
+  students: 'read',
+  financials: 'read',
+};
+
+function samePermissions(a: Record<string, unknown>, b: Record<string, unknown>): boolean {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  return aKeys.every((key, index) => key === bKeys[index] && String(a[key]) === String(b[key]));
+}
+
+/**
+ * One-time upgrade: give the built-in employee role the full operational
+ * matrix. Only runs while the role still holds the untouched legacy value, so
+ * a customised role is never overwritten.
+ */
+async function upgradeLegacyEmployeeRole() {
+  try {
+    const result = await execute('SELECT permissions FROM roles WHERE id=2');
+    const row = result.rows[0] as { permissions?: string } | undefined;
+    if (!row?.permissions) return;
+    const current = JSON.parse(row.permissions) as Record<string, unknown>;
+    if (!samePermissions(current, LEGACY_EMPLOYEE_PERMISSIONS)) return;
+    await execute(
+      `UPDATE roles SET permissions='${JSON.stringify(DEFAULT_EMPLOYEE_PERMISSIONS)}' WHERE id=2`,
+    );
+  } catch {
+    /* role table or permissions value not available yet — ignore */
+  }
+}
+
+/**
+ * Grant the new `places` section to the built-in employee role when it already
+ * has group management. Customised roles are left untouched (the key is only
+ * added when it does not exist yet).
+ */
+async function ensurePlacesPermission() {
+  try {
+    const result = await execute('SELECT permissions FROM roles WHERE id=2');
+    const row = result.rows[0] as { permissions?: string } | undefined;
+    if (!row?.permissions) return;
+    const current = JSON.parse(row.permissions) as Record<string, unknown>;
+    if (current.all || current.places !== undefined) return;
+    if (!String(current.groups || '').includes('write')) return;
+    const next = { ...current, places: 'read,write' };
+    await execute(
+      `UPDATE roles SET permissions='${JSON.stringify(next).replace(/'/g, "''")}' WHERE id=2`,
+    );
+  } catch {
+    /* role table or permissions value not available yet — ignore */
+  }
+}
+
+/**
+ * Grant the new `proposals` section to the built-in employee role when it
+ * already manages groups. Customised roles are left untouched.
+ */
+async function ensureProposalsPermission() {
+  try {
+    const result = await execute('SELECT permissions FROM roles WHERE id=2');
+    const row = result.rows[0] as { permissions?: string } | undefined;
+    if (!row?.permissions) return;
+    const current = JSON.parse(row.permissions) as Record<string, unknown>;
+    if (current.all || current.proposals !== undefined) return;
+    if (!String(current.groups || '').includes('write')) return;
+    const next = { ...current, proposals: 'read,write' };
+    await execute(
+      `UPDATE roles SET permissions='${JSON.stringify(next).replace(/'/g, "''")}' WHERE id=2`,
+    );
+  } catch {
+    /* role table or permissions value not available yet — ignore */
+  }
+}
+
+/**
+ * Instructors get their own account type with no admin privileges. The role is
+ * created on boot when missing so existing databases pick it up automatically.
+ */
+async function ensureInstructorRole() {
+  try {
+    const existing = await execute("SELECT id FROM roles WHERE name='instructor' OR id=4");
+    if (existing.rows.length > 0) return;
+    await execute("INSERT INTO roles (id, name, permissions) VALUES (4, 'instructor', '{}')");
+  } catch {
+    /* role table not available yet — ignore */
+  }
+}
+
 export async function seed() {
   const roleCount = await count('SELECT COUNT(*) as count FROM roles');
   if (roleCount === 0) {
     await execSQL("INSERT INTO roles (id, name, permissions) VALUES (1, 'admin', '{\"all\": true}')");
-    await execSQL("INSERT INTO roles (id, name, permissions) VALUES (2, 'employee', '{\"courses\":\"read,write\",\"orders\":\"read,write\",\"students\":\"read\",\"financials\":\"read\"}')");
+    await execSQL(`INSERT INTO roles (id, name, permissions) VALUES (2, 'employee', '${JSON.stringify(DEFAULT_EMPLOYEE_PERMISSIONS)}')`);
     await execSQL("INSERT INTO roles (id, name, permissions) VALUES (3, 'student', '{\"courses\":\"read\",\"orders\":\"read\"}')");
   }
+  await upgradeLegacyEmployeeRole();
+  await ensurePlacesPermission();
+  await ensureProposalsPermission();
+  await ensureInstructorRole();
 
   const brandCount = await count("SELECT COUNT(*) as count FROM system_settings WHERE key='branding'");
   if (brandCount === 0) {

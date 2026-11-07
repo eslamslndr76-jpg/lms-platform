@@ -6,7 +6,7 @@ import DataTable from '../../components/DataTable';
 import Modal from '../../components/Modal';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import Pagination from '../../components/Pagination';
-import ExportModal from '../../components/ExportModal';
+import ExportButton from '../../components/ExportButton';
 import StatusBadge from '../../components/StatusBadge';
 import Skeleton from '../../components/Skeleton';
 import { useToast } from '../../components/Toast';
@@ -18,8 +18,6 @@ export default function StudentsPage() {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [exportOpen, setExportOpen] = useState(false);
-  const [courses, setCourses] = useState<any[]>([]);
 
   const [detailModal, setDetailModal] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<any>(null);
@@ -50,7 +48,7 @@ export default function StudentsPage() {
     }
   };
 
-  useEffect(() => { load(); api('/api/courses').then(setCourses).catch(() => {}); }, [page]);
+  useEffect(() => { load(); }, [page]);
 
   const openDetail = (student: any) => {
     api(`/api/admin/users/${student.id}`).then((data: any) => {
@@ -145,9 +143,7 @@ export default function StudentsPage() {
           <button onClick={() => setAddModal(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
             + إضافة طالب
           </button>
-          <button onClick={() => setExportOpen(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
-            📥 تصدير
-          </button>
+          <ExportButton dataset="students" title="تصدير الطلاب" />
         </div>
       </div>
 
@@ -402,9 +398,6 @@ export default function StudentsPage() {
         loading={deleting}
       />
 
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)}
-        title="تصدير الطلاب بكورس" endpoint="/api/exports/students/:courseId" filename="students"
-        showCoursePicker courses={courses.map((c: any) => ({ id: c.id, name_ar: c.title_ar }))} />
     </div>
   );
 }

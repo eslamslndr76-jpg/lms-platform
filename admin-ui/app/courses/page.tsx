@@ -9,6 +9,7 @@ import ConfirmDialog from '../../components/ConfirmDialog';
 import Skeleton from '../../components/Skeleton';
 import { compressAndEncode } from '../../lib/imageUtils';
 import { useToast } from '../../components/Toast';
+import ExportButton from '../../components/ExportButton';
 
 export default function CoursesPage() {
   const router = useRouter();
@@ -142,9 +143,12 @@ export default function CoursesPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الكورسات</h1>
-        <button onClick={() => setAddModal(true)} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm font-medium">
-          + إضافة كورس
-        </button>
+        <div className="flex gap-2">
+          <ExportButton dataset="courses" title="تصدير الكورسات" />
+          <button onClick={() => setAddModal(true)} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm font-medium">
+            + إضافة كورس
+          </button>
+        </div>
       </div>
 
       <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>

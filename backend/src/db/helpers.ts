@@ -6,7 +6,6 @@ export function escape(val: unknown): string {
   if (typeof val === 'number') return String(val);
   if (typeof val === 'boolean') return val ? '1' : '0';
   const s = String(val);
-  if (/^\d+$/.test(s)) return s;
   return "'" + s.replace(/'/g, "''") + "'";
 }
 
@@ -44,4 +43,16 @@ export function normalizeRows(rows: Record<string, unknown>[]): Record<string, u
 export async function sqlOne(query: string, ...args: unknown[]) {
   const result = await sql(query, ...args);
   return result.rows[0] || null;
+}
+
+/**
+ * Normalize Egyptian phone number to 01XXXXXXXXX format.
+ * Returns null if the phone is not a valid Egyptian number.
+ */
+export function normalizePhone(phone: string): string | null {
+  const cleaned = phone.replace(/[\s\-()]/g, '');
+  if (/^01[0-9]{9}$/.test(cleaned)) return cleaned;
+  if (/^1[0-9]{9}$/.test(cleaned)) return '0' + cleaned;
+  if (/^(\+?20)?1[0-9]{9}$/.test(cleaned)) return '0' + cleaned.replace(/^\+?20/, '');
+  return null;
 }

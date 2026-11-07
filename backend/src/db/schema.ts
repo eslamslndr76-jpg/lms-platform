@@ -27,6 +27,14 @@ CREATE TABLE IF NOT EXISTS categories (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS places (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL,
+  capacity INTEGER NOT NULL DEFAULT 0,
+  is_active INTEGER NOT NULL DEFAULT 1,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS courses (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   title_ar TEXT NOT NULL,
@@ -46,6 +54,12 @@ CREATE TABLE IF NOT EXISTS courses (
   auto_assign INTEGER NOT NULL DEFAULT 1,
   prevent_overlap INTEGER NOT NULL DEFAULT 1,
   is_active INTEGER NOT NULL DEFAULT 1,
+  objectives TEXT DEFAULT '[]',
+  daily_content TEXT DEFAULT '[]',
+  introduction TEXT DEFAULT '',
+  target_audience TEXT DEFAULT '',
+  proposal_id INTEGER,
+  announcement_sent_at DATETIME,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (category_id) REFERENCES categories(id)
 );
@@ -58,11 +72,22 @@ CREATE TABLE IF NOT EXISTS groups (
   start_date TEXT,
   end_date TEXT,
   instructor_name TEXT DEFAULT '',
+  instructor_user_id INTEGER,
+  instructor_eval_opened_at DATETIME,
   location TEXT DEFAULT '',
+  place_id INTEGER,
   max_students INTEGER,
   is_active INTEGER NOT NULL DEFAULT 1,
   is_complete INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL DEFAULT 'pending',
+  completed_at DATETIME,
+  completed_by INTEGER,
+  survey_closes_at DATETIME,
+  survey_reminder1_at DATETIME,
+  survey_reminder2_at DATETIME,
+  activity_type TEXT DEFAULT '',
+  report_notes TEXT DEFAULT '',
+  report_recommendations TEXT DEFAULT '',
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (course_id) REFERENCES courses(id) ON DELETE CASCADE
 );
@@ -108,6 +133,9 @@ CREATE TABLE IF NOT EXISTS certificates (
   user_id INTEGER NOT NULL,
   course_id INTEGER NOT NULL,
   serial_id TEXT UNIQUE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  revoked_at DATETIME,
+  revoke_reason TEXT,
   issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
@@ -184,6 +212,67 @@ CREATE TABLE IF NOT EXISTS cart_items (
   course_id INTEGER NOT NULL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+-- Post-course student survey (edit-plan.md §4.4). One row per student per
+-- group: a draft that is auto-saved, then a single submitted response.
+CREATE TABLE IF NOT EXISTS group_surveys (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL,
+  user_id INTEGER NOT NULL,
+  is_anonymous INTEGER NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'draft',
+  answers TEXT NOT NULL DEFAULT '{}',
+  current_step INTEGER NOT NULL DEFAULT 0,
+  started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  submitted_at DATETIME,
+  UNIQUE(group_id, user_id),
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- Instructor evaluation of the group's students (edit-plan.md §5). One record
+-- per group holding a draft, then a final submission that only an admin reopens.
+CREATE TABLE IF NOT EXISTS group_instructor_evals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  group_id INTEGER NOT NULL UNIQUE,
+  instructor_user_id INTEGER,
+  status TEXT NOT NULL DEFAULT 'draft',
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  submitted_at DATETIME,
+  FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE,
+  FOREIGN KEY (instructor_user_id) REFERENCES users(id)
+);
+
+CREATE TABLE IF NOT EXISTS group_instructor_eval_scores (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  eval_id INTEGER NOT NULL,
+  student_id INTEGER NOT NULL,
+  scores TEXT NOT NULL DEFAULT '[]',
+  total INTEGER NOT NULL DEFAULT 0,
+  UNIQUE(eval_id, student_id),
+  FOREIGN KEY (eval_id) REFERENCES group_instructor_evals(id) ON DELETE CASCADE,
+  FOREIGN KEY (student_id) REFERENCES users(id)
+);
+
+-- Course proposals submitted by instructors before a course exists (edit-plan.md §6).
+CREATE TABLE IF NOT EXISTS course_proposals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  instructor_user_id INTEGER NOT NULL,
+  course_title TEXT NOT NULL DEFAULT '',
+  objectives TEXT NOT NULL DEFAULT '[]',
+  daily_content TEXT NOT NULL DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'draft',
+  admin_note TEXT DEFAULT '',
+  course_id INTEGER,
+  submitted_at DATETIME,
+  reviewed_at DATETIME,
+  reviewed_by INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (instructor_user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
 );
 `;

@@ -15,14 +15,24 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--bg, #f9fafb)' }}>
+        <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
           <div className="max-w-md text-center">
-            <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--primary, #2563eb)' }}>عذراً</h1>
-            <p className="text-gray-600 mb-4">حدث خطأ غير متوقع. حاول تحديث الصفحة.</p>
+            <span className="material-symbols-outlined text-[48px] mb-4 block" style={{ color: 'var(--md-sys-color-error)' }}>
+              error
+            </span>
+            <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)', fontFamily: 'var(--md-sys-typescale-headline-small-font)' }}>
+              عذراً
+            </h1>
+            <p className="text-sm mb-6" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              حدث خطأ غير متوقع. حاول تحديث الصفحة.
+            </p>
             <button
               onClick={() => { this.setState({ hasError: false }); window.location.reload(); }}
-              className="px-6 py-2 text-white rounded-lg"
-              style={{ backgroundColor: 'var(--primary, #2563eb)' }}
+              className="h-10 px-6 rounded-full text-sm font-medium transition-colors duration-200"
+              style={{
+                backgroundColor: 'var(--md-sys-color-primary)',
+                color: 'var(--md-sys-color-on-primary)',
+              }}
             >
               تحديث الصفحة
             </button>

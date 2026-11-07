@@ -5,11 +5,12 @@ import Link from 'next/link';
 import { api } from '../lib/api';
 import StatsCard from '../components/StatsCard';
 import DataTable from '../components/DataTable';
+import ExportButton from '../components/ExportButton';
 import StatusBadge from '../components/StatusBadge';
 import { useAdminAuth } from '../lib/auth';
 
 export default function AdminDashboard() {
-  const { user } = useAdminAuth();
+  const { user, can, isAdmin } = useAdminAuth();
   const [stats, setStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [incompleteGroups, setIncompleteGroups] = useState<any[]>([]);
@@ -17,15 +18,15 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     Promise.all([
-      api('/api/admin/orders/financials'),
-      api('/api/groups/incomplete').catch(() => []),
-      api('/api/admin/unassigned/count').then((r: any) => r.count || 0).catch(() => 0),
+      can('financials') ? api('/api/admin/orders/financials') : Promise.resolve(null),
+      isAdmin ? api('/api/groups/incomplete').catch(() => []) : Promise.resolve([]),
+      can('groups') ? api('/api/admin/unassigned/count').then((r: any) => r.count || 0).catch(() => 0) : Promise.resolve(0),
     ]).then(([s, g, u]) => {
       setStats(s);
-      setIncompleteGroups(g);
-      setUnassignedCount(u);
+      setIncompleteGroups(g as any[]);
+      setUnassignedCount(u as number);
     }).catch(() => {}).finally(() => setLoading(false));
-  }, []);
+  }, [can, isAdmin]);
 
   const pendingCount = stats?.totalPending?.count || 0;
 
@@ -42,7 +43,7 @@ export default function AdminDashboard() {
 
       {/* Notifications */}
       <div className="space-y-2">
-        {pendingCount > 0 && (
+        {pendingCount > 0 && can('orders') && (
           <div className="rounded-2xl p-4 border-2" style={{ backgroundColor: '#fef3c7', borderColor: '#f59e0b' }}>
             <div className="flex items-center gap-3">
               <span className="text-2xl">⏳</span>
@@ -102,32 +103,39 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-stagger">
-        <StatsCard title="إجمالي المبيعات" value={`${stats?.totalPaid?.sum || 0} ج.م`}
-          subtitle={`${stats?.totalPaid?.count || 0} طلب مدفوع`} icon="💰" color="#059669" />
-        <StatsCard title="طلبات معلقة" value={stats?.totalPending?.count || 0}
-          subtitle={`بقيمة ${stats?.totalPending?.sum || 0} ج.م`} icon="⏳" color="#d97706" />
-        <StatsCard title="الطلبات المدفوعة" value={stats?.totalPaid?.count || 0} icon="✅" color="#2563eb" />
-        <StatsCard title="آخر 6 أشهر" value={stats?.monthly?.[0]?.sum || 0}
-          subtitle="الشهر الحالي" icon="📈" color="#7c3aed" />
-      </div>
-
-      <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>آخر الطلبات</h2>
-          <Link href="/orders" className="text-sm" style={{ color: 'var(--primary)' }}>عرض الكل ←</Link>
+      {can('financials') && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 animate-stagger">
+          <StatsCard title="إجمالي المبيعات" value={`${stats?.totalPaid?.sum || 0} ج.م`}
+            subtitle={`${stats?.totalPaid?.count || 0} طلب مدفوع`} icon="💰" color="#059669" />
+          <StatsCard title="طلبات معلقة" value={stats?.totalPending?.count || 0}
+            subtitle={`بقيمة ${stats?.totalPending?.sum || 0} ج.م`} icon="⏳" color="#d97706" />
+          <StatsCard title="الطلبات المدفوعة" value={stats?.totalPaid?.count || 0} icon="✅" color="#2563eb" />
+          <StatsCard title="آخر 6 أشهر" value={stats?.monthly?.[0]?.sum || 0}
+            subtitle="الشهر الحالي" icon="📈" color="#7c3aed" />
         </div>
-        <DataTable
-          columns={[
-            { key: 'id', label: '#' },
-            { key: 'student_name', label: 'الطالب' },
-            { key: 'title_ar', label: 'الكورس' },
-            { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
-            { key: 'status', label: 'الحالة', render: (v: string) => <StatusBadge status={v} /> },
-          ]}
-          data={stats?.recent || []}
-        />
-      </div>
+      )}
+
+      {can('orders') && (
+        <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold" style={{ color: 'var(--text)' }}>آخر الطلبات</h2>
+            <div className="flex items-center gap-2">
+              <ExportButton variant="icon" dataset="orders" title="تصدير الطلبات" label="تصدير الطلبات" />
+              <Link href="/orders" className="text-sm" style={{ color: 'var(--primary)' }}>عرض الكل ←</Link>
+            </div>
+          </div>
+          <DataTable
+            columns={[
+              { key: 'id', label: '#' },
+              { key: 'student_name', label: 'الطالب' },
+              { key: 'title_ar', label: 'الكورس' },
+              { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
+              { key: 'status', label: 'الحالة', render: (v: string) => <StatusBadge status={v} /> },
+            ]}
+            data={stats?.recent || []}
+          />
+        </div>
+      )}
     </div>
   );
 }
