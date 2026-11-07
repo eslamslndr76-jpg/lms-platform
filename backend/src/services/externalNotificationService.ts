@@ -191,8 +191,9 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
   const shortSummary = getShortSummary(type, data);
 
   // Always create an in-app notification row for real-time and background app push sync
+  let notifId: number | null = null;
   try {
-    await createNotification(userId, subject, shortSummary, notifType, link);
+    notifId = await createNotification(userId, subject, shortSummary, notifType, link);
   } catch (notifErr: any) {
     console.error('[Notify] In-app notification creation failed:', notifErr.message);
   }
@@ -205,7 +206,7 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
       user.fcm_token,
       subject,
       shortSummary,
-      { link, type: notifType },
+      { link: link || '/notifications', type: notifType, notificationId: notifId ? String(notifId) : '' },
     ).catch(() => {});
   }
 
@@ -458,9 +459,16 @@ export async function broadcastAnnouncement(
   );
   for (const row of users.rows as any[]) {
     const uid = Number(row.id);
-    await createNotification(uid, title, message, type, link || '/dashboard').catch(() => {});
+    let bNotifId: number | null = null;
+    try {
+      bNotifId = await createNotification(uid, title, message, type, link || '/dashboard');
+    } catch (_) {}
     if (isFcmEnabled() && row.fcm_token) {
-      sendFcmToToken(row.fcm_token, title, message, { link: link || '/dashboard', type }).catch(() => {});
+      sendFcmToToken(row.fcm_token, title, message, {
+        link: link || '/dashboard',
+        type,
+        notificationId: bNotifId ? String(bNotifId) : '',
+      }).catch(() => {});
     }
     if (row.email && Number(row.email_notifications) && isEmailEnabled()) {
       sendGenericEmail(row.email, title, `${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});

@@ -1,8 +1,12 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
+import '../navigation/app_navigation.dart';
+import '../notifications/notifications_provider.dart';
 
 /// Top-level handler for background/terminated FCM messages (required by Firebase).
 @pragma('vm:entry-point')
@@ -55,23 +59,64 @@ class FcmService {
     // Register background handler
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
 
-    // Foreground messages → show local notification
-    FirebaseMessaging.onMessage.listen((msg) => _showFromRemoteMessage(msg));
+    // Foreground messages → show local notification & refresh in-app list
+    FirebaseMessaging.onMessage.listen((msg) {
+      _showFromRemoteMessage(msg);
+      _refreshInAppNotifications();
+    });
+
+    // Background notification tap (while app was in background)
+    FirebaseMessaging.onMessageOpenedApp.listen((msg) {
+      _handleRemoteMessageNavigation(msg);
+    });
+
+    // Terminated notification tap (cold start)
+    messaging.getInitialMessage().then((msg) {
+      if (msg != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _handleRemoteMessageNavigation(msg);
+        });
+      }
+    });
 
     // Save/refresh FCM token to backend
     await syncToken();
-    messaging.onTokenRefresh.listen((token) => syncToken());
+    messaging.onTokenRefresh.listen((_) => syncToken());
+  }
+
+  static void _refreshInAppNotifications() {
+    try {
+      final ctx = AppNavigation.navigatorKey.currentContext;
+      if (ctx != null) {
+        ctx.read<NotificationsProvider>().fetchNotifications(silent: true);
+      }
+    } catch (_) {}
   }
 
   static void _onTap(NotificationResponse response) {
-    // Deep link handling via AppLinks in app.dart
+    final payload = response.payload;
+    if (payload != null && payload.isNotEmpty) {
+      final parts = payload.split('|');
+      final link = parts.first;
+      final notifId = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      AppNavigation.handleLink(link, notificationId: notifId);
+    }
+  }
+
+  static void _handleRemoteMessageNavigation(RemoteMessage message) {
+    final link = message.data['link'] as String? ?? '/notifications';
+    final notifIdStr = message.data['notificationId'] as String?;
+    final notifId = int.tryParse(notifIdStr ?? '');
+    AppNavigation.handleLink(link, notificationId: notifId);
   }
 
   static Future<void> _showFromRemoteMessage(RemoteMessage message) async {
     final notification = message.notification;
     final title = notification?.title ?? message.data['title'] as String? ?? 'إشعار جديد';
     final body = notification?.body ?? message.data['body'] as String? ?? '';
-    final payload = message.data['link'] as String?;
+    final link = message.data['link'] as String? ?? '';
+    final notifId = message.data['notificationId'] as String? ?? '';
+    final payload = '$link|$notifId';
 
     await _plugin.show(
       message.hashCode,

@@ -1,3 +1,4 @@
+import '../../core/navigation/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/notifications/notifications_provider.dart';
@@ -106,6 +107,9 @@ class _NotificationTile extends StatelessWidget {
         onTap: () {
           if (!notification.isRead) {
             context.read<NotificationsProvider>().markAsRead(notification.id);
+          }
+          if (notification.link != null && notification.link!.isNotEmpty) {
+            AppNavigation.handleLink(notification.link!, notificationId: notification.id);
           }
         },
         child: Padding(

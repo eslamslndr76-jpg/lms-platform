@@ -1,3 +1,4 @@
+import '../../core/navigation/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
@@ -30,6 +31,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    AppNavigation.homeTabNotifier.addListener(_onGlobalTabChange);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<CoursesProvider>().fetchAll(silent: true);
       context.read<OrdersProvider>().fetchMyOrders(silent: true);
@@ -51,6 +53,18 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _navigateToTab(int index) {
     setState(() => _selectedIndex = index);
+  }
+
+  void _onGlobalTabChange() {
+    if (mounted && _selectedIndex != AppNavigation.homeTabNotifier.value) {
+      setState(() => _selectedIndex = AppNavigation.homeTabNotifier.value);
+    }
+  }
+
+  @override
+  void dispose() {
+    AppNavigation.homeTabNotifier.removeListener(_onGlobalTabChange);
+    super.dispose();
   }
 
   @override

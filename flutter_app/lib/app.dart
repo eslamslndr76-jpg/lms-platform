@@ -6,10 +6,9 @@ import 'package:app_links/app_links.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
 import 'core/auth/auth_provider.dart';
-import 'core/attendance/attendance_provider.dart';
+import 'core/navigation/app_navigation.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
-import 'features/attendance/qr_scanner_screen.dart';
 
 class TrainingApp extends StatelessWidget {
   const TrainingApp({super.key});
@@ -20,6 +19,7 @@ class TrainingApp extends StatelessWidget {
     final auth = context.watch<AuthProvider>();
 
     return MaterialApp(
+      navigatorKey: AppNavigation.navigatorKey,
       title: branding.systemName,
       debugShowCheckedModeBanner: false,
 
@@ -46,7 +46,7 @@ class TrainingApp extends StatelessWidget {
   }
 }
 
-/// Wraps HomeScreen and listens for deep links (QR attendance URLs).
+/// Wraps HomeScreen and listens for deep links (QR attendance URLs, notification URLs).
 class _AppRoot extends StatefulWidget {
   const _AppRoot();
 
@@ -66,46 +66,12 @@ class _AppRootState extends State<_AppRoot> {
   void _initDeepLinks() {
     // Handle link that cold-started the app
     _appLinks.getInitialLink().then((uri) {
-      if (uri != null) _handleLink(uri);
+      if (uri != null) AppNavigation.handleLink(uri.toString());
     });
 
     // Handle links while app is running
-    _appLinks.uriLinkStream.listen(_handleLink);
-  }
-
-  void _handleLink(Uri uri) {
-    // Expected patterns:
-    //   https://lms-user*.vercel.app/attendance/<lectureId>?code=<code>
-    //   trainingunit://attendance/<lectureId>?code=<code>
-    final segments = uri.pathSegments;
-    final attendanceIdx = segments.indexOf('attendance');
-    if (attendanceIdx == -1) return;
-
-    final lectureIdStr = attendanceIdx + 1 < segments.length
-        ? segments[attendanceIdx + 1]
-        : null;
-    final code = uri.queryParameters['code'];
-    final lectureId = int.tryParse(lectureIdStr ?? '');
-
-    if (lectureId == null || code == null) return;
-
-    // Auto-mark attendance then navigate to result
-    final attendanceProvider = context.read<AttendanceProvider>();
-    attendanceProvider.markAttendance(lectureId: lectureId, code: code).then((_) {
-      if (!mounted) return;
-      // Show success snackbar
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ تم تسجيل حضورك بنجاح'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    }).catchError((_) {
-      if (!mounted) return;
-      // Navigate to scanner so user can try manually
-      Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => const QrScannerScreen()),
-      );
+    _appLinks.uriLinkStream.listen((uri) {
+      AppNavigation.handleLink(uri.toString());
     });
   }
 
