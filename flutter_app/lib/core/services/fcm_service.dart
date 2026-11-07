@@ -59,8 +59,8 @@ class FcmService {
     FirebaseMessaging.onMessage.listen((msg) => _showFromRemoteMessage(msg));
 
     // Save/refresh FCM token to backend
-    await _registerToken();
-    messaging.onTokenRefresh.listen(_sendTokenToBackend);
+    await syncToken();
+    messaging.onTokenRefresh.listen((token) => syncToken());
   }
 
   static void _onTap(NotificationResponse response) {
@@ -91,23 +91,17 @@ class FcmService {
     );
   }
 
-  static Future<void> _registerToken() async {
+  /// Syncs current device FCM token to backend for authenticated user.
+  static Future<void> syncToken() async {
     try {
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null) {
-        await _sendTokenToBackend(token);
+        await ApiClient().post('/api/notifications/fcm-token', data: {'token': token});
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('fcm_token', token);
       }
-    } catch (_) {}
-  }
-
-  static Future<void> _sendTokenToBackend(String token) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final lastToken = prefs.getString('fcm_token');
-      if (lastToken == token) return; // No change
-
-      await ApiClient().post('/api/notifications/fcm-token', data: {'token': token});
-      await prefs.setString('fcm_token', token);
-    } catch (_) {}
+    } catch (_) {
+      // Ignored if user not yet logged in (401)
+    }
   }
 }

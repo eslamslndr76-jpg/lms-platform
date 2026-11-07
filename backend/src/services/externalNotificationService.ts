@@ -453,12 +453,15 @@ export async function broadcastAnnouncement(
   targetRole: number = 3,
 ): Promise<{ count: number }> {
   const users = await sql(
-    'SELECT id, email, telegram_chat_id, COALESCE(NULLIF(email_notifications, 0), 1) as email_notifications, COALESCE(NULLIF(telegram_notifications, 0), 1) as telegram_notifications FROM users WHERE role_id=?',
+    'SELECT id, email, telegram_chat_id, fcm_token, COALESCE(NULLIF(email_notifications, 0), 1) as email_notifications, COALESCE(NULLIF(telegram_notifications, 0), 1) as telegram_notifications FROM users WHERE role_id=?',
     targetRole,
   );
   for (const row of users.rows as any[]) {
     const uid = Number(row.id);
     await createNotification(uid, title, message, type, link || '/dashboard').catch(() => {});
+    if (isFcmEnabled() && row.fcm_token) {
+      sendFcmToToken(row.fcm_token, title, message, { link: link || '/dashboard', type }).catch(() => {});
+    }
     if (row.email && Number(row.email_notifications) && isEmailEnabled()) {
       sendGenericEmail(row.email, title, `${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});
     }

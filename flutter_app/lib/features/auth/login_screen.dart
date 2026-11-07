@@ -103,7 +103,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     FilledButton.tonal(
                       onPressed: () =>
-                          AppUpdateService.downloadAndInstallBackground(context: context, directApkUrl: _updateInfo!.apkDirectUrl),
+                          AppUpdateService.startDownloadWithDialog(context: context, directApkUrl: _updateInfo!.apkDirectUrl, version: _updateInfo!.latestVersion),
                       style: FilledButton.styleFrom(
                         visualDensity: VisualDensity.compact,
                         padding: const EdgeInsets.symmetric(horizontal: 12),

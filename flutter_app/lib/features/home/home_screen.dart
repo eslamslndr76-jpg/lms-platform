@@ -43,7 +43,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final info = await AppUpdateService.check();
     if (info != null && mounted) {
       setState(() => _updateInfo = info);
-      AppUpdateService.showUpdatePrompt(context, info);
+      AppUpdateService.showUpdatePrompt(context, info, onDismiss: () {
+        if (mounted) setState(() => _updateBannerDismissed = true);
+      });
     }
   }
 
@@ -127,7 +129,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   FilledButton.tonal(
                     onPressed: () =>
-                        AppUpdateService.downloadAndInstallBackground(context: context, directApkUrl: _updateInfo!.apkDirectUrl),
+                        AppUpdateService.startDownloadWithDialog(context: context, directApkUrl: _updateInfo!.apkDirectUrl, version: _updateInfo!.latestVersion),
                     style: FilledButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 12),

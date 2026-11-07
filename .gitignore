@@ -39,3 +39,10 @@ flutter_app/android/key.properties
 *.jks
 
 backend/uploads/
+
+# Firebase service account (secrets)
+*adminsdk*.json
+
+# Flutter build artifacts
+flutter_app/build/
+flutter_app/build_log.txt

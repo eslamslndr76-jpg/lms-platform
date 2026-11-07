@@ -1,3 +1,4 @@
+import '../services/fcm_service.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -73,6 +74,7 @@ class AuthProvider extends ChangeNotifier {
     _token = await _storage.read(key: _tokenKey);
     if (_token != null) {
       await _fetchMe();
+      FcmService.syncToken();
     }
     notifyListeners();
   }
@@ -93,6 +95,7 @@ class AuthProvider extends ChangeNotifier {
         _token = data['token'] as String;
         _user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
         await _storage.write(key: _tokenKey, value: _token);
+        FcmService.syncToken();
         return true;
       }
     } catch (e) {
