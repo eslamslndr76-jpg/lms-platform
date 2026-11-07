@@ -4,6 +4,7 @@ import '../attendance/attendance_provider.dart';
 import '../notifications/notifications_provider.dart';
 import '../../features/attendance/qr_scanner_screen.dart';
 import '../../features/cart/cart_screen.dart';
+import '../../features/groups/group_details_screen.dart';
 
 class AppNavigation {
   AppNavigation._();
@@ -14,14 +15,17 @@ class AppNavigation {
   /// Switch the main bottom navigation tab on HomeScreen (0: Home, 1: Courses, 2: MyCourses, 3: Notifications, 4: Profile)
   static void switchTab(int index) {
     homeTabNotifier.value = index;
-    // Pop any open sub-screens (e.g. cart, scanner) back to home root
+    // Pop any open sub-screens (e.g. cart, scanner, group details) back to home root
     navigatorKey.currentState?.popUntil((route) => route.isFirst);
   }
 
   /// Centralized link router that handles URLs, custom schemes, and internal paths.
-  static void handleLink(String rawLink, {int? notificationId}) {
-    if (rawLink.trim().isEmpty) return;
-
+  static void handleLink(
+    String rawLink, {
+    int? notificationId,
+    int? groupId,
+    int? lectureId,
+  }) {
     final context = navigatorKey.currentContext;
     if (context == null) return;
 
@@ -35,19 +39,41 @@ class AppNavigation {
     final cleanLink = rawLink.trim();
     final uri = Uri.tryParse(cleanLink);
 
-    // 1. Attendance links: /attendance/<lectureId>?code=<code>
+    // 1. Group details: /groups/<groupId> or explicit groupId
+    int? targetGroupId = groupId;
+    if (cleanLink.contains('/groups/')) {
+      final segments = uri?.pathSegments ?? cleanLink.split('/');
+      final grpIdx = segments.indexOf('groups');
+      if (grpIdx != -1 && grpIdx + 1 < segments.length) {
+        targetGroupId = int.tryParse(segments[grpIdx + 1]);
+      }
+    }
+    if (targetGroupId != null && targetGroupId > 0) {
+      navigatorKey.currentState?.push(
+        MaterialPageRoute(
+          builder: (_) => GroupDetailsScreen(
+            groupId: targetGroupId!,
+            highlightLectureId: lectureId,
+          ),
+        ),
+      );
+      return;
+    }
+
+    // 2. Attendance links: /attendance/<lectureId>?code=<code>
     if (cleanLink.contains('/attendance/')) {
       final segments = uri?.pathSegments ?? cleanLink.split('/');
       final attendanceIdx = segments.indexOf('attendance');
       final lectureIdStr = (attendanceIdx != -1 && attendanceIdx + 1 < segments.length)
           ? segments[attendanceIdx + 1]
           : null;
-      final lectureId = int.tryParse(lectureIdStr ?? '');
+      final parsedLectureId = int.tryParse(lectureIdStr ?? '') ?? lectureId;
       final code = uri?.queryParameters['code'];
 
-      if (lectureId != null && code != null && code.isNotEmpty) {
+      if (parsedLectureId != null && code != null && code.isNotEmpty) {
+        // Auto-mark attendance
         final attendance = context.read<AttendanceProvider>();
-        attendance.markAttendance(lectureId: lectureId, code: code).then((_) {
+        attendance.markAttendance(lectureId: parsedLectureId, code: code).then((_) {
           final navState = navigatorKey.currentState;
           if (navState != null && navState.mounted) {
             ScaffoldMessenger.of(navState.context).showSnackBar(
@@ -59,38 +85,43 @@ class AppNavigation {
             );
           }
         }).catchError((_) {
+          // Open scanner as fallback
           navigatorKey.currentState?.push(
-            MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+            MaterialPageRoute(
+              builder: (_) => QrScannerScreen(targetLectureId: parsedLectureId),
+            ),
           );
         });
       } else {
         // Open QR scanner directly so student can scan lecturer's QR
         navigatorKey.currentState?.push(
-          MaterialPageRoute(builder: (_) => const QrScannerScreen()),
+          MaterialPageRoute(
+            builder: (_) => QrScannerScreen(targetLectureId: parsedLectureId),
+          ),
         );
       }
       return;
     }
 
-    // 2. My Courses: /my-courses
+    // 3. My Courses: /my-courses
     if (cleanLink.contains('my-courses')) {
       switchTab(2);
       return;
     }
 
-    // 3. Courses Catalog: /courses
+    // 4. Courses Catalog: /courses
     if (cleanLink.contains('courses') && !cleanLink.contains('my-courses')) {
       switchTab(1);
       return;
     }
 
-    // 4. Notifications center: /notifications
+    // 5. Notifications center: /notifications
     if (cleanLink.contains('notifications')) {
       switchTab(3);
       return;
     }
 
-    // 5. Orders / Cart: /orders or /cart
+    // 6. Orders / Cart: /orders or /cart
     if (cleanLink.contains('orders') || cleanLink.contains('cart')) {
       navigatorKey.currentState?.push(
         MaterialPageRoute(builder: (_) => const CartScreen()),
@@ -98,13 +129,13 @@ class AppNavigation {
       return;
     }
 
-    // 6. Profile / Certificates: /profile or /certificates
+    // 7. Profile / Certificates: /profile or /certificates
     if (cleanLink.contains('profile') || cleanLink.contains('certificates')) {
       switchTab(4);
       return;
     }
 
-    // 7. Default fallback: Home Dashboard
+    // 8. Default fallback: Home Dashboard
     switchTab(0);
   }
 }

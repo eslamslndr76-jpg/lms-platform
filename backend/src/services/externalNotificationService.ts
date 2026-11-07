@@ -206,7 +206,7 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
       user.fcm_token,
       subject,
       shortSummary,
-      { link: link || '/notifications', type: notifType, notificationId: notifId ? String(notifId) : '' },
+      { link: link || '/notifications', type: notifType, notificationId: notifId ? String(notifId) : '', groupId: data?.groupId ? String(data.groupId) : '', lectureId: data?.lectureId ? String(data.lectureId) : '' },
     ).catch(() => {});
   }
 
@@ -273,6 +273,10 @@ function getLinkForType(type: NotificationType, data: any): string {
       return '/instructor';
     case 'proposal_reviewed':
       return `/instructor/proposals/${data.proposalId}`;
+    case 'assigned_to_group':
+    case 'moved_to_group':
+    case 'lecture_added':
+      return data?.groupId ? `/groups/${data.groupId}` : '/my-courses';
     default:
       return '/my-courses';
   }

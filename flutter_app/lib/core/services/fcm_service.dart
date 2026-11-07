@@ -11,8 +11,12 @@ import '../notifications/notifications_provider.dart';
 /// Top-level handler for background/terminated FCM messages (required by Firebase).
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  await FcmService._showFromRemoteMessage(message);
+  // If the message has a notification payload, Android OS displays it automatically in the system tray.
+  // Displaying it again causes a duplicate notification! Only show if it's data-only.
+  if (message.notification == null) {
+    await Firebase.initializeApp();
+    await FcmService._showFromRemoteMessage(message);
+  }
 }
 
 class FcmService {
@@ -99,7 +103,14 @@ class FcmService {
       final parts = payload.split('|');
       final link = parts.first;
       final notifId = parts.length > 1 ? int.tryParse(parts[1]) : null;
-      AppNavigation.handleLink(link, notificationId: notifId);
+      final groupId = parts.length > 2 ? int.tryParse(parts[2]) : null;
+      final lectureId = parts.length > 3 ? int.tryParse(parts[3]) : null;
+      AppNavigation.handleLink(
+        link,
+        notificationId: notifId,
+        groupId: groupId,
+        lectureId: lectureId,
+      );
     }
   }
 
@@ -107,7 +118,17 @@ class FcmService {
     final link = message.data['link'] as String? ?? '/notifications';
     final notifIdStr = message.data['notificationId'] as String?;
     final notifId = int.tryParse(notifIdStr ?? '');
-    AppNavigation.handleLink(link, notificationId: notifId);
+    final grpIdStr = message.data['groupId'] as String?;
+    final groupId = int.tryParse(grpIdStr ?? '');
+    final lecIdStr = message.data['lectureId'] as String?;
+    final lectureId = int.tryParse(lecIdStr ?? '');
+
+    AppNavigation.handleLink(
+      link,
+      notificationId: notifId,
+      groupId: groupId,
+      lectureId: lectureId,
+    );
   }
 
   static Future<void> _showFromRemoteMessage(RemoteMessage message) async {
@@ -116,7 +137,9 @@ class FcmService {
     final body = notification?.body ?? message.data['body'] as String? ?? '';
     final link = message.data['link'] as String? ?? '';
     final notifId = message.data['notificationId'] as String? ?? '';
-    final payload = '$link|$notifId';
+    final groupId = message.data['groupId'] as String? ?? '';
+    final lectureId = message.data['lectureId'] as String? ?? '';
+    final payload = '$link|$notifId|$groupId|$lectureId';
 
     await _plugin.show(
       message.hashCode,

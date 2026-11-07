@@ -849,6 +849,7 @@ export async function addStudentsToGroup(groupId: number, userIds: number[], mov
         await createNotification(userId, 'تم إضافتك إلى مجموعة', `تم إضافتك إلى مجموعة "${g.name}" في كورس "${courseName}"`, 'success', `/dashboard`);
         // External notification (email + telegram)
         await sendNotification(userId, 'assigned_to_group', {
+          groupId,
           courseTitle: courseName,
           groupName: g.name || '',
           instructor: g.instructor_name || undefined,
@@ -1046,6 +1047,7 @@ export async function autoAssignStudent(studentId: number, courseId: number): Pr
   if (grp.rows.length > 0) {
     const g = grp.rows[0] as any;
     await sendNotification(studentId, 'assigned_to_group', {
+      groupId,
       courseTitle: courseName,
       groupName: g.name || '',
       instructor: g.instructor_name || undefined,
@@ -1258,6 +1260,7 @@ export async function addLecture(groupId: number, data: {
     const course = await sql('SELECT title_ar FROM courses WHERE id=?', g.course_id);
     const courseName = course.rows.length > 0 ? (course.rows[0] as any).title_ar : '';
     await notifyGroupStudentsExt(groupId, 'lecture_added', {
+      groupId,
       courseTitle: courseName,
       groupName: g.name || '',
       topic: data.topic || '',

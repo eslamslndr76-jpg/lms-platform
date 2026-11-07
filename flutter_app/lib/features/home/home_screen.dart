@@ -1,3 +1,5 @@
+import '../groups/group_details_screen.dart';
+import '../../core/api/api_client.dart';
 import '../../core/navigation/app_navigation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -574,8 +576,45 @@ class _CoursesTab extends StatelessWidget {
 // 3. My Courses Tab
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _MyCoursesTab extends StatelessWidget {
+class _MyCoursesTab extends StatefulWidget {
   const _MyCoursesTab();
+
+  @override
+  State<_MyCoursesTab> createState() => _MyCoursesTabState();
+}
+
+class _MyCoursesTabState extends State<_MyCoursesTab> {
+  final ApiClient _api = ApiClient();
+  List<dynamic> _groups = [];
+  bool _loadingGroups = true;
+  String _activeTab = 'groups'; // 'groups' | 'orders'
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchGroups();
+  }
+
+  Future<void> _fetchGroups() async {
+    try {
+      final res = await _api.get('/api/groups/my/all');
+      if (res.statusCode == 200 && res.data is List && mounted) {
+        setState(() {
+          _groups = res.data as List;
+          _loadingGroups = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingGroups = false);
+    }
+  }
+
+  Future<void> _refreshAll() async {
+    await Future.wait([
+      _fetchGroups(),
+      context.read<OrdersProvider>().fetchMyOrders(silent: true),
+    ]);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -583,138 +622,351 @@ class _MyCoursesTab extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final orders = context.watch<OrdersProvider>();
 
-    return RefreshIndicator(
-      onRefresh: () => orders.fetchMyOrders(silent: true),
-      child: orders.isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : orders.myOrders.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.school_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
-                        const SizedBox(height: 16),
-                        Text(
-                          'لم تشترك في أي دورة بعد',
-                          style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+    return Scaffold(
+      body: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              border: Border(
+                bottom: BorderSide(color: cs.outlineVariant.withValues(alpha: 0.3)),
+              ),
+            ),
+            child: Row(
+              children: [
+                ChoiceChip(
+                  label: Text('�������� ������� (${_groups.length})'),
+                  selected: _activeTab == 'groups',
+                  onSelected: (val) {
+                    if (val) setState(() => _activeTab = 'groups');
+                  },
+                ),
+                const SizedBox(width: 8),
+                ChoiceChip(
+                  label: Text('��� ���������� (${orders.myOrders.length})'),
+                  selected: _activeTab == 'orders',
+                  onSelected: (val) {
+                    if (val) setState(() => _activeTab = 'orders');
+                  },
+                ),
+              ],
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: _refreshAll,
+              child: _activeTab == 'groups'
+                  ? _buildGroupsList(cs, tt)
+                  : _buildOrdersList(orders, cs, tt),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGroupsList(ColorScheme cs, TextTheme tt) {
+    if (_loadingGroups) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_groups.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.school_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+              const SizedBox(height: 16),
+              Text(
+                '�� ��� ������ �� �� ������ ���',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '����� ������ �� ������ ������ɡ ����� ��� ������ ��������� ������� ������ ������� ����� ������.',
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: _groups.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 14),
+      itemBuilder: (context, index) {
+        final g = _groups[index] as Map<String, dynamic>;
+        final groupId = g['id'] as int? ?? 0;
+        final title = g['title_ar'] as String? ?? g['course_name'] as String? ?? '���� �������';
+        final groupName = g['name'] as String? ?? '������';
+        final schedule = g['schedule_display'] as String? ?? g['schedule'] as String? ?? '';
+        final instructor = g['instructor_name'] as String? ?? g['instructor'] as String?;
+        final progress = g['lecture_progress'] as Map<String, dynamic>?;
+        final total = progress?['total'] as int? ?? 0;
+        final done = progress?['done'] as int? ?? 0;
+
+        return Card(
+          elevation: 1,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => GroupDetailsScreen(groupId: groupId),
+                ),
+              );
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          title,
+                          style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'استكشف الدورات التدريبية المتاحة وسجل الآن لتطوير مهاراتك!',
-                          textAlign: TextAlign.center,
-                          style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: cs.primaryContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          groupName,
+                          style: TextStyle(
+                            color: cs.onPrimaryContainer,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (schedule.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Row(
+                      children: [
+                        Icon(Icons.calendar_month_rounded, size: 16, color: cs.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            schedule,
+                            style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+                          ),
                         ),
                       ],
                     ),
+                  ],
+                  if (instructor != null && instructor.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Icon(Icons.person_outline_rounded, size: 16, color: cs.onSurfaceVariant),
+                        const SizedBox(width: 6),
+                        Text(
+                          '�������: $instructor',
+                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (total > 0) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '���������: $done �� $total',
+                          style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        Text(
+                          '${((done / total) * 100).toInt()}%',
+                          style: tt.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w800,
+                            color: cs.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: LinearProgressIndicator(
+                        value: done / total,
+                        minHeight: 6,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  FilledButton.tonalIcon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => GroupDetailsScreen(groupId: groupId),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.event_note_rounded, size: 18),
+                    label: const Text('��� ������ ��������� ������� �������'),
+                    style: FilledButton.styleFrom(
+                      minimumSize: const Size.fromHeight(40),
+                    ),
                   ),
-                )
-              : ListView.separated(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: orders.myOrders.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
-                    final order = orders.myOrders[index];
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-                    Color statusBg;
-                    Color statusFg;
-                    switch (order.status) {
-                      case 'paid':
-                        statusBg = cs.primaryContainer;
-                        statusFg = cs.onPrimaryContainer;
-                        break;
-                      case 'review':
-                        statusBg = cs.secondaryContainer;
-                        statusFg = cs.onSecondaryContainer;
-                        break;
-                      case 'rejected':
-                        statusBg = cs.errorContainer;
-                        statusFg = cs.onErrorContainer;
-                        break;
-                      case 'pending':
-                      default:
-                        statusBg = cs.surfaceContainerHighest;
-                        statusFg = cs.onSurfaceVariant;
-                        break;
-                    }
+  Widget _buildOrdersList(OrdersProvider orders, ColorScheme cs, TextTheme tt) {
+    if (orders.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
-                    return Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    order.titleAr ?? 'دورة تدريبية',
-                                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                                  ),
-                                ),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: statusBg,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    order.statusTextAr,
-                                    style: TextStyle(
-                                      color: statusFg,
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            if (order.instructor != null) ...[
-                              Row(
-                                children: [
-                                  Icon(Icons.person_outline_rounded, size: 16, color: cs.onSurfaceVariant),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    order.instructor!,
-                                    style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                            ],
-                            const Divider(height: 16),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  'المبلغ: ${order.amount.toInt()} ج.م',
-                                  style: TextStyle(
-                                    fontWeight: FontWeight.w700,
-                                    color: cs.primary,
-                                  ),
-                                ),
-                                Text(
-                                  order.createdAt != null
-                                      ? order.createdAt!.split('T').first
-                                      : '',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: cs.onSurfaceVariant,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
+    if (orders.myOrders.isEmpty) {
+      return Center(
+        child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.receipt_long_outlined, size: 72, color: cs.onSurfaceVariant.withValues(alpha: 0.4)),
+              const SizedBox(height: 16),
+              Text(
+                '�� ���� ����� ������ �����',
+                style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '��� ������� �� �� ���� ������� ����� ������ ����� ������ �������� ���.',
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: orders.myOrders.length,
+      separatorBuilder: (_, __) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final order = orders.myOrders[index];
+
+        Color statusBg;
+        Color statusFg;
+        switch (order.status) {
+          case 'paid':
+            statusBg = cs.primaryContainer;
+            statusFg = cs.onPrimaryContainer;
+            break;
+          case 'review':
+            statusBg = cs.secondaryContainer;
+            statusFg = cs.onSecondaryContainer;
+            break;
+          case 'rejected':
+            statusBg = cs.errorContainer;
+            statusFg = cs.onErrorContainer;
+            break;
+          case 'pending':
+          default:
+            statusBg = cs.surfaceContainerHighest;
+            statusFg = cs.onSurfaceVariant;
+            break;
+        }
+
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        order.titleAr ?? '���� �������',
+                        style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: statusBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        order.statusTextAr,
+                        style: TextStyle(
+                          color: statusFg,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12,
                         ),
                       ),
-                    );
-                  },
+                    ),
+                  ],
                 ),
+                const SizedBox(height: 8),
+                if (order.instructor != null) ...[
+                  Row(
+                    children: [
+                      Icon(Icons.person_outline_rounded, size: 16, color: cs.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        order.instructor!,
+                        style: TextStyle(fontSize: 13, color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                const Divider(height: 16),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      '������: ${order.amount.toInt()} �.�',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary,
+                      ),
+                    ),
+                    Text(
+                      order.createdAt != null
+                          ? order.createdAt!.split('T').first
+                          : '',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }
-
-

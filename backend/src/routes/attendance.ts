@@ -6,6 +6,7 @@ import { authMiddleware } from '../middleware/auth';
 import { requireRole, requirePermission, ADMIN, EMPLOYEE, STUDENT } from '../middleware/rbac';
 import { notifyGroupStudents } from '../services/notificationService';
 import { sendNotification, notifyGroupStudents as notifyGroupStudentsExt } from '../services/externalNotificationService';
+import { getFrontendUrl } from '../config/notification';
 
 const router = Router();
 
@@ -18,7 +19,8 @@ function generateCode(lectureId: number, seed: string, timestamp: number): strin
 }
 
 function getQRData(lectureId: number, code: string): string {
-  return JSON.stringify({ v: 1, l: lectureId, c: code, t: Math.floor(Date.now() / 1000) });
+  const baseUrl = getFrontendUrl();
+  return `${baseUrl}/attendance/${lectureId}?code=${code}`;
 }
 
 // POST /api/attendance/:lectureId/start - Admin starts attendance session
