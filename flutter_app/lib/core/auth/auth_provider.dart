@@ -104,6 +104,57 @@ class AuthProvider extends ChangeNotifier {
     return false;
   }
 
+  // Register
+  Future<bool> register({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    required String nationalId,
+    String? birthDate,
+    String? gender,
+    String? governorate,
+    required bool isEnrolled,
+    String? universityName,
+    String? universityCode,
+  }) async {
+    _loading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final res = await ApiClient().post(
+        ApiConstants.register,
+        data: {
+          'name': name.trim(),
+          'email': email.trim().toLowerCase(),
+          'password': password,
+          'phone': phone.trim(),
+          'nationalId': nationalId.trim(),
+          'birthDate': birthDate,
+          'gender': gender,
+          'governorate': governorate,
+          'isEnrolled': isEnrolled,
+          'universityName': isEnrolled ? universityName?.trim() : null,
+          'universityCode': isEnrolled ? universityCode?.trim() : null,
+        },
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        final data = res.data as Map<String, dynamic>;
+        _token = data['token'] as String;
+        _user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+        await _storage.write(key: _tokenKey, value: _token);
+        return true;
+      }
+    } catch (e) {
+      _error = _extractError(e);
+    } finally {
+      _loading = false;
+      notifyListeners();
+    }
+    return false;
+  }
+
   // Logout
   Future<void> logout() async {
     _token = null;

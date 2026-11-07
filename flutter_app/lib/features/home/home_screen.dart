@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../core/courses/courses_provider.dart';
 import '../../core/orders/orders_provider.dart';
@@ -23,6 +24,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _selectedIndex = 0;
+  AppUpdateInfo? _updateInfo;
+  bool _updateBannerDismissed = false;
 
   @override
   void initState() {
@@ -32,7 +35,16 @@ class _HomeScreenState extends State<HomeScreen> {
       context.read<OrdersProvider>().fetchMyOrders(silent: true);
       context.read<CartProvider>().fetchCart(silent: true);
       context.read<NotificationsProvider>().fetchNotifications(silent: true);
+      _checkAppUpdate();
     });
+  }
+
+  Future<void> _checkAppUpdate() async {
+    final info = await AppUpdateService.check();
+    if (info != null && mounted) {
+      setState(() => _updateInfo = info);
+      AppUpdateService.showUpdatePrompt(context, info);
+    }
   }
 
   void _navigateToTab(int index) {
@@ -90,6 +102,48 @@ class _HomeScreenState extends State<HomeScreen> {
       body: Column(
         children: [
           const OfflineBannerWidget(),
+          if (_updateInfo != null && !_updateBannerDismissed)
+            Container(
+              width: double.infinity,
+              color: Theme.of(context).colorScheme.primaryContainer,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.system_update_rounded,
+                    size: 20,
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'يوجد إصدار جديد من التطبيق! اضغط للتحديث',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                  FilledButton.tonal(
+                    onPressed: () =>
+                        AppUpdateService.openDownloadPage(_updateInfo!.downloadUrl),
+                    style: FilledButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                    ),
+                    child: const Text('تحديث الآن', style: TextStyle(fontSize: 12)),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, size: 18),
+                    color: Theme.of(context).colorScheme.onPrimaryContainer,
+                    onPressed: () =>
+                        setState(() => _updateBannerDismissed = true),
+                    tooltip: 'إغلاق',
+                  ),
+                ],
+              ),
+            ),
           Expanded(
             child: IndexedStack(
               index: _selectedIndex,

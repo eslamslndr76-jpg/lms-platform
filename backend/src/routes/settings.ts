@@ -49,6 +49,50 @@ router.put('/auto-group', authMiddleware, requireRole(ADMIN), async (req: Reques
   }
 });
 
+// ───────────────────────────────────────────────
+// Mobile App Version & Update Settings
+// ───────────────────────────────────────────────
+
+router.get('/app-version', async (_req: Request, res: Response) => {
+  try {
+    const result = await sql("SELECT value FROM system_settings WHERE key='appVersion'");
+    if (result.rows.length > 0 && result.rows[0].value) {
+      return res.json(JSON.parse(result.rows[0].value as string));
+    }
+    res.json({
+      latestVersion: '1.0.1',
+      buildNumber: 2,
+      forceUpdate: false,
+      title: 'تحديث جديد متوفر',
+      message: 'يتوفر إصدار جديد من تطبيق الهاتف يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',
+      downloadUrl: 'https://lms-user.vercel.app/download',
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch app version' });
+  }
+});
+
+router.put('/app-version', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { latestVersion, buildNumber, forceUpdate, title, message, downloadUrl } = req.body;
+    const data = {
+      latestVersion: latestVersion || '1.0.1',
+      buildNumber: Number(buildNumber) || 2,
+      forceUpdate: Boolean(forceUpdate),
+      title: title || 'تحديث جديد متوفر',
+      message: message || 'يتوفر إصدار جديد من تطبيق الهاتف، اضغط للتحديث الآن.',
+      downloadUrl: downloadUrl || 'https://lms-user.vercel.app/download',
+    };
+    await sql(
+      "INSERT INTO system_settings (key, value) VALUES ('appVersion', ?) ON CONFLICT(key) DO UPDATE SET value=?, updated_at=CURRENT_TIMESTAMP",
+      JSON.stringify(data), JSON.stringify(data),
+    );
+    res.json({ message: 'App version updated', data });
+  } catch {
+    res.status(500).json({ error: 'Failed to update app version' });
+  }
+});
+
 // ═══════════════════════════════════════════════
 // Notification Settings (SMTP + Telegram)
 // ═══════════════════════════════════════════════
