@@ -31,11 +31,15 @@ class CartProvider extends ChangeNotifier {
 
     try {
       final res = await _api.get(ApiConstants.cart);
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        final data = res.data as Map<String, dynamic>;
+      if (res.statusCode == 200 && res.data != null && res.data is Map) {
+        final data = Map<String, dynamic>.from(res.data as Map);
         final rawList = data['items'] as List? ?? [];
-        _items = rawList.map((i) => CartItemModel.fromJson(i as Map<String, dynamic>)).toList();
-        _total = (data['total'] as num?)?.toDouble() ?? 0.0;
+        _items = rawList
+            .whereType<Map>()
+            .map((i) => CartItemModel.fromJson(Map<String, dynamic>.from(i)))
+            .toList();
+        final rawTotal = data['total'];
+        _total = rawTotal is num ? rawTotal.toDouble() : double.tryParse(rawTotal?.toString() ?? '') ?? 0.0;
         _error = null;
       }
     } catch (_) {

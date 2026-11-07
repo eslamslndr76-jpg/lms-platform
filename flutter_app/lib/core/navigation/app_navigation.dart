@@ -4,6 +4,7 @@ import '../notifications/notifications_provider.dart';
 import '../../features/attendance/qr_scanner_screen.dart';
 import '../../features/cart/cart_screen.dart';
 import '../../features/groups/group_details_screen.dart';
+import '../../features/courses/course_details_screen.dart';
 
 class AppNavigation {
   AppNavigation._();
@@ -83,8 +84,20 @@ class AppNavigation {
       return;
     }
 
-    // 4. Courses Catalog: /courses
+    // 4. Courses Catalog: /courses or /courses/:id
     if (cleanLink.contains('courses') && !cleanLink.contains('my-courses')) {
+      final match = RegExp(r'courses/(\d+)').firstMatch(cleanLink);
+      if (match != null) {
+        final cid = int.tryParse(match.group(1)!);
+        if (cid != null) {
+          navigatorKey.currentState?.push(
+            MaterialPageRoute(
+              builder: (_) => CourseDetailsScreen(courseId: cid),
+            ),
+          );
+          return;
+        }
+      }
       switchTab(1);
       return;
     }

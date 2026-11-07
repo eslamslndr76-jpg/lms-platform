@@ -19,7 +19,10 @@ class OrdersProvider extends ChangeNotifier {
     try {
       final cached = await CacheService.load(CacheService.keyMyOrders);
       if (cached is List && cached.isNotEmpty) {
-        _myOrders = cached.map((o) => OrderModel.fromJson(o as Map<String, dynamic>)).toList();
+        _myOrders = cached
+            .whereType<Map>()
+            .map((o) => OrderModel.fromJson(Map<String, dynamic>.from(o)))
+            .toList();
         notifyListeners();
       }
     } catch (_) {}
@@ -43,7 +46,10 @@ class OrdersProvider extends ChangeNotifier {
       final res = await _api.get(ApiConstants.myOrders);
       if (res.statusCode == 200 && res.data is List) {
         final list = res.data as List;
-        _myOrders = list.map((item) => OrderModel.fromJson(item as Map<String, dynamic>)).toList();
+        _myOrders = list
+            .whereType<Map>()
+            .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
         CacheService.save(CacheService.keyMyOrders, res.data);
         _error = null;
       }

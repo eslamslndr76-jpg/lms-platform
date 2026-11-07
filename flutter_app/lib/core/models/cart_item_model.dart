@@ -21,17 +21,31 @@ class CartItemModel {
     this.createdAt,
   });
 
+  static int _parseInt(dynamic val, [int defaultVal = 0]) {
+    if (val == null) return defaultVal;
+    if (val is num) return val.toInt();
+    if (val is String) return int.tryParse(val) ?? defaultVal;
+    return defaultVal;
+  }
+
+  static double _parseDouble(dynamic val, [double defaultVal = 0.0]) {
+    if (val == null) return defaultVal;
+    if (val is num) return val.toDouble();
+    if (val is String) return double.tryParse(val) ?? defaultVal;
+    return defaultVal;
+  }
+
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
     return CartItemModel(
-      id: (json['id'] as num).toInt(),
-      courseId: (json['course_id'] as num).toInt(),
-      titleAr: json['title_ar'] as String? ?? '',
-      titleEn: json['title_en'] as String?,
-      price: (json['price'] as num?)?.toDouble() ?? 0.0,
-      image: (json['image_url'] ?? json['image']) as String?,
-      instructor: json['instructor'] as String?,
-      categoryNameAr: json['category_name_ar'] as String?,
-      createdAt: json['created_at'] as String?,
+      id: _parseInt(json['id']),
+      courseId: _parseInt(json['course_id']),
+      titleAr: json['title_ar']?.toString() ?? '',
+      titleEn: json['title_en']?.toString(),
+      price: _parseDouble(json['price']),
+      image: (json['image_url'] ?? json['image'])?.toString(),
+      instructor: json['instructor']?.toString(),
+      categoryNameAr: json['category_name_ar']?.toString(),
+      createdAt: json['created_at']?.toString(),
     );
   }
 }

@@ -77,13 +77,19 @@ class CoursesProvider extends ChangeNotifier {
 
       if (responses[0].statusCode == 200 && responses[0].data is List) {
         final list = responses[0].data as List;
-        _courses = list.map((item) => CourseModel.fromJson(item as Map<String, dynamic>)).toList();
+        _courses = list
+            .whereType<Map>()
+            .map((item) => CourseModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
         CacheService.save(CacheService.keyCourses, responses[0].data);
       }
 
       if (responses[1].statusCode == 200 && responses[1].data is List) {
         final list = responses[1].data as List;
-        _categories = list.map((item) => CategoryModel.fromJson(item as Map<String, dynamic>)).toList();
+        _categories = list
+            .whereType<Map>()
+            .map((item) => CategoryModel.fromJson(Map<String, dynamic>.from(item)))
+            .toList();
         CacheService.save(CacheService.keyCategories, responses[1].data);
       }
 
@@ -118,8 +124,8 @@ class CoursesProvider extends ChangeNotifier {
   Future<CourseModel?> fetchCourseDetails(int id) async {
     try {
       final res = await _api.get('${ApiConstants.courses}/$id');
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        return CourseModel.fromJson(res.data as Map<String, dynamic>);
+      if (res.statusCode == 200 && res.data != null && res.data is Map) {
+        return CourseModel.fromJson(Map<String, dynamic>.from(res.data as Map));
       }
     } catch (_) {}
     return null;

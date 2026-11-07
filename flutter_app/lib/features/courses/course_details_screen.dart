@@ -27,13 +27,37 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
   }
 
   Future<void> _loadCourse() async {
-    setState(() => _isLoading = true);
-    final course = await context.read<CoursesProvider>().fetchCourseDetails(widget.courseId);
-    if (mounted) {
-      setState(() {
-        _course = course;
-        _isLoading = false;
-      });
+    // 1. Try to initialize from cached/in-memory courses immediately so screen loads instantly
+    try {
+      final existing = context
+          .read<CoursesProvider>()
+          .allCourses
+          .where((c) => c.id == widget.courseId)
+          .firstOrNull;
+      if (existing != null && mounted) {
+        setState(() {
+          _course = existing;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {}
+
+    if (_course == null) {
+      setState(() => _isLoading = true);
+    }
+
+    try {
+      final fetched = await context.read<CoursesProvider>().fetchCourseDetails(widget.courseId);
+      if (mounted) {
+        setState(() {
+          if (fetched != null) _course = fetched;
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted && _course == null) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -200,7 +224,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                                                 Text(
                                                   _course!.isFull
                                                       ? 'مكتمل'
-                                                      : '${(_course!.fillRate * 100).toInt()}%',
+                                                      : '${((_course!.fillRate * 100).toInt()).clamp(0, 100)}%',
                                                   style: TextStyle(
                                                     fontWeight: FontWeight.w700,
                                                     color: _course!.isFull ? cs.error : cs.primary,
@@ -212,7 +236,7 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                                             ClipRRect(
                                               borderRadius: BorderRadius.circular(4),
                                               child: LinearProgressIndicator(
-                                                value: _course!.fillRate,
+                                                value: _course!.fillRate.clamp(0.0, 1.0),
                                                 minHeight: 8,
                                                 backgroundColor: cs.surfaceContainerHighest,
                                                 valueColor: AlwaysStoppedAnimation<Color>(

@@ -25,6 +25,21 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   Map<String, dynamic>? _group;
   List<Map<String, dynamic>> _lectures = [];
 
+  static bool _parseBool(dynamic val) {
+    if (val == null) return false;
+    if (val is bool) return val;
+    if (val is num) return val.toInt() == 1;
+    if (val is String) return val == '1' || val.toLowerCase() == 'true';
+    return false;
+  }
+
+  static int? _parseInt(dynamic val) {
+    if (val == null) return null;
+    if (val is num) return val.toInt();
+    if (val is String) return int.tryParse(val);
+    return null;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -119,9 +134,9 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
     final progress = _group?['lecture_progress'] is Map
         ? Map<String, dynamic>.from(_group!['lecture_progress'] as Map)
         : null;
-    final totalLec = (progress?['total'] as num?)?.toInt() ?? _lectures.length;
-    final doneLec = (progress?['done'] as num?)?.toInt() ??
-        _lectures.where((l) => (l['is_completed'] as num?)?.toInt() == 1).length;
+    final totalLec = _parseInt(progress?['total']) ?? _lectures.length;
+    final doneLec = _parseInt(progress?['done']) ??
+        _lectures.where((l) => _parseBool(l['is_completed'])).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -221,7 +236,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                             ),
                           ),
                           Text(
-                            totalLec > 0 ? '${((doneLec / totalLec) * 100).toInt()}%' : '0%',
+                            totalLec > 0 ? '${((doneLec / totalLec) * 100).toInt().clamp(0, 100)}%' : '0%',
                             style: tt.bodySmall?.copyWith(
                               fontWeight: FontWeight.w800,
                               color: cs.primary,
@@ -233,7 +248,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                       ClipRRect(
                         borderRadius: BorderRadius.circular(6),
                         child: LinearProgressIndicator(
-                          value: totalLec > 0 ? (doneLec / totalLec) : 0,
+                          value: totalLec > 0 ? (doneLec / totalLec).clamp(0.0, 1.0) : 0.0,
                           minHeight: 8,
                         ),
                       ),
@@ -273,18 +288,18 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
               ..._lectures.asMap().entries.map((entry) {
                 final idx = entry.key + 1;
                 final lec = entry.value;
-                final lecId = (lec['id'] as num?)?.toInt() ?? 0;
-                final topic = lec['topic'] as String? ?? 'محاضرة $idx';
-                final date = lec['date'] as String? ?? '';
-                final dayName = lec['day_of_week_name'] as String? ?? '';
-                final timeFrom = lec['time_from'] as String? ?? '';
-                final timeTo = lec['time_to'] as String? ?? '';
-                final lecLoc = lec['location'] as String? ?? '';
-                final zoomLink = lec['zoom_link'] as String?;
-                final isAttActive = (lec['attendance_active'] as num?)?.toInt() == 1;
-                final isCompleted = (lec['is_completed'] as num?)?.toInt() == 1;
-                final attendedBool = lec['attended'] == true || (lec['attended'] as num?)?.toInt() == 1;
-                final myAtt = lec['my_attendance'] as String? ?? (attendedBool ? 'attended' : null);
+                final lecId = _parseInt(lec['id']) ?? 0;
+                final topic = lec['topic']?.toString() ?? 'محاضرة $idx';
+                final date = lec['date']?.toString() ?? '';
+                final dayName = lec['day_of_week_name']?.toString() ?? '';
+                final timeFrom = lec['time_from']?.toString() ?? '';
+                final timeTo = lec['time_to']?.toString() ?? '';
+                final lecLoc = lec['location']?.toString() ?? '';
+                final zoomLink = lec['zoom_link']?.toString();
+                final isAttActive = _parseBool(lec['attendance_active']);
+                final isCompleted = _parseBool(lec['is_completed']);
+                final attendedBool = _parseBool(lec['attended']);
+                final myAtt = lec['my_attendance']?.toString() ?? (attendedBool ? 'attended' : null);
 
                 final isHighlighted = widget.highlightLectureId == lecId;
 

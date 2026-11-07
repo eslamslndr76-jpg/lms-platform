@@ -11,12 +11,19 @@ class CategoryModel {
     this.description,
   });
 
+  static int _parseInt(dynamic val, [int defaultVal = 0]) {
+    if (val == null) return defaultVal;
+    if (val is num) return val.toInt();
+    if (val is String) return int.tryParse(val) ?? defaultVal;
+    return defaultVal;
+  }
+
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
     return CategoryModel(
-      id: (json['id'] as num).toInt(),
-      nameAr: json['name_ar'] as String? ?? '',
-      nameEn: json['name_en'] as String? ?? '',
-      description: json['description'] as String?,
+      id: _parseInt(json['id']),
+      nameAr: json['name_ar']?.toString() ?? '',
+      nameEn: json['name_en']?.toString() ?? '',
+      description: json['description']?.toString(),
     );
   }
 }

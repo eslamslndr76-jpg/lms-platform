@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../../core/api/api_constants.dart';
 
 class AppNetworkImage extends StatelessWidget {
   final String? imageUrl;
@@ -22,10 +24,14 @@ class AppNetworkImage extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
 
     Widget imageWidget;
+    final url = imageUrl?.trim();
 
-    if (imageUrl != null && imageUrl!.startsWith('data:image')) {
+    if (url != null && url.startsWith('data:image')) {
       try {
-        final bytes = Uri.dataFromString(imageUrl!).data!.contentAsBytes();
+        final commaIdx = url.indexOf(',');
+        final base64Data = commaIdx != -1 ? url.substring(commaIdx + 1) : url;
+        final cleanBase64 = base64Data.replaceAll(RegExp(r'\s+'), '');
+        final bytes = base64Decode(cleanBase64);
         imageWidget = Image.memory(
           bytes,
           width: width,
@@ -36,14 +42,24 @@ class AppNetworkImage extends StatelessWidget {
       } catch (_) {
         imageWidget = _placeholder(cs);
       }
-    } else if (imageUrl != null && (imageUrl!.startsWith('http://') || imageUrl!.startsWith('https://'))) {
+    } else if (url != null && (url.startsWith('http://') || url.startsWith('https://'))) {
       imageWidget = CachedNetworkImage(
-        imageUrl: imageUrl!,
+        imageUrl: url,
         width: width,
         height: height,
         fit: fit,
-        placeholder: (context, url) => _loadingPlaceholder(cs),
-        errorWidget: (context, url, error) => _placeholder(cs),
+        placeholder: (context, u) => _loadingPlaceholder(cs),
+        errorWidget: (context, u, error) => _placeholder(cs),
+      );
+    } else if (url != null && url.startsWith('/')) {
+      final fullUrl = '${ApiConstants.defaultBaseUrl}$url';
+      imageWidget = CachedNetworkImage(
+        imageUrl: fullUrl,
+        width: width,
+        height: height,
+        fit: fit,
+        placeholder: (context, u) => _loadingPlaceholder(cs),
+        errorWidget: (context, u, error) => _placeholder(cs),
       );
     } else {
       imageWidget = _placeholder(cs);

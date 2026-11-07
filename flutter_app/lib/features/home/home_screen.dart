@@ -802,7 +802,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                           style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          '${((done / total) * 100).toInt()}%',
+                          total > 0 ? '${((done / total) * 100).toInt().clamp(0, 100)}%' : '0%',
                           style: tt.bodySmall?.copyWith(
                             fontWeight: FontWeight.w800,
                             color: cs.primary,
@@ -814,7 +814,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                     ClipRRect(
                       borderRadius: BorderRadius.circular(4),
                       child: LinearProgressIndicator(
-                        value: done / total,
+                        value: total > 0 ? (done / total).clamp(0.0, 1.0) : 0.0,
                         minHeight: 6,
                       ),
                     ),
