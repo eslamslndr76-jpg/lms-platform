@@ -127,7 +127,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   FilledButton.tonal(
                     onPressed: () =>
-                        AppUpdateService.openDownloadPage(_updateInfo!.downloadUrl),
+                        AppUpdateService.downloadAndInstall(context, directApkUrl: _updateInfo!.apkDirectUrl),
                     style: FilledButton.styleFrom(
                       visualDensity: VisualDensity.compact,
                       padding: const EdgeInsets.symmetric(horizontal: 12),

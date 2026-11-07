@@ -1,4 +1,8 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
 
@@ -9,6 +13,7 @@ class AppUpdateInfo {
   final String title;
   final String message;
   final String downloadUrl;
+  final String apkDirectUrl;
 
   const AppUpdateInfo({
     required this.latestVersion,
@@ -17,6 +22,7 @@ class AppUpdateInfo {
     required this.title,
     required this.message,
     required this.downloadUrl,
+    required this.apkDirectUrl,
   });
 
   factory AppUpdateInfo.fromJson(Map<String, dynamic> json) {
@@ -24,10 +30,12 @@ class AppUpdateInfo {
       latestVersion: json['latestVersion'] as String? ?? '1.0.1',
       buildNumber: (json['buildNumber'] as num?)?.toInt() ?? 2,
       forceUpdate: json['forceUpdate'] as bool? ?? false,
-      title: json['title'] as String? ?? 'تحديث جديد متوفر',
+      title: json['title'] as String? ?? 'تحديث جديد متوفر 🚀',
       message: json['message'] as String? ??
-          'يتوفر إصدار أحدث من التطبيق يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',
+          'يتوفر إصدار جديد من تطبيق وحدة التدريب يتضمن ميزة إنشاء حساب جديد، خطوط عصرية، والشعار الرسمي. اضغط للتثبيت الآن.',
       downloadUrl: json['downloadUrl'] as String? ?? 'https://lms-user.vercel.app/download',
+      apkDirectUrl: json['apkDirectUrl'] as String? ??
+          'https://lms-user.vercel.app/downloads/training-unit.apk',
     );
   }
 }
@@ -35,9 +43,9 @@ class AppUpdateInfo {
 class AppUpdateService {
   AppUpdateService._();
 
-  // Current build number of the installed client
-  static const int currentBuildNumber = 2;
-  static const String currentVersionName = '1.0.1';
+  // Current client build number
+  static const int currentBuildNumber = 1;
+  static const String currentVersionName = '1.0.0';
 
   static AppUpdateInfo? _cachedUpdate;
   static bool _checked = false;
@@ -53,20 +61,182 @@ class AppUpdateService {
         }
       }
     } catch (_) {
-      // Offline or endpoint unavailable: fallback silently
+      // Silently ignore if offline
     } finally {
       _checked = true;
     }
     return _cachedUpdate;
   }
 
-  static Future<void> openDownloadPage([String? url]) async {
-    final target = Uri.parse(url ?? 'https://lms-user.vercel.app/download');
+  /// Downloads the APK directly from within the app and triggers the
+  /// Android package installer without external browser navigation.
+  static Future<void> downloadAndInstall(
+    BuildContext context, {
+    String? directApkUrl,
+  }) async {
+    final apkUrl = directApkUrl ??
+        'https://lms-user.vercel.app/downloads/training-unit.apk';
+
+    // Show Progress Dialog
+    double progress = 0.0;
+    String statusText = 'جارٍ بدء التحميل...';
+    String sizeText = '';
+    bool isDownloading = true;
+    CancelToken cancelToken = CancelToken();
+
+    final dialogContext = context;
+
+    showDialog(
+      context: dialogContext,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final cs = Theme.of(context).colorScheme;
+            final tt = Theme.of(context).textTheme;
+
+            return PopScope(
+              canPop: false,
+              child: AlertDialog(
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                title: Row(
+                  children: [
+                    Icon(
+                      Icons.system_update_rounded,
+                      color: cs.primary,
+                      size: 26,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'تحديث التطبيق تلقائياً',
+                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ],
+                ),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      statusText,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 12),
+                    LinearProgressIndicator(
+                      value: progress > 0 ? progress : null,
+                      borderRadius: BorderRadius.circular(8),
+                      minHeight: 8,
+                    ),
+                    if (sizeText.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        sizeText,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: cs.onSurfaceVariant,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    Text(
+                      'سيتم بدء تثبيت التحديث تلقائياً فور انتهاء التحميل.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: cs.onSurfaceVariant.withValues(alpha: 0.8),
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () {
+                      cancelToken.cancel();
+                      Navigator.of(ctx).pop();
+                    },
+                    child: const Text('إلغاء'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
     try {
-      if (await canLaunchUrl(target)) {
-        await launchUrl(target, mode: LaunchMode.externalApplication);
+      final dir = await getTemporaryDirectory();
+      final savePath = '${dir.path}/training-unit.apk';
+
+      // Delete existing temporary apk if exists
+      final existingFile = File(savePath);
+      if (await existingFile.exists()) {
+        await existingFile.delete();
       }
-    } catch (_) {}
+
+      final dio = Dio();
+      await dio.download(
+        apkUrl,
+        savePath,
+        cancelToken: cancelToken,
+        onReceiveProgress: (received, total) {
+          if (total > 0 && isDownloading) {
+            progress = received / total;
+            final recMb = (received / (1024 * 1024)).toStringAsFixed(1);
+            final totMb = (total / (1024 * 1024)).toStringAsFixed(1);
+            final percent = (progress * 100).toInt();
+            sizeText = '$recMb ميجابايت / $totMb ميجابايت ($percent%)';
+            statusText = 'جارٍ تحميل التحديث... $percent%';
+            // Trigger dialog rebuild
+            if (context.mounted) {
+              (context as Element).markNeedsBuild();
+            }
+          }
+        },
+      );
+
+      // Dismiss progress dialog
+      if (dialogContext.mounted) {
+        Navigator.of(dialogContext, rootNavigator: true).pop();
+      }
+
+      // Automatically launch package installer
+      final result = await OpenFilex.open(
+        savePath,
+        type: 'application/vnd.android.package-archive',
+      );
+
+      if (result.type != ResultType.done && dialogContext.mounted) {
+        // Fallback to browser download if package installer was blocked
+        _fallbackBrowser(dialogContext, apkUrl);
+      }
+    } catch (e) {
+      if (dialogContext.mounted) {
+        try {
+          Navigator.of(dialogContext, rootNavigator: true).pop();
+        } catch (_) {}
+
+        if (e is! DioException || e.type != DioExceptionType.cancel) {
+          ScaffoldMessenger.of(dialogContext).showSnackBar(
+            const SnackBar(
+              content: Text('تعذر التثبيت التلقائي، جارٍ فتح صفحة التحميل...'),
+            ),
+          );
+          _fallbackBrowser(dialogContext, apkUrl);
+        }
+      }
+    }
+  }
+
+  static Future<void> _fallbackBrowser(BuildContext context, String apkUrl) async {
+    final uri = Uri.parse(apkUrl);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   static void showUpdatePrompt(BuildContext context, AppUpdateInfo info) {
@@ -115,13 +285,11 @@ class AppUpdateService {
                 const SizedBox(height: 24),
                 FilledButton.icon(
                   onPressed: () {
-                    openDownloadPage(info.downloadUrl);
-                    if (!info.forceUpdate) {
-                      Navigator.of(ctx).pop();
-                    }
+                    Navigator.of(ctx).pop();
+                    downloadAndInstall(context, directApkUrl: info.apkDirectUrl);
                   },
-                  icon: const Icon(Icons.download_rounded),
-                  label: const Text('اضغط للتحديث الآن'),
+                  icon: const Icon(Icons.install_mobile_rounded),
+                  label: const Text('تثبيت التحديث الآن من داخل التطبيق'),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
                   ),
