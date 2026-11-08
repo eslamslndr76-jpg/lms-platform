@@ -65,6 +65,28 @@ function sanitizeDailyContent(raw: unknown, fallbackInstructor: string): Proposa
     .slice(0, 60);
 }
 
+/**
+ * Course material is a link only (Drive/Dropbox/PDF host). Files above 20MB
+ * cannot be uploaded, so the instructor pastes a shared link instead.
+ */
+function sanitizeMaterialsUrl(raw: unknown): string {
+  const value = String(raw ?? '').trim();
+  if (!value) return '';
+  if (value.length > 500) {
+    throw { status: 400, message: 'رابط المادة العلمية يجب ألا يزيد عن 500 حرف' };
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw { status: 400, message: 'رابط المادة العلمية غير صالح' };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw { status: 400, message: 'رابط المادة العلمية يجب أن يبدأ بـ http أو https' };
+  }
+  return parsed.toString();
+}
+
 function parseJsonArray(value: unknown): any[] {
   try {
     const parsed = JSON.parse(String(value || '[]'));
@@ -107,6 +129,7 @@ function serializeProposal(row: any): any {
       topic: String(day?.topic || ''),
       instructor: String(day?.instructor || row.instructor_name || ''),
     })),
+    materials_url: row.materials_url || '',
     status: row.status as ProposalStatus,
     status_label: STATUS_LABELS[row.status as ProposalStatus] || row.status,
     admin_note: row.admin_note || '',
@@ -131,16 +154,17 @@ export async function getInstructorProposals(instructorId: number): Promise<any[
 
 export async function createProposal(
   instructorId: number,
-  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown },
+  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown; materials_url?: string },
 ): Promise<any> {
   const instructor = await loadInstructor(instructorId);
   const result = await sql(
-    `INSERT INTO course_proposals (instructor_user_id, course_title, objectives, daily_content, status)
-     VALUES (?,?,?,?,'draft')`,
+    `INSERT INTO course_proposals (instructor_user_id, course_title, objectives, daily_content, materials_url, status)
+     VALUES (?,?,?,?,?,'draft')`,
     instructorId,
     String(payload.course_title || '').slice(0, 200),
     JSON.stringify(sanitizeObjectives(payload.objectives).map((text) => ({ text }))),
     JSON.stringify(sanitizeDailyContent(payload.daily_content, instructor.name)),
+    sanitizeMaterialsUrl(payload.materials_url),
   );
   return loadProposalForInstructor(instructorId, Number(result.lastInsertRowid));
 }
@@ -152,7 +176,7 @@ function canInstructorEdit(status: ProposalStatus): boolean {
 export async function updateProposal(
   instructorId: number,
   proposalId: number,
-  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown },
+  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown; materials_url?: string },
 ): Promise<any> {
   const current = await loadProposalForInstructor(instructorId, proposalId);
   if (!canInstructorEdit(current.status)) {
@@ -161,13 +185,14 @@ export async function updateProposal(
   const instructor = await loadInstructor(instructorId);
   await sql(
     `UPDATE course_proposals
-     SET course_title=?, objectives=?, daily_content=?, updated_at=datetime('now')
+     SET course_title=?, objectives=?, daily_content=?, materials_url=?, updated_at=datetime('now')
      WHERE id=? AND instructor_user_id=?`,
     String(payload.course_title ?? current.course_title).slice(0, 200),
     JSON.stringify(
       sanitizeObjectives(payload.objectives ?? current.objectives).map((text) => ({ text })),
     ),
     JSON.stringify(sanitizeDailyContent(payload.daily_content ?? current.daily_content, instructor.name)),
+    sanitizeMaterialsUrl(payload.materials_url ?? current.materials_url),
     proposalId, instructorId,
   );
   return loadProposalForInstructor(instructorId, proposalId);
@@ -244,7 +269,7 @@ export async function getProposal(proposalId: number): Promise<any> {
 
 export async function adminUpdateProposal(
   proposalId: number,
-  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown },
+  payload: { course_title?: string; objectives?: unknown; daily_content?: unknown; materials_url?: string },
 ): Promise<any> {
   const current = await getProposal(proposalId);
   if (current.status === 'approved') {
@@ -253,13 +278,14 @@ export async function adminUpdateProposal(
   const instructor = await loadInstructor(current.instructor_user_id);
   await sql(
     `UPDATE course_proposals
-     SET course_title=?, objectives=?, daily_content=?, updated_at=datetime('now')
+     SET course_title=?, objectives=?, daily_content=?, materials_url=?, updated_at=datetime('now')
      WHERE id=?`,
     String(payload.course_title ?? current.course_title).slice(0, 200),
     JSON.stringify(
       sanitizeObjectives(payload.objectives ?? current.objectives).map((text) => ({ text })),
     ),
     JSON.stringify(sanitizeDailyContent(payload.daily_content ?? current.daily_content, instructor.name)),
+    sanitizeMaterialsUrl(payload.materials_url ?? current.materials_url),
     proposalId,
   );
   return getProposal(proposalId);
@@ -330,6 +356,7 @@ export async function createCourseFromProposal(
     description?: string;
     target_audience?: string;
     introduction?: string;
+    materials_url?: string;
     is_active?: number;
   },
 ): Promise<{ id: number }> {
@@ -345,8 +372,8 @@ export async function createCourseFromProposal(
     `INSERT INTO courses
       (title_ar, title_en, description, price, category_id, image_url, max_students,
        lecture_count, lecture_duration, course_mode, objectives, daily_content,
-       introduction, target_audience, proposal_id, instructor, is_active)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+       introduction, target_audience, materials_url, proposal_id, instructor, is_active)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
     proposal.course_title,
     String(payload.title_en || proposal.course_title).slice(0, 200),
     String(payload.description || '').slice(0, 5000),
@@ -361,6 +388,7 @@ export async function createCourseFromProposal(
     JSON.stringify(proposal.daily_content),
     String(payload.introduction || '').slice(0, 5000),
     String(payload.target_audience || '').slice(0, 2000),
+    sanitizeMaterialsUrl(payload.materials_url ?? proposal.materials_url),
     proposalId,
     proposal.instructor_name,
     payload.is_active === 0 ? 0 : 1,
@@ -411,6 +439,7 @@ export async function buildProposalWord(proposal: any): Promise<Buffer> {
   const children: (Paragraph | Table)[] = [
     rtlParagraph(MINISTRY_HEADER, { bold: true, size: 24, spacing: 60 }),
     rtlParagraph(UNIT_HEADER, { bold: true, size: 28, spacing: 240 }),
+    rtlParagraph('خطة تدريب', { bold: true, size: 26, spacing: 80 }),
     rtlParagraph(proposal.course_title || 'مقترح دورة تدريبية', {
       bold: true,
       size: 36,
@@ -455,6 +484,18 @@ export async function buildProposalWord(proposal: any): Promise<Buffer> {
       rows,
     }),
   );
+
+  if (proposal.materials_url) {
+    children.push(
+      rtlParagraph('المادة العلمية', {
+        bold: true,
+        size: 30,
+        heading: HeadingLevel.HEADING_2,
+        spacing: 240,
+      }),
+      rtlParagraph(proposal.materials_url, { size: 22, spacing: 240 }),
+    );
+  }
 
   children.push(
     rtlParagraph('', { spacing: 400 }),

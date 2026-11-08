@@ -302,6 +302,7 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       describeFilters(dataset, params),
       exporterIdentity(req),
     ]);
+    const footerNote = dataset.buildNote ? await dataset.buildNote(params) : undefined;
 
     const buffer = await buildBrandedWorkbook({
       sheetName: dataset.name,
@@ -313,9 +314,14 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       filters,
       exportedBy: identity.name,
       exportedByRole: identity.role,
+      footerNote,
     });
 
-    const filename = safeFilename(dataset.name);
+    const filename = safeFilename(
+      [dataset.name, ...filters.filter((f) => f.label === 'الكورس' || f.label === 'المجموعة').map((f) => f.value)]
+        .filter(Boolean)
+        .join('-'),
+    );
     res.setHeader('Content-Type', XLSX_MIME);
     res.setHeader(
       'Content-Disposition',

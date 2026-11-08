@@ -113,6 +113,8 @@ export async function initializeDatabase() {
     "UPDATE groups SET survey_closes_at = datetime(COALESCE(completed_at, CURRENT_TIMESTAMP), '+30 days') WHERE status = 'completed' AND survey_closes_at IS NULL",
     // FCM push notification token for Flutter mobile app
     "ALTER TABLE users ADD COLUMN fcm_token TEXT",
+    // Course material link supplied by the instructor (Drive/PDF > 20MB).
+    "ALTER TABLE course_proposals ADD COLUMN materials_url TEXT",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

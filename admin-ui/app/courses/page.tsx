@@ -19,7 +19,7 @@ export default function CoursesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [addModal, setAddModal] = useState(false);
-  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
+  const [addForm, setAddForm] = useState({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', materials_url: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
 
   const [editModal, setEditModal] = useState(false);
   const [editForm, setEditForm] = useState<any>({});
@@ -56,7 +56,7 @@ export default function CoursesPage() {
         body: JSON.stringify({ ...addForm, category_id: addForm.category_id ? Number(addForm.category_id) : null }),
       });
       setAddModal(false);
-      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
+      setAddForm({ title_ar: '', title_en: '', description: '', price: 0, category_id: '', image_url: '', max_students: 30, lecture_count: 0, lecture_duration: 0, instructor: '', materials_url: '', course_mode: 'online', featured: false, enable_direct_purchase: true, enable_mobile_sticky_cta: true, auto_assign: true });
       toast('تم إضافة الكورس', 'success');
       load();
     } catch {
@@ -236,6 +236,16 @@ export default function CoursesPage() {
               onChange={e => setAddForm({ ...addForm, instructor: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رابط المادة العلمية (Google Drive / PDF)</label>
+            <input type="url" dir="ltr" placeholder="https://drive.google.com/file/d/..." value={addForm.materials_url}
+              onChange={e => setAddForm({ ...addForm, materials_url: e.target.value })}
+              maxLength={500}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm text-left" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              للملفات الأكبر من 20 ميجا ارفعها على درايف وضع رابط المشاركة هنا. يظهر الرابط للطلاب المسجلين فقط.
+            </p>
+          </div>
            <div>
              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع الكورس</label>
              <select value={addForm.course_mode} onChange={e => setAddForm({ ...addForm, course_mode: e.target.value })}
@@ -364,6 +374,16 @@ export default function CoursesPage() {
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>اسم المدرب</label>
             <input value={editForm.instructor} onChange={e => setEditForm({ ...editForm, instructor: e.target.value })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+          </div>
+          <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رابط المادة العلمية (Google Drive / PDF)</label>
+            <input type="url" dir="ltr" placeholder="https://drive.google.com/file/d/..." value={editForm.materials_url || ''}
+              onChange={e => setEditForm({ ...editForm, materials_url: e.target.value })}
+              maxLength={500}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm text-left" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              للملفات الأكبر من 20 ميجا ارفعها على درايف وضع رابط المشاركة هنا. يظهر الرابط للطلاب المسجلين فقط.
+            </p>
           </div>
           <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للطلاب</label>

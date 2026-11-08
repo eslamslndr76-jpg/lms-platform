@@ -604,6 +604,9 @@ export async function updateGroup(id: number, data: {
   max_students?: number | null;
   is_active?: number;
   status?: string;
+  activity_type?: string;
+  report_notes?: string;
+  report_recommendations?: string;
 }): Promise<void> {
   if (data.status === 'completed') {
     throw { status: 400, message: 'لا يمكن تعيين الحالة "مكتملة" يدوياً — استخدم زر "إنهاء المجموعة"' };
@@ -697,7 +700,7 @@ export async function updateGroup(id: number, data: {
     }
   }
 
-  const fields: (keyof typeof data)[] = ['name', 'zoom_link', 'end_date', 'instructor_name', 'location', 'place_id', 'max_students', 'is_active', 'status'];
+  const fields: (keyof typeof data)[] = ['name', 'zoom_link', 'end_date', 'instructor_name', 'location', 'place_id', 'max_students', 'is_active', 'status', 'activity_type', 'report_notes', 'report_recommendations'];
   for (const f of fields) {
     if (data[f] !== undefined) {
       if (f === 'place_id') {

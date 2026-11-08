@@ -264,6 +264,7 @@ CREATE TABLE IF NOT EXISTS course_proposals (
   course_title TEXT NOT NULL DEFAULT '',
   objectives TEXT NOT NULL DEFAULT '[]',
   daily_content TEXT NOT NULL DEFAULT '[]',
+  materials_url TEXT,
   status TEXT NOT NULL DEFAULT 'draft',
   admin_note TEXT DEFAULT '',
   course_id INTEGER,

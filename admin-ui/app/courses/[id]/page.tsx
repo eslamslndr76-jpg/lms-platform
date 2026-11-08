@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { api } from '../../../lib/api';
+import { api, downloadFile } from '../../../lib/api';
 import DataTable from '../../../components/DataTable';
 import Modal from '../../../components/Modal';
 import ConfirmDialog from '../../../components/ConfirmDialog';
@@ -64,7 +64,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [editGroupPlaceInfo, setEditGroupPlaceInfo] = useState<{ conflicts: any[]; groups: any[] }>({ conflicts: [], groups: [] });
 
   const [detailGroup, setDetailGroup] = useState<any>(null);
-  const [detailGroupTab, setDetailGroupTab] = useState<'info' | 'lectures' | 'students' | 'survey'>('info');
+  const [detailGroupTab, setDetailGroupTab] = useState<'info' | 'lectures' | 'students' | 'survey' | 'report'>('info');
+
+  // Group report (edit-plan.md §8)
+  const [reportData, setReportData] = useState<any>(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState('');
+  const [reportForm, setReportForm] = useState({ activity_type: '', report_notes: '', report_recommendations: '' });
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportImages, setReportImages] = useState<File[]>([]);
+  const [reportImagesOpen, setReportImagesOpen] = useState(false);
+  const [reportExtracting, setReportExtracting] = useState(false);
+  const [exportingKey, setExportingKey] = useState('');
 
   // Group survey (edit-plan.md §4.4)
   const [surveyStats, setSurveyStats] = useState<any>(null);
@@ -79,6 +90,14 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
   const [instructorEval, setInstructorEval] = useState<any>(null);
   const [instructorEvalLoading, setInstructorEvalLoading] = useState(false);
   const [reopeningInstructorEval, setReopeningInstructorEval] = useState(false);
+
+  // Course announcement (edit-plan.md §7)
+  const [announceOpen, setAnnounceOpen] = useState(false);
+  const [announceLoading, setAnnounceLoading] = useState(false);
+  const [announceForm, setAnnounceForm] = useState({ title: '', body: '' });
+  const [announceMeta, setAnnounceMeta] = useState<{ sent_at: string | null; recipients: number } | null>(null);
+  const [announceSending, setAnnounceSending] = useState(false);
+  const [announceForce, setAnnounceForce] = useState(false);
 
   const [lectures, setLectures] = useState<any[]>([]);
   const [lecturesLoading, setLecturesLoading] = useState(false);
@@ -488,6 +507,143 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       toast(err?.message || 'فشل إعادة فتح التقييم', 'error');
     } finally {
       setReopeningInstructorEval(false);
+    }
+  };
+
+
+  // ── Group report (edit-plan.md §8) ────────────────────────────
+  const loadReport = async (groupId: number) => {
+    setReportLoading(true);
+    setReportError('');
+    try {
+      const data: any = await api(`/api/groups/${groupId}/report`);
+      setReportData(data);
+      setReportForm({
+        activity_type: data?.group?.activity_type || '',
+        report_notes: data?.group?.notes || '',
+        report_recommendations: data?.group?.recommendations || '',
+      });
+    } catch (err: any) {
+      setReportError(err?.message || 'فشل تحميل بيانات التقرير');
+      setReportData(null);
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const saveReportData = async () => {
+    if (!detailGroup || reportSaving) return;
+    setReportSaving(true);
+    try {
+      await api(`/api/groups/${detailGroup.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(reportForm),
+      });
+      toast('تم حفظ بيانات التقرير', 'success');
+      await loadReport(detailGroup.id);
+      await refreshDetailGroup(detailGroup.id);
+    } catch (err: any) {
+      toast(err?.message || 'فشل حفظ بيانات التقرير', 'error');
+    } finally {
+      setReportSaving(false);
+    }
+  };
+
+  const pickReportImages = (files: FileList | null) => {
+    if (!files) return;
+    const picked: File[] = [];
+    for (const file of Array.from(files)) {
+      if (!/^image\/(jpe?g|png)$/i.test(file.type)) {
+        toast('الصور يجب أن تكون JPG أو PNG فقط', 'error');
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast('حجم كل صورة يجب ألا يتجاوز 5 ميجابايت', 'error');
+        continue;
+      }
+      picked.push(file);
+    }
+    const next = [...reportImages, ...picked].slice(0, 8);
+    if (reportImages.length + picked.length > 8) {
+      toast('الحد الأقصى 8 صور — تم الاحتفاظ بأول 8', 'info');
+    }
+    setReportImages(next);
+  };
+
+  const extractReport = async () => {
+    if (!detailGroup || reportExtracting) return;
+    setReportExtracting(true);
+    try {
+      const formData = new FormData();
+      reportImages.slice(0, 8).forEach((file) => formData.append('images', file));
+      await downloadFile(
+        `/api/groups/${detailGroup.id}/report/word`,
+        `report-${detailGroup.id}.docx`,
+        { method: 'POST', body: formData },
+      );
+      toast('تم استخراج التقرير', 'success');
+      setReportImagesOpen(false);
+      setReportImages([]);
+    } catch (err: any) {
+      toast(err?.message || 'فشل استخراج التقرير', 'error');
+    } finally {
+      setReportExtracting(false);
+    }
+  };
+
+  const exportGroupDataset = async (dataset: string, label: string) => {
+    if (!detailGroup || exportingKey) return;
+    setExportingKey(dataset);
+    try {
+      await downloadFile(
+        `/api/exports/${dataset}?groupId=${detailGroup.id}`,
+        `${dataset}-${detailGroup.id}.xlsx`,
+      );
+      toast(`تم تصدير ${label}`, 'success');
+    } catch (err: any) {
+      toast(err?.message || `فشل تصدير ${label}`, 'error');
+    } finally {
+      setExportingKey('');
+    }
+  };
+
+
+  // ── Course announcement (edit-plan.md §7) ─────────────────────
+  const openAnnouncement = async () => {
+    if (!course) return;
+    setAnnounceOpen(true);
+    setAnnounceLoading(true);
+    setAnnounceForce(false);
+    try {
+      const data: any = await api(`/api/courses/${course.id}/announcement`);
+      setAnnounceForm({ title: data?.title || '', body: data?.body || '' });
+      setAnnounceMeta({ sent_at: data?.sent_at || null, recipients: Number(data?.recipients || 0) });
+    } catch (err: any) {
+      toast(err?.message || 'فشل تحضير الإعلان', 'error');
+      setAnnounceOpen(false);
+    } finally {
+      setAnnounceLoading(false);
+    }
+  };
+
+  const sendAnnouncement = async () => {
+    if (!course || announceSending) return;
+    if (!announceForm.title.trim() || !announceForm.body.trim()) {
+      toast('عنوان الإعلان ونصه مطلوبان', 'error');
+      return;
+    }
+    setAnnounceSending(true);
+    try {
+      const res: any = await api(`/api/courses/${course.id}/announce`, {
+        method: 'POST',
+        body: JSON.stringify({ ...announceForm, force: announceForce }),
+      });
+      toast(`تم إرسال الإعلان إلى ${res?.recipients ?? 0} حساب`, 'success');
+      setAnnounceOpen(false);
+    } catch (err: any) {
+      toast(err?.message || 'فشل إرسال الإعلان', 'error');
+    } finally {
+      setAnnounceSending(false);
     }
   };
 
@@ -975,6 +1131,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>{course.title_ar}</h1>
         </div>
         <div className="flex gap-2">
+          <button onClick={() => void openAnnouncement()}
+            className="px-4 py-2 rounded-xl text-sm font-medium border"
+            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+            📣 إرسال الإعلان
+          </button>
           <button onClick={() => setConfirmToggleCourse(course)}
             className="px-4 py-2 rounded-xl text-sm font-medium border"
             style={{ borderColor: 'var(--border)', color: Number(course.is_active) ? '#dc2626' : '#16a34a' }}>
@@ -1410,6 +1571,16 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
           </div>
           <div>
+            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رابط المادة العلمية (Google Drive / PDF)</label>
+            <input type="url" dir="ltr" placeholder="https://drive.google.com/file/d/..." value={editForm.materials_url || ''}
+              onChange={e => setEditForm({ ...editForm, materials_url: e.target.value })}
+              maxLength={500}
+              className="w-full px-4 py-2.5 rounded-xl border text-sm text-left" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              للملفات الأكبر من 20 ميجا ارفعها على درايف وضع رابط المشاركة هنا. يظهر الرابط للطلاب المسجلين فقط.
+            </p>
+          </div>
+          <div>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للطلاب</label>
             <input type="number" value={editForm.max_students} onChange={e => setEditForm({ ...editForm, max_students: Number(e.target.value) })}
               className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
@@ -1696,17 +1867,18 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
         {detailGroup && (
           <div className="space-y-4">
             <div className="flex gap-1 border-b pb-2" style={{ borderColor: 'var(--border)' }}>
-              {(['info', 'lectures', 'students', 'survey'] as const).map(t => (
+              {(['info', 'lectures', 'students', 'survey', 'report'] as const).map(t => (
                 <button key={t} onClick={() => {
                   setDetailGroupTab(t);
                   if (t === 'survey') loadSurvey(detailGroup.id);
+                  if (t === 'report') loadReport(detailGroup.id);
                 }}
                   className="px-4 py-2 rounded-lg text-sm font-medium transition-all"
                   style={{
                     backgroundColor: detailGroupTab === t ? 'var(--primary)' : 'transparent',
                     color: detailGroupTab === t ? '#fff' : 'var(--text)',
                   }}>
-                  {t === 'info' ? 'معلومات' : t === 'lectures' ? 'جدول المحاضرات' : t === 'students' ? 'الطلاب' : 'الاستبيان'}
+                  {t === 'info' ? 'معلومات' : t === 'lectures' ? 'جدول المحاضرات' : t === 'students' ? 'الطلاب' : t === 'survey' ? 'الاستبيان' : '📄 التقرير'}
                 </button>
               ))}
             </div>
@@ -2018,6 +2190,135 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
               </div>
             )}
 
+            {detailGroupTab === 'report' && (
+              <div className="space-y-4">
+                {!isGroupCompleted(detailGroup) && (
+                  <div className="p-4 rounded-xl text-sm" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                    ⏳ التقرير متاح بعد إنهاء المجموعة. يمكنك تجهيز بياناته الآن وسيُفتح الاستخراج بعد الإنهاء.
+                  </div>
+                )}
+
+                {reportLoading ? (
+                  <div className="flex items-center justify-center py-10">
+                    <div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+                  </div>
+                ) : reportError ? (
+                  <div className="flex flex-col items-center gap-3 py-8">
+                    <p className="text-sm" style={{ color: '#dc2626' }}>{reportError}</p>
+                    <button onClick={() => loadReport(detailGroup.id)} className="px-4 py-2 rounded-xl text-sm text-white" style={{ backgroundColor: 'var(--primary)' }}>
+                      إعادة المحاولة
+                    </button>
+                  </div>
+                ) : reportData && (
+                  <>
+                    {/* ملخص */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>الدورة</span>
+                        <span style={{ color: 'var(--text)' }}>{reportData.course?.title_ar}</span>
+                      </div>
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>المحاضر</span>
+                        <span style={{ color: 'var(--text)' }}>{reportData.group?.instructor_name || '—'}</span>
+                      </div>
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>المشاركون</span>
+                        <span style={{ color: 'var(--text)' }}>{reportData.students?.length ?? 0} مشارك</span>
+                      </div>
+                      <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                        <span className="block mb-1" style={{ color: 'var(--text-muted)' }}>الاستبيان</span>
+                        <span style={{ color: 'var(--text)' }}>
+                          {reportData.survey ? `${reportData.survey.answered} من ${reportData.survey.total_students}` : 'لا توجد إجابات'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* بيانات التقرير */}
+                    <div className="p-4 rounded-xl space-y-3" style={{ backgroundColor: 'var(--bg)' }}>
+                      <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>📝 بيانات التقرير</h4>
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع النشاط</label>
+                        <input
+                          value={reportForm.activity_type}
+                          onChange={e => setReportForm({ ...reportForm, activity_type: e.target.value })}
+                          maxLength={300}
+                          className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات عامة (القسم الثامن)</label>
+                        <textarea
+                          value={reportForm.report_notes}
+                          onChange={e => setReportForm({ ...reportForm, report_notes: e.target.value })}
+                          rows={3}
+                          maxLength={4000}
+                          className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>التوصيات (القسم التاسع)</label>
+                        <textarea
+                          value={reportForm.report_recommendations}
+                          onChange={e => setReportForm({ ...reportForm, report_recommendations: e.target.value })}
+                          rows={3}
+                          maxLength={4000}
+                          className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        />
+                      </div>
+                      <button onClick={saveReportData} disabled={reportSaving}
+                        className="px-5 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                        style={{ backgroundColor: 'var(--primary)' }}>
+                        {reportSaving ? 'جاري الحفظ...' : '💾 حفظ بيانات التقرير'}
+                      </button>
+                    </div>
+
+                    {/* الاستخراج */}
+                    <div className="p-4 rounded-xl flex flex-col sm:flex-row sm:items-center gap-3" style={{ backgroundColor: 'var(--bg)' }}>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>📄 تقرير المجموعة (Word)</h4>
+                        <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                          يُولَّد من أحدث البيانات وقت الضغط، مع إمكانية إرفاق حتى 8 صور وثائقية لا تُخزَّن في النظام.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => { setReportImages([]); setReportImagesOpen(true); }}
+                        disabled={!isGroupCompleted(detailGroup)}
+                        title={!isGroupCompleted(detailGroup) ? 'التقرير متاح بعد إنهاء المجموعة' : ''}
+                        className="px-5 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                        style={{ backgroundColor: '#059669' }}>
+                        {isGroupCompleted(detailGroup) ? '📥 استخراج التقرير' : 'التقرير بعد الإنهاء'}
+                      </button>
+                    </div>
+
+                    {/* التصدير */}
+                    <div className="p-4 rounded-xl space-y-2" style={{ backgroundColor: 'var(--bg)' }}>
+                      <h4 className="font-bold text-sm" style={{ color: 'var(--text)' }}>📊 تصدير Excel</h4>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {[
+                          { key: 'attendance', label: 'كشف الحضور' },
+                          { key: 'group_roster', label: 'المجموعة وطلابها' },
+                          { key: 'survey_results', label: 'نتائج الاستبيان' },
+                          { key: 'instructor_eval', label: 'تقييم المحاضر للطلاب' },
+                        ].map(item => (
+                          <button
+                            key={item.key}
+                            onClick={() => exportGroupDataset(item.key, item.label)}
+                            disabled={exportingKey !== ''}
+                            className="px-4 py-2.5 rounded-xl text-sm font-medium border disabled:opacity-50 text-right"
+                            style={{ borderColor: 'var(--border)', color: 'var(--text)', backgroundColor: 'var(--card)' }}>
+                            {exportingKey === item.key ? '⏳ جاري التصدير…' : `📊 ${item.label}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             {detailGroupTab === 'lectures' && (
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -2264,6 +2565,113 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
             style={{ backgroundColor: 'var(--primary)' }}>
             {addStudentSaving ? 'جاري الإضافة...' : `إضافة ${selectedStudentIds.length > 0 ? `(${selectedStudentIds.length})` : ''}`}
+          </button>
+        </div>
+      </Modal>
+
+      {/* ===================== ANNOUNCEMENT MODAL (edit-plan.md §7) ===================== */}
+      <Modal open={announceOpen} onClose={() => setAnnounceOpen(false)} title="إرسال إعلان الكورس" size="lg">
+        {announceLoading ? (
+          <p className="text-sm text-center py-6" style={{ color: 'var(--text-muted)' }}>جارٍ تحضير الإعلان…</p>
+        ) : (
+          <div className="space-y-3">
+            {announceMeta?.sent_at && (
+              <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+                ⚠️ أُرسل الإعلان بتاريخ {new Date(announceMeta.sent_at).toLocaleDateString('ar-EG')}.
+                <label className="flex items-center gap-2 mt-2 text-xs font-medium">
+                  <input
+                    type="checkbox"
+                    checked={announceForce}
+                    onChange={e => setAnnounceForce(e.target.checked)}
+                  />
+                  أريد إرساله مرة أخرى لكل الحسابات
+                </label>
+              </div>
+            )}
+
+            <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+              سيصل الإعلان إلى {announceMeta?.recipients ?? 0} حساب: إشعار داخل المنصة + بريد إلكتروني،
+              وتليجرام لمن ربطه. راجع النص قبل الإرسال.
+            </p>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>عنوان الإعلان</label>
+              <input
+                value={announceForm.title}
+                onChange={e => setAnnounceForm({ ...announceForm, title: e.target.value })}
+                maxLength={200}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نص الإعلان</label>
+              <textarea
+                value={announceForm.body}
+                onChange={e => setAnnounceForm({ ...announceForm, body: e.target.value })}
+                rows={9}
+                maxLength={8000}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              />
+            </div>
+
+            <button
+              onClick={() => void sendAnnouncement()}
+              disabled={announceSending || (Boolean(announceMeta?.sent_at) && !announceForce)}
+              className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
+              style={{ backgroundColor: 'var(--primary)' }}
+            >
+              {announceSending ? 'جارٍ الإرسال…' : 'إرسال الإعلان'}
+            </button>
+          </div>
+        )}
+      </Modal>
+
+      {/* ===================== REPORT IMAGES MODAL (edit-plan.md §8) ===================== */}
+      <Modal open={reportImagesOpen} onClose={() => setReportImagesOpen(false)} title="صور التقرير الوثائقية" size="lg">
+        <div className="space-y-3">
+          <p className="text-xs p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            اختيارية — حتى 8 صور بصيغة JPG أو PNG. تُستخدم لإدراجها في القسم العاشر من التقرير فقط،
+            ولا تُحفظ في النظام أو قاعدة البيانات. إعادة الاستخراج تتطلب اختيارها من جديد.
+          </p>
+
+          <label className="block border-2 border-dashed rounded-xl p-6 text-center cursor-pointer"
+            style={{ borderColor: 'var(--border)' }}>
+            <span className="block text-sm font-medium" style={{ color: 'var(--primary)' }}>📷 اختر الصور</span>
+            <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              {reportImages.length > 0 ? `${reportImages.length} من 8 صور محددة` : 'لم تُحدد صور — التقرير سيُولد بدونها'}
+            </span>
+            <input
+              type="file"
+              accept="image/png,image/jpeg"
+              multiple
+              className="hidden"
+              onChange={e => { pickReportImages(e.target.files); e.target.value = ''; }}
+            />
+          </label>
+
+          {reportImages.length > 0 && (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {reportImages.map((file, index) => (
+                <div key={`${file.name}-${index}`} className="relative rounded-xl overflow-hidden border" style={{ borderColor: 'var(--border)' }}>
+                  <img src={URL.createObjectURL(file)} alt={file.name} className="w-full h-24 object-cover" />
+                  <button
+                    onClick={() => setReportImages(prev => prev.filter((_, i) => i !== index))}
+                    className="absolute top-1 left-1 h-6 w-6 rounded-full text-white text-xs"
+                    style={{ backgroundColor: '#dc2626' }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button onClick={extractReport} disabled={reportExtracting}
+            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
+            style={{ backgroundColor: '#059669' }}>
+            {reportExtracting ? 'جارٍ توليد التقرير…' : '📄 استخراج التقرير'}
           </button>
         </div>
       </Modal>

@@ -19,6 +19,7 @@ interface Course {
   category_id?: number;
   category_name_ar?: string;
   instructor?: string;
+  materials_url?: string;
   course_mode?: string;
   lecture_count?: number;
   lecture_duration?: number;
@@ -183,7 +184,7 @@ export default function CourseDetailPage() {
   const params = useParams();
   const router = useRouter();
   const courseId = Number(params.id);
-  const { token, loading: authLoading } = useAuth();
+  const { token, user, loading: authLoading } = useAuth();
   const { primaryColor, secondaryColor, sloganAr, sloganEn, systemName } = useBranding();
   const { show: showToast } = useToast();
 
@@ -261,6 +262,13 @@ export default function CourseDetailPage() {
       : null;
   const showBuyButton = course.enable_direct_purchase !== 0 && token && !purchased;
   const showCartButton = token && !purchased;
+  const canViewMaterials =
+    Boolean(course.materials_url) &&
+    Boolean(token) &&
+    (purchased === true ||
+      user?.role === 'instructor' ||
+      user?.role === 'admin' ||
+      user?.role === 'employee');
   const modeLabel = course.course_mode === 'offline' ? '📍 حضور مباشر' : '💻 أونلاين';
   const modeColor =
     course.course_mode === 'offline' ? '#059669' : '#2563eb';
@@ -634,6 +642,21 @@ export default function CourseDetailPage() {
                       </button>
                     )}
                   </>
+                )}
+                {canViewMaterials && (
+                  <a
+                    href={course.materials_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl font-bold text-sm border-2 transition-all duration-300 hover:-translate-y-0.5 ripple-btn"
+                    style={{
+                      borderColor: primaryColor,
+                      color: primaryColor,
+                      backgroundColor: `${primaryColor}06`,
+                    }}
+                  >
+                    📘 المادة العلمية
+                  </a>
                 )}
               </div>
 

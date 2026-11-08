@@ -292,4 +292,27 @@ router.put('/announcement', authMiddleware, requireRole(ADMIN), async (req: Requ
   }
 });
 
+// ═══════════════════════════════════════════════
+// Report Settings (edit-plan.md §8)
+// ═══════════════════════════════════════════════
+
+router.get('/report', authMiddleware, async (_req: Request, res: Response) => {
+  try {
+    const { getReportSettings } = await import('../services/reportService');
+    res.json(await getReportSettings());
+  } catch {
+    res.status(500).json({ error: 'Failed to fetch report settings' });
+  }
+});
+
+router.put('/report', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const { saveReportSettings } = await import('../services/reportService');
+    const settings = await saveReportSettings(req.body || {});
+    res.json({ message: 'Report settings updated', settings });
+  } catch (err: any) {
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to update report settings' });
+  }
+});
+
 export default router;

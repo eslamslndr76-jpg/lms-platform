@@ -46,6 +46,8 @@ export interface ExportDataset {
   columns: ExportColumn[];
   filters: ExportFilterDef[];
   build: (params: ExportParams) => Query;
+  /** Optional extra footer line (aggregates that do not fit a row, e.g. survey averages). */
+  buildNote?: (params: ExportParams) => Promise<string | undefined>;
 }
 
 // ─── Shared filter fragments ───────────────────────────────────────
@@ -492,6 +494,207 @@ export const EXPORT_DATASETS: ExportDataset[] = [
                JOIN groups g ON gs.group_id = g.id
                JOIN courses c ON g.course_id = c.id
                WHERE ${where} ORDER BY gs.joined_at DESC`,
+        args,
+      };
+    },
+  },
+  {
+    key: 'group_roster',
+    section: 'groups',
+    name: 'المجموعات وطلابها',
+    description: 'قائمة كل مجموعة مع طلابها وبيانات الوحدة/الجهة وتاريخ التسكين.',
+    icon: '🧾',
+    columns: [
+      { key: 'course', header: 'الكورس', type: 'text' },
+      { key: 'group_name', header: 'المجموعة', type: 'text' },
+      { key: 'instructor_name', header: 'المدرب', type: 'text', width: 18 },
+      { key: 'group_status', header: 'حالة المجموعة', type: 'text', width: 14 },
+      { key: 'start_date', header: 'تبدأ', type: 'date', width: 13 },
+      { key: 'end_date', header: 'تنتهي', type: 'date', width: 13 },
+      { key: 'student', header: 'الطالب', type: 'text' },
+      { key: 'unit_name', header: 'الوحدة/الجهة', type: 'text', width: 24 },
+      { key: 'email', header: 'البريد الإلكتروني', type: 'text', width: 26 },
+      { key: 'phone', header: 'الهاتف', type: 'text', width: 16 },
+      { key: 'joined_at', header: 'تاريخ التسكين', type: 'datetime', width: 18 },
+    ],
+    filters: [
+      { key: 'courseId', label: 'الكورس', type: 'course' },
+      { key: 'groupId', label: 'المجموعة', type: 'group' },
+      SEARCH_FILTER('اسم الطالب / الجهة'),
+    ],
+    build: (params) => {
+      const args: unknown[] = [];
+      let where = '1=1';
+      if (params.courseId) {
+        where += ' AND g.course_id = ?';
+        args.push(params.courseId);
+      }
+      if (params.groupId) {
+        where += ' AND g.id = ?';
+        args.push(params.groupId);
+      }
+      where += searchClause(['u.name', 'u.university_name'], params, args);
+      return {
+        text: `SELECT c.title_ar AS course, g.name AS group_name, g.instructor_name, g.status AS group_status,
+                 g.start_date, g.end_date, u.name AS student, u.university_name AS unit_name,
+                 u.email, u.phone, gs.joined_at
+               FROM group_students gs
+               JOIN users u ON gs.user_id = u.id
+               JOIN groups g ON gs.group_id = g.id
+               JOIN courses c ON g.course_id = c.id
+               WHERE ${where} ORDER BY c.title_ar ASC, g.name ASC, u.name ASC`,
+        args,
+      };
+    },
+  },
+  {
+    key: 'survey_results',
+    section: 'groups',
+    name: 'نتائج الاستبيان',
+    description: 'ردود استبيان الطالب مع درجات البنود ومتوسطاتها ونسبة من أجاب.',
+    icon: '⭐',
+    columns: [
+      { key: 'course', header: 'الكورس', type: 'text' },
+      { key: 'group_name', header: 'المجموعة', type: 'text' },
+      { key: 'student', header: 'الطالب', type: 'text', width: 22 },
+      { key: 'anonymous', header: 'مجهول؟', type: 'boolean', width: 10 },
+      { key: 'lecturer_knowledge', header: 'إلمام المدرب', type: 'number', width: 13 },
+      { key: 'lecturer_communication', header: 'توصيل المعلومات', type: 'number', width: 16 },
+      { key: 'lecturer_organization', header: 'تنظيم العرض', type: 'number', width: 14 },
+      { key: 'lecturer_cooperation', header: 'التعاون', type: 'number', width: 12 },
+      { key: 'lecturer_motivation', header: 'التحفيز', type: 'number', width: 12 },
+      { key: 'program_content', header: 'محتوى البرنامج', type: 'number', width: 15 },
+      { key: 'program_materials', header: 'المادة التدريبية', type: 'number', width: 15 },
+      { key: 'program_material_organization', header: 'تنظيم المادة', type: 'number', width: 14 },
+      { key: 'program_goals', header: 'تحقيق الأهداف', type: 'number', width: 14 },
+      { key: 'program_organization', header: 'تنظيم البرنامج', type: 'number', width: 14 },
+      { key: 'program_duration', header: 'المدة والتوقيت', type: 'number', width: 14 },
+      { key: 'program_place', header: 'مكان البرنامج', type: 'number', width: 14 },
+      { key: 'helped_develop', header: 'ساعد على التطوير؟', type: 'text', width: 16 },
+      { key: 'submitted_at', header: 'وقت الإجابة', type: 'datetime', width: 18 },
+    ],
+    filters: [
+      { key: 'courseId', label: 'الكورس', type: 'course' },
+      { key: 'groupId', label: 'المجموعة', type: 'group' },
+    ],
+    build: (params) => {
+      const args: unknown[] = [];
+      let where = "s.status = 'submitted'";
+      if (params.courseId) {
+        where += ' AND g.course_id = ?';
+        args.push(params.courseId);
+      }
+      if (params.groupId) {
+        where += ' AND s.group_id = ?';
+        args.push(params.groupId);
+      }
+      return {
+        text: `SELECT c.title_ar AS course, g.name AS group_name,
+                 CASE WHEN s.is_anonymous = 1 THEN 'مجهول' ELSE u.name END AS student,
+                 CASE WHEN s.is_anonymous = 1 THEN 1 ELSE 0 END AS anonymous,
+                 CAST(json_extract(s.answers,'$.lecturer_knowledge') AS REAL) AS lecturer_knowledge,
+                 CAST(json_extract(s.answers,'$.lecturer_communication') AS REAL) AS lecturer_communication,
+                 CAST(json_extract(s.answers,'$.lecturer_organization') AS REAL) AS lecturer_organization,
+                 CAST(json_extract(s.answers,'$.lecturer_cooperation') AS REAL) AS lecturer_cooperation,
+                 CAST(json_extract(s.answers,'$.lecturer_motivation') AS REAL) AS lecturer_motivation,
+                 CAST(json_extract(s.answers,'$.program_content') AS REAL) AS program_content,
+                 CAST(json_extract(s.answers,'$.program_materials') AS REAL) AS program_materials,
+                 CAST(json_extract(s.answers,'$.program_material_organization') AS REAL) AS program_material_organization,
+                 CAST(json_extract(s.answers,'$.program_goals') AS REAL) AS program_goals,
+                 CAST(json_extract(s.answers,'$.program_organization') AS REAL) AS program_organization,
+                 CAST(json_extract(s.answers,'$.program_duration') AS REAL) AS program_duration,
+                 CAST(json_extract(s.answers,'$.program_place') AS REAL) AS program_place,
+                 CASE json_extract(s.answers,'$.helped_develop')
+                   WHEN 'yes' THEN 'نعم' WHEN 'no' THEN 'لا' ELSE '' END AS helped_develop,
+                 s.submitted_at
+               FROM group_surveys s
+               JOIN users u ON s.user_id = u.id
+               JOIN groups g ON s.group_id = g.id
+               JOIN courses c ON g.course_id = c.id
+               WHERE ${where} ORDER BY c.title_ar ASC, g.name ASC, s.submitted_at ASC`,
+        args,
+      };
+    },
+    buildNote: async (params) => {
+      try {
+        if (params.groupId) {
+          const { getGroupSurveyStats } = await import('./surveyService');
+          const stats = await getGroupSurveyStats(params.groupId);
+          const averages = (stats.items as any[])
+            .filter((item) => item.avg != null)
+            .map((item) => `${item.label}: ${item.avg}`);
+          const parts = [
+            `عدد من أجابوا: ${stats.answered} من ${stats.total_students} (${stats.response_rate}%)`,
+            stats.overall_avg != null ? `المتوسط العام: ${stats.overall_avg} / 5` : '',
+            averages.length ? `متوسطات البنود — ${averages.join(' | ')}` : '',
+          ].filter(Boolean);
+          return parts.join('   •   ');
+        }
+        const noteArgs: unknown[] = [];
+        let noteWhere = "s.status = 'submitted'";
+        if (params.courseId) {
+          noteWhere += ' AND g.course_id = ?';
+          noteArgs.push(params.courseId);
+        }
+        const result = await sql(
+          `SELECT COUNT(*) AS answered
+           FROM group_surveys s JOIN groups g ON s.group_id = g.id
+           WHERE ${noteWhere}`,
+          ...noteArgs,
+        );
+        const row = result.rows[0] as any;
+        return `عدد الردود المسجلة: ${Number(row?.answered || 0)}`;
+      } catch {
+        return undefined;
+      }
+    },
+  },
+  {
+    key: 'instructor_eval',
+    section: 'groups',
+    name: 'تقييم المحاضر للطلاب',
+    description: 'درجات أسئلة تقييم المحاضر للطلاب الأربعة والمجموع لكل طالب.',
+    icon: '🧑‍🏫',
+    columns: [
+      { key: 'course', header: 'الكورس', type: 'text' },
+      { key: 'group_name', header: 'المجموعة', type: 'text' },
+      { key: 'student', header: 'الطالب', type: 'text' },
+      { key: 'commitment', header: 'الالتزام بالقواعد', type: 'number', width: 16 },
+      { key: 'attendance', header: 'التواجد والحرص', type: 'number', width: 16 },
+      { key: 'conduct', header: 'التعامل اللائق', type: 'number', width: 15 },
+      { key: 'participation', header: 'المشاركة الإيجابية', type: 'number', width: 16 },
+      { key: 'total', header: 'المجموع', type: 'number', width: 12, total: 'sum' },
+      { key: 'eval_status', header: 'حالة التقييم', type: 'text', width: 13 },
+      { key: 'submitted_at', header: 'وقت الإرسال', type: 'datetime', width: 18 },
+    ],
+    filters: [
+      { key: 'courseId', label: 'الكورس', type: 'course' },
+      { key: 'groupId', label: 'المجموعة', type: 'group' },
+    ],
+    build: (params) => {
+      const args: unknown[] = [];
+      let where = '1=1';
+      if (params.courseId) {
+        where += ' AND g.course_id = ?';
+        args.push(params.courseId);
+      }
+      if (params.groupId) {
+        where += ' AND g.id = ?';
+        args.push(params.groupId);
+      }
+      return {
+        text: `SELECT c.title_ar AS course, g.name AS group_name, u.name AS student,
+                 CAST(json_extract(sc.scores,'$[0]') AS REAL) AS commitment,
+                 CAST(json_extract(sc.scores,'$[1]') AS REAL) AS attendance,
+                 CAST(json_extract(sc.scores,'$[2]') AS REAL) AS conduct,
+                 CAST(json_extract(sc.scores,'$[3]') AS REAL) AS participation,
+                 sc.total, e.status AS eval_status, e.submitted_at
+               FROM group_instructor_evals e
+               JOIN groups g ON e.group_id = g.id
+               JOIN courses c ON g.course_id = c.id
+               JOIN group_instructor_eval_scores sc ON sc.eval_id = e.id
+               JOIN users u ON sc.student_id = u.id
+               WHERE ${where} ORDER BY c.title_ar ASC, g.name ASC, sc.total DESC, u.name ASC`,
         args,
       };
     },

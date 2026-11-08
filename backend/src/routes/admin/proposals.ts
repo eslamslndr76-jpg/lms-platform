@@ -35,6 +35,7 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermissi
       course_title: req.body?.course_title,
       objectives: req.body?.objectives,
       daily_content: req.body?.daily_content,
+      materials_url: req.body?.materials_url,
     });
     res.json({ message: 'Proposal updated', proposal });
   } catch (err: any) {

@@ -1,11 +1,26 @@
 import { Router, Request, Response } from 'express';
+import multer from 'multer';
 import { authMiddleware } from '../middleware/auth';
 import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import * as groupService from '../services/groupService';
 import * as instructorEvalService from '../services/instructorEvalService';
+import * as reportService from '../services/reportService';
+import { buildGroupReportWord } from '../services/wordReportService';
 import { sql } from '../db/helpers';
 
 const router = Router();
+
+/** Report photos live in memory only — they are never written to disk or the DB. */
+const reportUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024, files: 8 },
+  fileFilter: (_req, file, cb) => {
+    if (!/^image\/(jpe?g|png)$/i.test(file.mimetype)) {
+      return cb(new Error('الصور يجب أن تكون بصيغة JPG أو PNG فقط'));
+    }
+    cb(null, true);
+  },
+});
 
 // GET /api/groups/incomplete — for dashboard alerts
 router.get('/incomplete', authMiddleware, requireRole(ADMIN), async (_req: Request, res: Response) => {
@@ -104,8 +119,8 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Reque
 // PUT /api/groups/:id — update
 router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
   try {
-    const { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status } = req.body;
-    await groupService.updateGroup(Number(req.params.id), { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status });
+    const { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status, activity_type, report_notes, report_recommendations } = req.body;
+    await groupService.updateGroup(Number(req.params.id), { name, zoom_link, end_date, instructor_name, instructor_user_id, location, place_id, max_students, is_active, status, activity_type, report_notes, report_recommendations });
     res.json({ message: 'Group updated' });
   } catch (err: any) {
     console.error('Update group error:', err?.message || err);
@@ -159,6 +174,55 @@ router.post('/:id/reopen', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (
     console.error('Reopen group error:', err?.message || err);
     res.status(err?.status || 500).json({ error: err?.message || 'Failed to reopen group' });
   }
+});
+
+// ──────────────────────────────
+// Group report (edit-plan.md §8)
+// ──────────────────────────────
+
+// GET /api/groups/:id/report — fresh report data (never stored)
+router.get('/:id/report', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (req: Request, res: Response) => {
+  try {
+    const report = await reportService.buildGroupReport(Number(req.params.id));
+    res.json(report);
+  } catch (err: any) {
+    console.error('Group report data error:', err?.message || err);
+    res.status(err?.status || 500).json({ error: err?.message || 'Failed to build report data' });
+  }
+});
+
+// POST /api/groups/:id/report/word — Word report; optional photos (max 8) are used in memory only
+router.post('/:id/report/word', (req: Request, res: Response) => {
+  reportUpload.array('images', 8)(req, res, async (uploadError: any) => {
+    if (uploadError) {
+      return res.status(400).json({ error: uploadError?.message || 'فشل رفع الصور' });
+    }
+    try {
+      const report = await reportService.buildGroupReport(Number(req.params.id));
+      if (!report.completed) {
+        return res.status(400).json({ error: 'التقرير متاح بعد إنهاء المجموعة' });
+      }
+      const files = ((req.files as Express.Multer.File[] | undefined) || []).map((file) => ({
+        buffer: file.buffer,
+        mimetype: file.mimetype,
+      }));
+      const buffer = await buildGroupReportWord(report, files);
+      const fileName = `تقرير-${report.course.title_ar}-${report.group.name}.docx`;
+      res.setHeader(
+        'Content-Type',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      );
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="group-report-${report.group.id}.docx"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+      );
+      res.setHeader('Content-Length', String(buffer.length));
+      res.send(buffer);
+    } catch (err: any) {
+      console.error('Group report word error:', err?.message || err);
+      res.status(err?.status || 500).json({ error: err?.message || 'Failed to generate report' });
+    }
+  });
 });
 
 // ──────────────────────────────

@@ -21,6 +21,7 @@ interface Proposal {
   course_title: string;
   objectives: string[];
   daily_content: DayContent[];
+  materials_url: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'needs_changes';
   status_label: string;
   admin_note: string;
@@ -60,6 +61,7 @@ const emptyCourseForm = {
   introduction: '',
   target_audience: '',
   image_url: '',
+  materials_url: '',
   is_active: 1,
 };
 
@@ -77,6 +79,7 @@ export default function ProposalDetailPage() {
   const [title, setTitle] = useState('');
   const [objectives, setObjectives] = useState<string[]>([]);
   const [days, setDays] = useState<{ day: string; topic: string }[]>([]);
+  const [materialsUrl, setMaterialsUrl] = useState('');
   const [savingContent, setSavingContent] = useState(false);
 
   const [note, setNote] = useState('');
@@ -105,11 +108,13 @@ export default function ProposalDetailPage() {
           : [{ day: '', topic: '' }],
       );
       setNote(next.admin_note || '');
+      setMaterialsUrl(next.materials_url || '');
       setCourseForm({
         ...emptyCourseForm,
         title_ar: next.course_title,
         title_en: next.course_title,
         lecture_count: next.daily_content.length || 0,
+        materials_url: next.materials_url || '',
       });
       setCategories(Array.isArray(cats) ? cats : []);
     } catch (err: any) {
@@ -133,8 +138,9 @@ export default function ProposalDetailPage() {
       daily_content: days
         .map((row) => ({ day: row.day.trim(), topic: row.topic.trim() }))
         .filter((row) => row.day || row.topic),
+      materials_url: materialsUrl.trim(),
     }),
-    [title, objectives, days],
+    [title, objectives, days, materialsUrl],
   );
 
   const saveContent = async () => {
@@ -220,6 +226,7 @@ export default function ProposalDetailPage() {
           introduction: courseForm.introduction,
           target_audience: courseForm.target_audience,
           image_url: courseForm.image_url,
+          materials_url: courseForm.materials_url,
           is_active: courseForm.is_active,
         }),
       });
@@ -482,6 +489,35 @@ export default function ProposalDetailPage() {
             </button>
           )}
         </div>
+
+        <div>
+          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المادة العلمية (رابط)</p>
+          <input
+            type="url"
+            dir="ltr"
+            value={materialsUrl}
+            onChange={(event) => setMaterialsUrl(event.target.value)}
+            disabled={!editable}
+            maxLength={1000}
+            placeholder="https://drive.google.com/file/d/..."
+            className="w-full px-4 py-2.5 rounded-xl border text-sm text-left disabled:opacity-70"
+            style={inputStyle}
+          />
+          <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            رابط Google Drive أو PDF للمادة التي سيشرح منها المحاضر (للملفات الأكبر من 20 ميجا).
+          </p>
+          {proposal.materials_url && (
+            <a
+              href={proposal.materials_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block text-xs mt-1"
+              style={{ color: 'var(--primary)' }}
+            >
+              فتح الرابط المحفوظ ↗
+            </a>
+          )}
+        </div>
       </section>
 
       {/* ── Create course from an approved proposal ── */}
@@ -633,6 +669,19 @@ export default function ProposalDetailPage() {
               {courseForm.image_url && (
                 <img src={courseForm.image_url} alt="معاينة" className="mt-2 h-20 rounded-lg object-cover" />
               )}
+            </div>
+            <div className="sm:col-span-2">
+              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رابط المادة العلمية</label>
+              <input
+                type="url"
+                dir="ltr"
+                value={courseForm.materials_url}
+                onChange={(event) => setCourseForm({ ...courseForm, materials_url: event.target.value })}
+                maxLength={500}
+                placeholder="https://drive.google.com/file/d/..."
+                className="w-full px-4 py-2.5 rounded-xl border text-sm text-left"
+                style={inputStyle}
+              />
             </div>
             <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--text)' }}>
               <input

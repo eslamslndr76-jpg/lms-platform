@@ -7,7 +7,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey' | 'announcement' | 'reports'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -62,6 +62,19 @@ export default function SettingsPage() {
   const [surveySettings, setSurveySettings] = useState({ openDays: 30, reminder1Days: 2, reminder2Days: 5 });
   const [surveySaving, setSurveySaving] = useState(false);
   const [surveyLoading, setSurveyLoading] = useState(false);
+
+  // Announcement Settings (edit-plan.md §7)
+  const [announcementSettings, setAnnouncementSettings] = useState({ autoEnabled: false });
+  const [announcementSaving, setAnnouncementSaving] = useState(false);
+  const [announcementLoading, setAnnouncementLoading] = useState(false);
+
+  // Report Settings (edit-plan.md §8)
+  const [reportSettings, setReportSettings] = useState({
+    coordinatorName: '', organizerText: '', certificateText: '',
+    defaultNotes: '', defaultRecommendations: '', defaultActivityType: '',
+  });
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportLoading, setReportLoading] = useState(false);
 
   // Places (training rooms)
   const [places, setPlaces] = useState<any[]>([]);
@@ -290,6 +303,8 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (tab === 'survey') loadSurveySettings();
+    if (tab === 'announcement') loadAnnouncementSettings();
+    if (tab === 'reports') loadReportSettings();
   }, [tab]);
 
   const saveSurveySettings = async () => {
@@ -310,8 +325,73 @@ export default function SettingsPage() {
     }
   };
 
-  const PROVIDER_DEFAULTS: Record<string, { name: string; apiUrl: string; models: string[]; placeholder: string }> = {
-    gemini: { name: 'Google Gemini', apiUrl: 'https://generativelanguage.googleapis.com/v1beta', models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], placeholder: 'AIzaSy...' },
+  // ── Announcement settings (edit-plan.md §7) ──────────────────
+  const loadAnnouncementSettings = async () => {
+    setAnnouncementLoading(true);
+    try {
+      const data = await api('/api/settings/announcement');
+      if (data && typeof data === 'object') {
+        setAnnouncementSettings(prev => ({ ...prev, ...data }));
+      }
+    } catch {
+      // keep defaults
+    } finally {
+      setAnnouncementLoading(false);
+    }
+  };
+
+  const saveAnnouncementSettings = async () => {
+    if (announcementSaving) return;
+    setAnnouncementSaving(true);
+    try {
+      const res: any = await api('/api/settings/announcement', {
+        method: 'PUT',
+        body: JSON.stringify(announcementSettings),
+      });
+      if (res?.settings) setAnnouncementSettings(prev => ({ ...prev, ...res.settings }));
+      setMsg('تم حفظ إعدادات الإعلانات');
+    } catch (err: any) {
+      setMsg(err?.message || 'فشل حفظ إعدادات الإعلانات');
+    } finally {
+      setAnnouncementSaving(false);
+      setTimeout(() => setMsg(''), 3000);
+    }
+  };
+
+  // ── Report settings (edit-plan.md §8) ────────────────────────
+  const loadReportSettings = async () => {
+    setReportLoading(true);
+    try {
+      const data = await api('/api/settings/report');
+      if (data && typeof data === 'object') {
+        setReportSettings(prev => ({ ...prev, ...data }));
+      }
+    } catch {
+      // keep defaults
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
+  const saveReportSettings = async () => {
+    if (reportSaving) return;
+    setReportSaving(true);
+    try {
+      const res: any = await api('/api/settings/report', {
+        method: 'PUT',
+        body: JSON.stringify(reportSettings),
+      });
+      if (res?.settings) setReportSettings(prev => ({ ...prev, ...res.settings }));
+      setMsg('تم حفظ إعدادات التقارير');
+    } catch (err: any) {
+      setMsg(err?.message || 'فشل حفظ إعدادات التقارير');
+    } finally {
+      setReportSaving(false);
+      setTimeout(() => setMsg(''), 3000);
+    }
+  };
+
+  const PROVIDER_DEFAULTS: Record<string, { name: string; apiUrl: string; models: string[]; placeholder: string }> = {    gemini: { name: 'Google Gemini', apiUrl: 'https://generativelanguage.googleapis.com/v1beta', models: ['gemini-2.5-flash', 'gemini-flash-latest', 'gemini-2.0-flash'], placeholder: 'AIzaSy...' },
     openai: { name: 'OpenAI', apiUrl: 'https://api.openai.com/v1', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'], placeholder: 'sk-...' },
     anthropic: { name: 'Anthropic Claude', apiUrl: 'https://api.anthropic.com/v1', models: ['claude-3-5-sonnet-20241022', 'claude-3-opus-20240229'], placeholder: 'sk-ant-...' },
     'openai-compat': { name: 'OpenAI-Compatible', apiUrl: 'http://localhost:11434/v1', models: ['llama3', 'mistral', 'phi3'], placeholder: '...' },
@@ -576,11 +656,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey'] as const).map(t => (
+        {(['branding', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey', 'announcement', 'reports'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : '⭐ الاستبيان'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : t === 'survey' ? '⭐ الاستبيان' : t === 'announcement' ? '📣 الإعلانات' : '📄 التقارير'}
           </button>
         ))}
       </div>
@@ -1087,6 +1167,154 @@ export default function SettingsPage() {
                 <li>بند «مكان البرنامج» يظهر في المجموعات الأوفلاين فقط.</li>
                 <li>مفتاح «إظهار اسمي وبياناتي للإدارة» مفعّل افتراضياً ويستطيع الطالب إطفاءه.</li>
                 <li>المحاضر لا يرى أسماء الطلاب ولا نتائج الاستبيان في كل الأحوال.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Announcement Settings (edit-plan.md §7) */}
+      {tab === 'announcement' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📣 إعلانات الكورسات الجديدة</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                الإعلان يُبنى تلقائياً من بيانات الكورس، ويمكن إرساله يدوياً من صفحة أي كورس بعد مراجعته.
+              </p>
+            </div>
+
+            {announcementLoading ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin h-6 w-6 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+              </div>
+            ) : (
+              <label className="flex items-start gap-3 p-4 rounded-xl cursor-pointer" style={{ backgroundColor: 'var(--bg)' }}>
+                <input
+                  type="checkbox"
+                  checked={announcementSettings.autoEnabled}
+                  onChange={e => setAnnouncementSettings(prev => ({ ...prev, autoEnabled: e.target.checked }))}
+                  className="mt-1"
+                />
+                <span>
+                  <span className="block text-sm font-medium" style={{ color: 'var(--text)' }}>
+                    إرسال تلقائي عند نشر الكورس
+                  </span>
+                  <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    يُرسل مرة واحدة فقط لكل كورس عند تفعيله وفتحه للتسجيل — لا عند حفظه كمسودة. الزر اليدوي يبقى متاحاً دائماً.
+                  </span>
+                </span>
+              </label>
+            )}
+
+            <button onClick={saveAnnouncementSettings} disabled={announcementSaving || announcementLoading}
+              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              {announcementSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+            </button>
+          </div>
+
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>📬 كيف يصل الإعلان؟</strong></p>
+              <ul className="mt-2 space-y-1 list-disc list-inside">
+                <li>إشعار داخل المنصة + بريد إلكتروني لكل حساب نشط — دائماً.</li>
+                <li>رسالة تليجرام لمن ربط حسابه بالبوت.</li>
+                <li>قبل الإرسال تظهر معاينة كاملة للنص وعدد المستلمين للمراجعة.</li>
+                <li>إن سبق إرسال إعلان الكورس يظهر تحذير بتاريخ الإرسال قبل السماح بالتكرار.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Report Settings (edit-plan.md §8) */}
+      {tab === 'reports' && (
+        <div className="space-y-4">
+          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📄 إعدادات تقرير المجموعة</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                النصوص الثابتة التي تظهر في تقرير Word، والقيم الافتراضية لبيانات التقرير في كل مجموعة.
+              </p>
+            </div>
+
+            {reportLoading ? (
+              <div className="flex justify-center py-6">
+                <div className="animate-spin h-6 w-6 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم منسق الدورة</label>
+                    <input value={reportSettings.coordinatorName}
+                      onChange={e => setReportSettings({ ...reportSettings, coordinatorName: e.target.value })}
+                      maxLength={200}
+                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  </div>
+                  <div>
+                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>منسق/منظم/رعاة الدورة</label>
+                    <input value={reportSettings.organizerText}
+                      onChange={e => setReportSettings({ ...reportSettings, organizerText: e.target.value })}
+                      maxLength={300}
+                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نوع النشاط الافتراضي</label>
+                    <input value={reportSettings.defaultActivityType}
+                      onChange={e => setReportSettings({ ...reportSettings, defaultActivityType: e.target.value })}
+                      maxLength={300}
+                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص الشهادات (القسم السابع)</label>
+                  <textarea value={reportSettings.certificateText}
+                    onChange={e => setReportSettings({ ...reportSettings, certificateText: e.target.value })}
+                    rows={3} maxLength={2000}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص الملاحظات العامة الافتراضي (القسم الثامن)</label>
+                  <textarea value={reportSettings.defaultNotes}
+                    onChange={e => setReportSettings({ ...reportSettings, defaultNotes: e.target.value })}
+                    rows={3} maxLength={4000}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                </div>
+
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص التوصيات الافتراضي (القسم التاسع)</label>
+                  <textarea value={reportSettings.defaultRecommendations}
+                    onChange={e => setReportSettings({ ...reportSettings, defaultRecommendations: e.target.value })}
+                    rows={3} maxLength={4000}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                </div>
+
+                <button onClick={saveReportSettings} disabled={reportSaving}
+                  className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                  {reportSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
+                </button>
+              </>
+            )}
+          </div>
+
+          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+              <p><strong>📋 كيف يُبنى تقرير المجموعة؟</strong></p>
+              <ul className="mt-2 space-y-1 list-disc list-inside">
+                <li>يُولَّد من أحدث بيانات الكورس والمجموعة والمحاضرات والطلاب وقت الضغط — لا يُحفظ ملف قديم.</li>
+                <li>الاستخراج متاح بعد إنهاء المجموعة فقط، ويعود معطلاً إذا أُعيد فتحها.</li>
+                <li>الصور الوثائقية تُرفع وقت الاستخراج (حتى 8 صور) ولا تُخزَّن في النظام.</li>
+                <li>قسم نتائج التقييم يُبنى من استبيان الطالب، ويختفي مجال المكان في الأونلاين.</li>
+                <li>التصدير إلى Excel متاح للحضور والمجموعات وطلابها ونتائج الاستبيان وتقييم المحاضر.</li>
               </ul>
             </div>
           </div>

@@ -18,6 +18,7 @@ interface Proposal {
   instructor_name: string;
   objectives: string[];
   daily_content: DayContent[];
+  materials_url: string;
   status: 'draft' | 'submitted' | 'approved' | 'rejected' | 'needs_changes';
   status_label: string;
   admin_note: string;
@@ -52,6 +53,7 @@ export default function ProposalEditorPage() {
   const [title, setTitle] = useState('');
   const [objectives, setObjectives] = useState<string[]>([]);
   const [days, setDays] = useState<{ day: string; topic: string }[]>([]);
+  const [materialsUrl, setMaterialsUrl] = useState('');
   const [loadingProposal, setLoadingProposal] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -71,6 +73,7 @@ export default function ProposalEditorPage() {
   const hydrate = useCallback((data: Proposal) => {
     setProposal(data);
     setTitle(data.course_title || '');
+    setMaterialsUrl(data.materials_url || '');
     setObjectives(data.objectives.length ? data.objectives : ['']);
     setDays(
       data.daily_content.length
@@ -106,8 +109,9 @@ export default function ProposalEditorPage() {
       daily_content: days
         .map((row) => ({ day: row.day.trim(), topic: row.topic.trim() }))
         .filter((row) => row.day || row.topic),
+      materials_url: materialsUrl.trim(),
     }),
-    [title, objectives, days],
+    [title, objectives, days, materialsUrl],
   );
 
   const save = async (): Promise<Proposal | null> => {
@@ -452,6 +456,48 @@ export default function ProposalEditorPage() {
               >
                 + إضافة يوم
               </button>
+            )}
+          </section>
+
+          <section
+            className="rounded-3xl p-4 sm:p-5 space-y-3"
+            style={{
+              backgroundColor: 'var(--md-sys-color-surface-container)',
+              border: '1px solid var(--md-sys-color-outline-variant)',
+            }}
+          >
+            <div>
+              <h2 className="font-bold text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                المادة العلمية
+              </h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                كتاب أو PDF أو Word يستخدمه المحاضر في الشرح. ارفعه على Google Drive وضع رابط المشاركة
+                هنا (مناسب للملفات الأكبر من 20 ميجا).
+              </p>
+            </div>
+            <input
+              type="url"
+              inputMode="url"
+              dir="ltr"
+              value={materialsUrl}
+              onChange={(event) => setMaterialsUrl(event.target.value)}
+              disabled={!canEdit}
+              maxLength={500}
+              placeholder="https://drive.google.com/file/d/..."
+              className="w-full px-4 py-2.5 rounded-xl border text-sm text-left disabled:opacity-70"
+              style={inputStyle}
+            />
+            {proposal.materials_url && (
+              <a
+                href={proposal.materials_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium"
+                style={{ color: 'var(--md-sys-color-primary)' }}
+              >
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">open_in_new</span>
+                فتح الرابط المحفوظ
+              </a>
             )}
           </section>
 

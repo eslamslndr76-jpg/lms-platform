@@ -74,6 +74,13 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 
 ### API changes for Flutter (append here when adding new endpoints Flutter will consume):
 <!-- Format: METHOD /api/path — description — added by web agent on DATE -->
+- GET /api/groups/:id/report — fresh group report data (staff only; used by the admin report tab) — 2026-11-08
+- POST /api/groups/:id/report/word — Word report, optional `images` multipart field (max 8, JPG/PNG, not stored) — 2026-11-08
+- GET/PUT /api/settings/report — report default texts (coordinator, certificate, notes, recommendations, activity type) — 2026-11-08
+- GET /api/exports/group_roster?groupId= — Excel: group + students (staff only) — 2026-11-08
+- GET /api/exports/survey_results?groupId= — Excel: survey answers + per-item averages — 2026-11-08
+- GET /api/exports/instructor_eval?groupId= — Excel: instructor evaluation of students — 2026-11-08
+- GET /api/courses/:id — course object now includes `materials_url` (Google Drive link to the scientific material; http(s) only, max 500 chars, may be empty). Show it to enrolled students and staff only — 2026-11-08
 
 ## Language & branding
 - Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").

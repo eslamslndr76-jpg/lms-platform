@@ -27,6 +27,9 @@ interface Evaluation {
     course_mode: string;
     completed_at: string | null;
     eval_opened_at: string | null;
+    start_date: string | null;
+    instructor_name: string;
+    place_name: string;
   };
   questions: EvalQuestion[];
   scale: { value: number; label: string }[];
@@ -47,6 +50,20 @@ function formatDate(value?: string | null): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
   return date.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric' });
+}
+
+function groupMetaLine(evaluation: Evaluation): string {
+  return [
+    evaluation.group.instructor_name ? `المدرّب: ${evaluation.group.instructor_name}` : '',
+    evaluation.group.start_date ? `تاريخ التدريب: ${formatDate(evaluation.group.start_date)}` : '',
+    evaluation.group.course_mode === 'offline'
+      ? evaluation.group.place_name
+        ? `المكان: ${evaluation.group.place_name}`
+        : ''
+      : 'أونلاين',
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 function toScoreMap(evaluation: Evaluation): ScoreMap {
@@ -251,6 +268,11 @@ export default function InstructorEvaluationPage() {
               {evaluation.group.course_title}
               {evaluation.group.completed_at ? ` · انتهت في ${formatDate(evaluation.group.completed_at)}` : ''}
             </p>
+            {groupMetaLine(evaluation) && (
+              <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                {groupMetaLine(evaluation)}
+              </p>
+            )}
             <p className="text-xs mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               سجل سلوكي فقط لا يؤثر على الشهادة.
             </p>

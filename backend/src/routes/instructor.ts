@@ -93,6 +93,7 @@ router.post('/proposals', authMiddleware, requireRole(INSTRUCTOR), async (req: R
       course_title: req.body?.course_title,
       objectives: req.body?.objectives,
       daily_content: req.body?.daily_content,
+      materials_url: req.body?.materials_url,
     });
     res.status(201).json({ message: 'Proposal created', proposal });
   } catch (err: any) {
@@ -116,6 +117,7 @@ router.put('/proposals/:id', authMiddleware, requireRole(INSTRUCTOR), async (req
       course_title: req.body?.course_title,
       objectives: req.body?.objectives,
       daily_content: req.body?.daily_content,
+      materials_url: req.body?.materials_url,
     });
     res.json({ message: 'Proposal saved', proposal });
   } catch (err: any) {

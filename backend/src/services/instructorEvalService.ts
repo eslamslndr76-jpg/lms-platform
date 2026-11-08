@@ -66,13 +66,18 @@ interface EvalGroup {
   course_id: number;
   course_title: string;
   course_mode: string;
+  start_date: string | null;
+  instructor_name: string;
+  place_name: string;
 }
 
 async function loadGroupForInstructor(instructorId: number, groupId: number): Promise<EvalGroup> {
   const result = await sql(
     `SELECT g.id, g.name, g.status, g.completed_at, g.instructor_eval_opened_at,
-            g.course_id, c.title_ar as course_title, c.course_mode
+            g.course_id, g.start_date, g.instructor_name, c.title_ar as course_title,
+            c.course_mode, p.name as place_name
      FROM groups g JOIN courses c ON g.course_id=c.id
+     LEFT JOIN places p ON g.place_id=p.id
      WHERE g.id=? AND g.instructor_user_id=?`,
     groupId, instructorId,
   );
@@ -89,6 +94,9 @@ async function loadGroupForInstructor(instructorId: number, groupId: number): Pr
     course_id: Number(row.course_id),
     course_title: row.course_title || '',
     course_mode: row.course_mode || 'online',
+    start_date: row.start_date || null,
+    instructor_name: row.instructor_name || '',
+    place_name: row.place_name || '',
   };
 }
 
@@ -241,6 +249,9 @@ export async function getInstructorEvaluation(instructorId: number, groupId: num
       name: group.name,
       course_title: group.course_title,
       course_mode: group.course_mode,
+      start_date: group.start_date,
+      instructor_name: group.instructor_name,
+      place_name: group.place_name,
       completed_at: group.completed_at,
       eval_opened_at: group.eval_opened_at,
     },

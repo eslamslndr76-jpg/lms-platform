@@ -26,9 +26,15 @@ export async function api(path: string, options: RequestInit = {}) {
 }
 
 /** Download an authenticated binary response (Word/Excel exports). */
-export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+export async function downloadFile(
+  path: string,
+  fallbackName: string,
+  options: { method?: string; body?: BodyInit } = {},
+): Promise<void> {
   const token = typeof window !== 'undefined' ? localStorage.getItem('admin_token') : null;
   const res = await fetch(`${API_URL}${path}`, {
+    method: options.method || 'GET',
+    body: options.body,
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
   if (!res.ok) {
