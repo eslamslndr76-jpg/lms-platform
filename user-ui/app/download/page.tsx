@@ -16,10 +16,20 @@ export default function DownloadPage() {
   const [downloadCount, setDownloadCount] = useState(1248);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const fullUrl = `${window.location.origin}/downloads/training-unit.apk`;
-      setDownloadUrl(fullUrl);
-    }
+    if (typeof window === 'undefined') return;
+    const fallback = `${window.location.origin}/downloads/training-unit.apk`;
+    setDownloadUrl(fallback);
+
+    // Prefer the latest build link configured by the admin (app-version settings),
+    // so publishing a new APK doesn't require a redeploy of this site.
+    const base = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+    fetch(`${base}/api/settings/app-version`, { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        const direct = typeof data?.apkDirectUrl === 'string' ? data.apkDirectUrl.trim() : '';
+        if (direct.startsWith('http')) setDownloadUrl(direct);
+      })
+      .catch(() => {});
   }, []);
 
   const handleCopy = () => {
@@ -150,7 +160,7 @@ export default function DownloadPage() {
             {/* Download CTA Button & Actions */}
             <div className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4 pt-2">
               <a
-                href="/downloads/training-unit.apk"
+                href={downloadUrl}
                 download="TrainingUnit.apk"
                 onClick={handleDownload}
                 className="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl font-bold text-base shadow-lg transition-all transform hover:-translate-y-1 active:translate-y-0"
@@ -552,7 +562,7 @@ export default function DownloadPage() {
           </p>
           <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
             <a
-              href="/downloads/training-unit.apk"
+              href={downloadUrl}
               download="TrainingUnit.apk"
               onClick={handleDownload}
               className="inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-white text-blue-600 font-black text-base shadow-lg hover:bg-blue-50 transition-all transform hover:scale-105"
@@ -574,7 +584,7 @@ export default function DownloadPage() {
       {/* ── Mobile Sticky Download Bar ────────────────────────────────────── */}
       <div className="sm:hidden fixed bottom-4 right-4 left-4 z-40 animate-fade-up">
         <a
-          href="/downloads/training-unit.apk"
+          href={downloadUrl}
           download="TrainingUnit.apk"
           onClick={handleDownload}
           className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-blue-600 text-white font-bold text-sm shadow-2xl border border-blue-400/40"
