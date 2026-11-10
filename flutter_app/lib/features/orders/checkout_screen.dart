@@ -138,6 +138,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   // ── Step 3: Confirm order ──────────────────────────────────────────────────
   Future<void> _confirmOrder() async {
+    // The order is created once; going back from the payment step must not
+    // create a second order.
+    if (_newOrderId != null) {
+      setState(() => _step = _CheckoutStep.pay);
+      await _loadPaymentMethods();
+      return;
+    }
+
     final missingAnswers = <String, dynamic>{};
     for (final entry in _missingCtrls.entries) {
       missingAnswers[entry.key] = entry.value.text.trim();
@@ -169,9 +177,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       if (newId != null) {
         setState(() {
           _newOrderId = newId;
-          _step = _CheckoutStep.done;
+          // Order created — go straight to choosing a payment method.
+          _step = _CheckoutStep.pay;
         });
         await context.read<CartProvider>().fetchCart(silent: true);
+        if (!mounted) return;
+        await _loadPaymentMethods();
       } else {
         setState(() {
           _isLoading = false;
@@ -454,12 +465,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _next() {
     switch (_step) {
       case _CheckoutStep.review:
-        setState(() => _step = _CheckoutStep.missing);
+        _checkMissingFields();
       case _CheckoutStep.missing:
         _confirmOrder();
       case _CheckoutStep.confirm:
-        setState(() => _step = _CheckoutStep.pay);
-        _loadPaymentMethods();
+        _confirmOrder();
       case _CheckoutStep.pay:
         _pay();
       case _CheckoutStep.done:

@@ -31,19 +31,20 @@ class NotificationsProvider extends ChangeNotifier {
         final list = listRes.data as List;
         final parsed = <NotificationModel>[];
         for (final item in list) {
-          if (item is! Map<String, dynamic>) continue;
+          if (item is! Map) continue;
           try {
-            parsed.add(NotificationModel.fromJson(item));
+            parsed.add(NotificationModel.fromJson(Map<String, dynamic>.from(item)));
           } catch (e) {
             debugPrint('[NOTIF] Skipped bad row: $e — $item');
           }
         }
         _notifications = parsed;
-      } else if (!silent) {
+        _error = null;
+      } else {
         _error = 'فشل تحميل قائمة الإشعارات (${listRes.statusCode})';
       }
     } catch (e) {
-      if (!silent) _error = 'تعذر الوصول للخادم';
+      _error = 'تعذر تحميل الإشعارات، تحقق من اتصالك وحاول مرة أخرى';
       debugPrint('[NOTIF] list fetch error: $e');
     }
 
@@ -57,11 +58,8 @@ class NotificationsProvider extends ChangeNotifier {
       debugPrint('[NOTIF] count fetch error: $e');
       // Count is non-critical; don't set _error
     }
-
-    if (!silent) {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _isLoading = false;
+    notifyListeners();
   }
 
   // ── Mark single notification as read ──────────────────────────────────────
