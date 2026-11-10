@@ -67,9 +67,10 @@
 الاختبار: بصمة/وجه + قفل بعد الخلفية، إضافة الحدث للتقويم + التذكير، فتح PDF/مشاركته، فتح الحدث من إشعار المتابعة.
 
 ## خطوات الإطلاق (بالترتيب)
-1. **نشر الـ backend** بالكود الجديد (`POST /api/auth/refresh` + افتراضي إصدار التطبيق `1.0.3`/`4`) — `vercel --prod` أو push إلى الفرع المرتبط.
-2. **مرة واحدة بعد النشر:** من لوحة الأدمن ← إعدادات ← إصدار التطبيق، احفظ `1.0.3` / build `4` (إن كان محفوظاً بقيم قديمة).
-3. **بناء APK موقّع** `1.0.3+4` بنفس keystore (`phase-6-release-and-apk-build.md`) ورفعه (رابط `apkDirectUrl` أو صفحة `/download`).
-4. **اختبار دخان على جهاز:** تسجيل دخول → كورسات → سلة → إتمام شراء → إشعار → حضور QR → استبيان → شهادة (عرض/مشاركة PDF) → قفل بصمة → تقويم، ثم حساب محاضر.
-5. **App Links:** التأكد أن `assetlinks.json` على `lms-user.vercel.app` يحمل بصمة التوقيع أعلاه.
+1. ✅ **نُشر الـ backend** (commit `0814d2d`): `POST /api/auth/refresh` يرد 401 للتوكن غير الصالح (ليس 404)، و`GET /api/settings/app-version` يرد `1.0.3` / `4` على الإنتاج.
+2. ✅ **إصدار التطبيق محفوظ على الإنتاج**: `1.0.3` / build `4` مع `apkDirectUrl` يشير لملف الإصدار، وأُرسل إشعار التحديث للمستخدمين.
+3. ✅ **APK موقّع مبني ومرفوع**: `flutter_app/build/app/outputs/flutter-apk/app-release-1.0.3.apk` (80.9MB) — بصمة SHA-256 مطابقة لـ `assetlinks.json`. رابط التنزيل المباشر: https://github.com/eslamslndr76-jpg/lms-platform/releases/download/app-v1.0.3/TrainingUnit-1.0.3.apk
+4. ⏳ **صفحة `/download`**: الكود صار يقرأ `apkDirectUrl` من الإعدادات (commit `bf5aabd`)، لكن نشر `user-ui` على Vercel لم يلتقط التحديث بعد — `/downloads/training-unit.apk` ما زال يخدم الملف القديم (71MB). يحتاج فحص حالة النشر في لوحة Vercel.
+5. ⏳ **اختبار دخان على جهاز**: لم يُنفَّذ (لا يوجد جهاز أندرويد متصل، فقط Windows/Chrome).
+
 
