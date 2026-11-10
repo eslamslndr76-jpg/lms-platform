@@ -48,6 +48,14 @@ router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), r
 
     // Notify all students in the group
 const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
+    const studentsCount = await sql(
+      'SELECT COUNT(*) as cnt FROM group_students WHERE group_id=?',
+      lecRow.group_id,
+    );
+    const studentsNotified = Number((studentsCount.rows[0] as any)?.cnt || 0);
+    if (studentsNotified === 0) {
+      console.warn(`[Notify] attendance_opened: group ${lecRow.group_id} has no students to notify`);
+    }
     notifyGroupStudents(
       lecRow.group_id,
       '🎯 تم فتح باب الحضور!',
@@ -75,6 +83,7 @@ const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
       qrData,
       expiresAt: expiresAt.toISOString(),
       expiresIn: CODE_TTL,
+      studentsNotified,
     });
   } catch {
     res.status(500).json({ error: 'فشل بدء تسجيل الحضور' });

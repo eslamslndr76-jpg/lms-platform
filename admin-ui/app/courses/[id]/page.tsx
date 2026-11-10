@@ -807,6 +807,11 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
       setAttendanceCountdown(res.expiresIn);
       startAttendanceRefresh(lectureId);
       loadAttendanceReport(lectureId);
+      if (typeof res.studentsNotified === 'number' && res.studentsNotified === 0) {
+        toast('تم فتح الحضور، لكن لا يوجد متدربون في هذه المجموعة — لن يصل أي إشعار', 'error');
+      } else if (typeof res.studentsNotified === 'number') {
+        toast(`تم فتح الحضور وإشعار ${res.studentsNotified} متدرباً`, 'success');
+      }
     } catch (err: any) {
       toast(err?.message || 'فشل بدء تسجيل الحضور', 'error');
     } finally {
