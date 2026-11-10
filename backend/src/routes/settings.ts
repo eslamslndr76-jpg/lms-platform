@@ -1,8 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
-import { requireRole, ADMIN } from '../middleware/rbac';
+import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import { invalidateNotificationCache, getNotificationSettings } from '../config/notification';
+import { broadcastAppUpdate } from '../services/externalNotificationService';
+import { getBookingExpiryHours, setBookingExpiryHours } from '../services/orderService';
 
 const router = Router();
 
@@ -57,7 +59,7 @@ router.get('/app-version', async (_req: Request, res: Response) => {
   try {
     const result = await sql("SELECT value FROM system_settings WHERE key='appVersion'");
     if (result.rows.length > 0 && result.rows[0].value) {
-      return res.json(JSON.parse(result.rows[0].value as string));
+      return res.json({ apkDirectUrl: '', ...JSON.parse(result.rows[0].value as string) });
     }
     res.json({
       latestVersion: '1.0.2',
@@ -66,6 +68,7 @@ router.get('/app-version', async (_req: Request, res: Response) => {
       title: 'تحديث جديد متوفر',
       message: 'يتوفر إصدار جديد من تطبيق الهاتف يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',
       downloadUrl: 'https://lms-user.vercel.app/download',
+      apkDirectUrl: '',
     });
   } catch {
     res.status(500).json({ error: 'Failed to fetch app version' });
@@ -74,7 +77,7 @@ router.get('/app-version', async (_req: Request, res: Response) => {
 
 router.put('/app-version', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
-    const { latestVersion, buildNumber, forceUpdate, title, message, downloadUrl } = req.body;
+    const { latestVersion, buildNumber, forceUpdate, title, message, downloadUrl, apkDirectUrl } = req.body;
     const data = {
       latestVersion: latestVersion || '1.0.1',
       buildNumber: Number(buildNumber) || 2,
@@ -82,14 +85,74 @@ router.put('/app-version', authMiddleware, requireRole(ADMIN), async (req: Reque
       title: title || 'تحديث جديد متوفر',
       message: message || 'يتوفر إصدار جديد من تطبيق الهاتف، اضغط للتحديث الآن.',
       downloadUrl: downloadUrl || 'https://lms-user.vercel.app/download',
+      apkDirectUrl: apkDirectUrl || '',
     };
+
+    // Compare with the previously saved version (a fresh save with no row
+    // before counts as new too, but only announces a higher build number).
+    const previous = await sql("SELECT value FROM system_settings WHERE key='appVersion'");
+    const previousBuild = previous.rows.length > 0
+      ? Number(JSON.parse(String(previous.rows[0].value || '{}')).buildNumber) || 0
+      : 0;
+
     await sql(
       "INSERT INTO system_settings (key, value) VALUES ('appVersion', ?) ON CONFLICT(key) DO UPDATE SET value=?, updated_at=CURRENT_TIMESTAMP",
       JSON.stringify(data), JSON.stringify(data),
     );
-    res.json({ message: 'App version updated', data });
+
+    // Auto-broadcast when a newer build is published.
+    let broadcastCount: number | null = null;
+    if (data.buildNumber > previousBuild) {
+      const broadcast = await broadcastAppUpdate(data.title, data.message)
+        .catch((e: any) => { console.error('[Notify] app-version broadcast failed:', e?.message || e); return null; });
+      broadcastCount = broadcast ? broadcast.count : null;
+    }
+
+    res.json({ message: 'App version updated', data, broadcastCount });
   } catch {
     res.status(500).json({ error: 'Failed to update app version' });
+  }
+});
+
+// Manual re-broadcast of the update notification (admin button).
+router.post('/app-version/broadcast', authMiddleware, requireRole(ADMIN), async (_req: Request, res: Response) => {
+  try {
+    const result = await sql("SELECT value FROM system_settings WHERE key='appVersion'");
+    const data = result.rows.length > 0
+      ? JSON.parse(String(result.rows[0].value || '{}'))
+      : {};
+    const title = data.title || 'تحديث جديد متوفر';
+    const message = data.message || 'يتوفر إصدار جديد من تطبيق الهاتف، اضغط للتحديث الآن.';
+    const broadcast = await broadcastAppUpdate(title, message);
+    res.json({ success: true, count: broadcast.count, message: `تم إرسال إشعار التحديث إلى ${broadcast.count} مستخدم` });
+  } catch (err: any) {
+    console.error('App version broadcast error:', err?.message || err);
+    res.status(500).json({ error: 'فشل إرسال إشعار التحديث' });
+  }
+});
+
+// ───────────────────────────────────────────────
+// Booking window (auto-cancel of unpaid bookings)
+// ───────────────────────────────────────────────
+
+router.get('/booking', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
+  try {
+    res.json({ hours: await getBookingExpiryHours() });
+  } catch {
+    res.status(500).json({ error: 'فشل تحميل إعدادات الحجز' });
+  }
+});
+
+router.put('/booking', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
+  try {
+    const hours = Number(req.body?.hours);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 720) {
+      return res.status(400).json({ error: 'المدة يجب أن تكون بين ساعة و720 ساعة' });
+    }
+    await setBookingExpiryHours(hours);
+    res.json({ message: 'تم تحديث مدة الحجز', hours });
+  } catch {
+    res.status(500).json({ error: 'فشل تحديث مدة الحجز' });
   }
 });
 

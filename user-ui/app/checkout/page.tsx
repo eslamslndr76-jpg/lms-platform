@@ -1,229 +1,201 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { api } from '../../lib/api';
-import { compressAndEncode } from '../../lib/imageUtils';
 import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 import { useAuth } from '../../lib/auth';
+import PaymentStep from '../../components/PaymentStep';
+import { loginUrl } from '../../lib/redirect';
 
-interface CartItem {
-  id: number;
+interface CheckoutItem {
   course_id: number;
   title_ar: string;
+  title_en?: string;
   price: number;
   image_url?: string;
 }
 
-/* ---- Minimalist input with top-aligned label ---- */
-function MinimalInput({ label, value, onChange, placeholder, type = 'text', autoComplete, accentColor }: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: string;
-  autoComplete?: string;
-  accentColor?: string;
-}) {
-  const ac = accentColor || 'var(--md-sys-color-on-surface)';
-  return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-xs uppercase tracking-widest font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-        {label}
-      </label>
-      <input
-        type={type}
-        value={value}
-        onChange={e => onChange(e.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
-        className="w-full text-sm outline-none transition-all duration-200"
-        style={{
-          backgroundColor: 'var(--md-sys-color-surface-container-highest)',
-          border: '1px solid var(--md-sys-color-outline)',
-          borderRadius: 'var(--md-sys-shape-corner-small)',
-          padding: '12px 16px',
-          color: 'var(--md-sys-color-on-surface)',
-        }}
-        onFocus={e => { e.target.style.borderColor = ac; e.target.style.boxShadow = `0 0 0 1px ${ac}`; }}
-        onBlur={e => { e.target.style.borderColor = 'var(--md-sys-color-outline)'; e.target.style.boxShadow = 'none'; }}
-      />
-    </div>
-  );
-}
+type Phase = 'review' | 'data' | 'booking' | 'payment' | 'done';
 
-/* ---- Numbered Progress Badge ---- */
-function StepBadge({ num, active, color }: { num: number; active: boolean; color?: string }) {
-  const c = color || 'var(--md-sys-color-on-surface)';
+const PHASE_LABELS: Record<string, string> = {
+  review: 'مراجعة الطلب',
+  data: 'بياناتك',
+  booking: 'تأكيد الحجز',
+  payment: 'الدفع',
+};
+
+/* Only the fields the checkout-requirements endpoint reports as missing. */
+const FIELD_META: Record<string, { label: string; placeholder: string; type?: string; ltr?: boolean }> = {
+  name: { label: 'الاسم', placeholder: 'اكتب اسمك بالكامل' },
+  phone: { label: 'رقم الهاتف', placeholder: '01XXXXXXXXX', type: 'tel', ltr: true },
+  national_id: { label: 'الرقم القومي', placeholder: '14 رقماً', ltr: true },
+  university_name: { label: 'اسم الجامعة', placeholder: 'اسم جامعتك' },
+  university_code: { label: 'الكود الجامعي', placeholder: 'كود الطالب', ltr: true },
+};
+
+const PROFILE_KEYS: Record<string, string> = {
+  name: 'name',
+  phone: 'phone',
+  national_id: 'nationalId',
+  university_name: 'universityName',
+  university_code: 'universityCode',
+};
+
+function StepBadge({ num, active, done }: { num: number; active: boolean; done: boolean }) {
   return (
-    <div
-      className="flex items-center justify-center text-xs font-bold shrink-0"
+    <div className="flex items-center justify-center text-xs font-bold shrink-0"
       style={{
-        width: '24px',
-        height: '24px',
+        width: '26px',
+        height: '26px',
         borderRadius: '50%',
-        backgroundColor: active ? c : 'transparent',
-        color: active ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-outline)',
-        border: active ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
+        backgroundColor: active || done ? 'var(--md-sys-color-primary)' : 'transparent',
+        color: active || done ? 'var(--md-sys-color-on-primary)' : 'var(--md-sys-color-outline)',
+        border: active || done ? 'none' : '1px solid var(--md-sys-color-outline-variant)',
         transition: 'all 0.3s ease',
-      }}
-    >
-      {num}
+      }}>
+      {done ? '✓' : num}
     </div>
   );
 }
 
-/* ---- Collapsible Order Summary ---- */
-function OrderSummary({ items, total, currency, isOpen, onToggle }: {
-  items: { title_ar: string; amount: number; image_url?: string }[];
-  total: number;
-  currency: string;
-  isOpen: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <div className="py-3" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', borderBottom: '1px solid var(--md-sys-color-outline-variant)' }}>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between text-sm transition-all duration-200"
-        style={{ color: 'var(--md-sys-color-on-surface)' }}
-      >
-        <span className="font-medium">
-          ملخص الطلب (<span dir="ltr">{items.length}</span>)
-        </span>
-        <span
-          className="text-xs transition-transform duration-300"
-          style={{
-            color: 'var(--md-sys-color-outline)',
-            transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-            display: 'inline-block',
-          }}
-        >
-          ▼
-        </span>
-      </button>
-
-      <div
-        className="overflow-hidden transition-all duration-300"
-        style={{
-          maxHeight: isOpen ? '600px' : '0px',
-          opacity: isOpen ? 1 : 0,
-        }}
-      >
-        <div className="pt-3 space-y-3">
-          {items.map((item, i) => (
-            <div key={i} className="flex items-center gap-3">
-              <div
-                className="flex items-center justify-center shrink-0"
-                style={{
-                  width: '64px',
-                  height: '64px',
-                  backgroundColor: 'var(--md-sys-color-surface-container-high)',
-                  borderRadius: 'var(--md-sys-shape-corner-extra-small)',
-                  overflow: 'hidden',
-                }}
-              >
-                {item.image_url ? (
-                  <img src={item.image_url} alt={item.title_ar} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="material-symbols-outlined" style={{ fontSize: '24px', color: 'var(--md-sys-color-outline)' }}>inventory_2</span>
-                )}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
-                  {item.title_ar}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--md-sys-color-outline)' }}>
-                  {item.amount.toLocaleString()} {currency}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ================================================================
-   MAIN CHECKOUT CONTENT
-   ================================================================ */
 function CheckoutContent() {
-  const searchParams = useSearchParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, loading: authLoading } = useAuth();
   const { show } = useToast();
-  const { primaryColor, sloganAr, sloganEn, systemName } = useBranding();
+  const { primaryColor } = useBranding();
 
-  const [file, setFile] = useState<File | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState('cash');
-  const [noteStudent, setNoteStudent] = useState('');
-  const [senderPhone, setSenderPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const courseId = Number(searchParams.get('course_id') || 0);
+  const isDirect = courseId > 0;
+
+  const [items, setItems] = useState<CheckoutItem[]>([]);
   const [cartTotal, setCartTotal] = useState(0);
-  const [cartFetching, setCartFetching] = useState(true);
-  const [activeStep, setActiveStep] = useState(0);
-  const [summaryOpen, setSummaryOpen] = useState(true);
-  const [directCourse, setDirectCourse] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [phase, setPhase] = useState<Phase>('review');
+  const [missing, setMissing] = useState<string[]>([]);
+  const [form, setForm] = useState<Record<string, string>>({});
+  const [note, setNote] = useState('');
+  const [savingData, setSavingData] = useState(false);
+  const [booking, setBooking] = useState(false);
+  const [order, setOrder] = useState<{ id: number; amount: number } | null>(null);
 
-  const courseId = searchParams.get('course_id');
-  const amount = searchParams.get('amount');
-  const isDirect = !!courseId && !!amount;
-
-  useEffect(() => {
-    if (authLoading) return;
-    if (!user) { router.push('/login'); return; }
-    if (!isDirect) {
-      api('/api/cart').then(data => {
-        setCartItems(data.items || []);
-        setCartTotal(data.total || 0);
-      }).catch(() => show('فشل تحميل السلة', 'error')).finally(() => setCartFetching(false));
-    } else {
-      api(`/api/courses/${courseId}`).then(data => {
-        setDirectCourse(data);
-        setCartTotal(Number(data.price));
-      }).catch(() => show('فشل تحميل بيانات الكورس', 'error')).finally(() => setCartFetching(false));
-    }
-  }, [user, authLoading, router, isDirect, show]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const load = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
+    setError('');
     try {
+      const requirements: any = await api('/api/orders/checkout-requirements')
+        .catch(() => ({ missing_fields: [] }));
+      setMissing((requirements?.missing_fields || []).map((f: any) => String(f.key)));
+
       if (isDirect) {
-        const data: any = { course_id: Number(courseId), amount: Number(amount), payment_method: paymentMethod };
-        if (senderPhone.trim()) data.sender_phone = senderPhone.trim();
-        if (noteStudent.trim()) data.note_student = noteStudent.trim();
-        if (paymentMethod !== 'cash' && !file) { show('يرجى إرفاق إيصال الدفع', 'error'); setLoading(false); return; }
-        if (file) data.receipt_url = await compressAndEncode(file);
-        await api('/api/orders', { method: 'POST', body: JSON.stringify(data) });
-        show('تم تقديم الطلب بنجاح!');
+        const course: any = await api(`/api/courses/${courseId}`);
+        setItems([{
+          course_id: courseId,
+          title_ar: course.title_ar,
+          title_en: course.title_en,
+          price: Number(course.price),
+          image_url: course.image_url,
+        }]);
+        setCartTotal(Number(course.price));
       } else {
-        if (cartItems.length === 0) { show('السلة فارغة', 'error'); setLoading(false); return; }
-        if (paymentMethod !== 'cash' && !file) { show('يرجى إرفاق إيصال الدفع', 'error'); setLoading(false); return; }
-        for (const item of cartItems) {
-          const data: any = { course_id: item.course_id, amount: Number(item.price), payment_method: paymentMethod };
-          if (senderPhone.trim()) data.sender_phone = senderPhone.trim();
-          if (noteStudent.trim()) data.note_student = noteStudent.trim();
-          if (file) data.receipt_url = await compressAndEncode(file);
-          await api('/api/orders', { method: 'POST', body: JSON.stringify(data) });
-        }
-        await api('/api/cart', { method: 'DELETE' });
-        show('تم تقديم الطلبات بنجاح!');
+        const cart: any = await api('/api/cart');
+        setItems((cart.items || []).map((i: any) => ({
+          course_id: Number(i.course_id),
+          title_ar: i.title_ar,
+          title_en: i.title_en,
+          price: Number(i.price),
+          image_url: i.image_url,
+        })));
+        setCartTotal(Number(cart.total || 0));
       }
-      router.push('/dashboard');
-    } catch (err: any) {
-      show(err.message || 'فشل تقديم الطلب', 'error');
+    } catch (e: any) {
+      setError(e?.message || 'فشل تحميل بيانات الطلب');
     } finally {
       setLoading(false);
     }
+  }, [user, isDirect, courseId]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!user) { router.push(loginUrl()); return; }
+    load();
+  }, [user, authLoading, router, load]);
+
+  /* "بياناتك" appears only when something required is actually missing. */
+  const steps = useMemo(() => {
+    const list: Phase[] = ['review'];
+    if (missing.length > 0) list.push('data');
+    list.push('booking', 'payment');
+    return list;
+  }, [missing.length]);
+
+  const stepIndex = phase === 'done' ? steps.length - 1 : Math.max(0, steps.indexOf(phase));
+  const total = order ? order.amount : cartTotal;
+  const currency = 'ج.م';
+
+  const goNext = () => {
+    const next = steps[stepIndex + 1];
+    if (next) setPhase(next);
   };
 
-  if (authLoading || cartFetching) {
+  const saveData = async () => {
+    const body: Record<string, unknown> = {};
+    for (const key of missing) {
+      const value = String(form[key] || '').trim();
+      if (!value) { show(`أدخل ${FIELD_META[key]?.label || key}`, 'error'); return; }
+      body[PROFILE_KEYS[key] || key] = value;
+    }
+    if (body.phone && !/^01\d{9}$/.test(String(body.phone))) {
+      show('رقم الهاتف يجب أن يكون 11 رقماً ويبدأ بـ 01', 'error');
+      return;
+    }
+    if (body.nationalId && !/^\d{14}$/.test(String(body.nationalId))) {
+      show('الرقم القومي يجب أن يكون 14 رقماً', 'error');
+      return;
+    }
+    setSavingData(true);
+    try {
+      await api('/api/auth/profile', { method: 'PUT', body: JSON.stringify(body) });
+      const requirements: any = await api('/api/orders/checkout-requirements');
+      const still: string[] = (requirements?.missing_fields || []).map((f: any) => String(f.key));
+      setMissing(still);
+      if (still.length > 0) { show('ما زالت هناك بيانات ناقصة', 'error'); return; }
+      setPhase('booking');
+    } catch (e: any) {
+      show(e?.message || 'فشل حفظ البيانات', 'error');
+    } finally {
+      setSavingData(false);
+    }
+  };
+
+  const confirmBooking = async () => {
+    if (items.length === 0) { show('لا توجد كورسات في الطلب', 'error'); return; }
+    setBooking(true);
+    try {
+      const created: any = await api('/api/orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          items: items.map(i => ({ course_id: i.course_id })),
+          note_student: note.trim() || undefined,
+        }),
+      });
+      setOrder({ id: Number(created.id), amount: Number(created.amount) || cartTotal });
+      // The cart is emptied at booking, not at payment.
+      if (!isDirect) await api('/api/cart', { method: 'DELETE' }).catch(() => undefined);
+      setPhase('payment');
+    } catch (e: any) {
+      show(e?.message || 'فشل تأكيد الحجز', 'error');
+    } finally {
+      setBooking(false);
+    }
+  };
+
+  if (authLoading || loading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]" style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
         <div className="text-center">
@@ -234,85 +206,132 @@ function CheckoutContent() {
     );
   }
 
-  const displayItems = isDirect && directCourse
-    ? [{ title_ar: directCourse.title_ar || directCourse.title_en, amount: Number(amount), image_url: directCourse.image_url }]
-    : cartItems.map(i => ({ title_ar: i.title_ar, amount: Number(i.price), image_url: i.image_url }));
-  const totalAmount = isDirect ? Number(amount) : cartTotal;
-  const totalSteps = 2;
-  const currency = 'ج.م';
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 px-4">
+        <p className="text-sm text-center" style={{ color: 'var(--md-sys-color-error)' }}>{error}</p>
+        <button onClick={load} className="h-11 px-6 rounded-full text-sm font-medium"
+          style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+          إعادة المحاولة
+        </button>
+      </div>
+    );
+  }
 
-  /* ---- Step content renderer ---- */
-  const renderStep = (step: number) => {
-    switch (step) {
-      /* ========== STEP 1: Payment Method ========== */
-      case 0:
-        return (
-          <div className="rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)', padding: '20px 24px' }}>
-            <div className="flex items-center gap-3 mb-6">
-              <StepBadge num={1} active={activeStep === 0} color={primaryColor} />
-              <h2
-                className="text-lg font-semibold tracking-tight"
-                style={{ color: activeStep === 0 ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-outline)', fontWeight: 600, fontSize: '18px' }}
-              >
-                طريقة الدفع
-              </h2>
+  if (items.length === 0 && !order) {
+    return (
+      <div className="text-center py-20 px-4" style={{ backgroundColor: 'var(--md-sys-color-surface)' }}>
+        <span className="material-symbols-outlined text-[64px] block mb-4" style={{ color: 'var(--md-sys-color-outline)' }}>shopping_cart</span>
+        <h1 className="text-xl font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>السلة فارغة</h1>
+        <p className="mb-6 text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>أضف كورساً واحداً على الأقل قبل إتمام الشراء</p>
+        <Link href="/courses" className="inline-flex items-center gap-2 h-12 px-6 rounded-full text-sm font-medium"
+          style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+          تصفح الكورسات
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ backgroundColor: 'var(--md-sys-color-surface)', minHeight: '100vh' }}>
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-4"
+        style={{ borderBottom: '1px solid var(--md-sys-color-outline-variant)', maxWidth: '560px', margin: '0 auto' }}>
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-[22px]" style={{ color: primaryColor }}>shopping_bag</span>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--md-sys-color-on-surface)' }}>إتمام الشراء</h1>
+        </div>
+        <span className="text-xs" style={{ color: 'var(--md-sys-color-outline)' }}>
+          الخطوة {stepIndex + 1} من {steps.length}
+        </span>
+      </div>
+
+      {/* Progress */}
+      <div className="flex items-center justify-center gap-1 py-5 flex-wrap" style={{ maxWidth: '560px', margin: '0 auto' }}>
+        {steps.map((step, i) => (
+          <div key={step} className="flex items-center">
+            <button type="button"
+              onClick={() => { if (!order && i <= stepIndex) setPhase(step); }}
+              className="flex items-center gap-1.5 px-1"
+              style={{ cursor: !order && i <= stepIndex ? 'pointer' : 'default' }}>
+              <StepBadge num={i + 1} active={i === stepIndex} done={i < stepIndex} />
+              <span className="text-[11px] font-medium hidden sm:inline"
+                style={{ color: i === stepIndex ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-outline)' }}>
+                {PHASE_LABELS[step]}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <div className="w-4 sm:w-8 h-px mx-1"
+                style={{ backgroundColor: i < stepIndex ? primaryColor : 'var(--md-sys-color-outline-variant)' }} />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div className="px-4 pb-12 space-y-4" style={{ maxWidth: '560px', margin: '0 auto' }}>
+        {/* ---------- REVIEW ---------- */}
+        {phase === 'review' && (
+          <div className="rounded-md3-md p-5 space-y-4"
+            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <h2 className="text-base font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>مراجعة الطلب</h2>
+            <div className="space-y-2">
+              {items.map(item => (
+                <div key={item.course_id} className="flex items-center gap-3 p-3 rounded-md3-sm"
+                  style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                  <div className="w-12 h-12 rounded-md3-sm overflow-hidden shrink-0 flex items-center justify-center"
+                    style={{ backgroundColor: 'var(--md-sys-color-surface-container-high)' }}>
+                    {item.image_url
+                      ? <img src={item.image_url} alt={item.title_ar} className="w-full h-full object-cover" />
+                      : <span className="material-symbols-outlined text-[22px]" style={{ color: 'var(--md-sys-color-outline)' }}>school</span>}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>{item.title_ar}</p>
+                    <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{item.price.toLocaleString()} {currency}</p>
+                  </div>
+                </div>
+              ))}
             </div>
+            <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+              <span className="text-sm font-semibold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الإجمالي</span>
+              <span className="text-lg font-bold" style={{ color: primaryColor }}>{total.toLocaleString()} {currency}</span>
+            </div>
+            <div className="flex gap-2">
+              <Link href={isDirect ? `/courses/${courseId}` : '/cart'}
+                className="flex-1 h-12 rounded-full text-sm font-medium flex items-center justify-center border"
+                style={{ borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                رجوع
+              </Link>
+              <button type="button" onClick={goNext}
+                className="flex-1 h-12 rounded-full text-sm font-bold"
+                style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+                متابعة
+              </button>
+            </div>
+          </div>
+        )}
 
-            <div
-              className="space-y-5"
-              style={{
-                opacity: activeStep === 0 ? 1 : 0.4,
-                filter: activeStep === 0 ? 'none' : 'grayscale(0.6)',
-                pointerEvents: activeStep === 0 ? 'auto' : 'none',
-                transition: 'all 0.3s ease',
-              }}
-            >
-              {/* Payment method radios */}
-              <div className="space-y-2">
-                {[
-                  { value: 'wallet', label: 'محفظة إلكترونية (Wallet)' },
-                  { value: 'instapay', label: 'إنستاباي (InstaPay)' },
-                  { value: 'cash', label: 'كاش — الدفع عند أحد منافذنا' },
-                ].map(opt => (
-                  <label
-                    key={opt.value}
-                    className="flex items-center gap-3 px-4 py-3 cursor-pointer transition-all duration-200"
-                    style={{
-                      backgroundColor: paymentMethod === opt.value ? 'var(--md-sys-color-surface-container-high)' : 'var(--md-sys-color-surface-container-low)',
-                      border: paymentMethod === opt.value ? `1px solid ${primaryColor}` : '1px solid var(--md-sys-color-outline-variant)',
-                      borderRadius: 'var(--md-sys-shape-corner-small)',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="payment_method"
-                      value={opt.value}
-                      checked={paymentMethod === opt.value}
-                      onChange={() => setPaymentMethod(opt.value)}
-                      className="appearance-none w-4 h-4 rounded-full border-2 transition-all duration-200 cursor-pointer"
-                      style={{
-                        borderColor: paymentMethod === opt.value ? primaryColor : 'var(--md-sys-color-outline-variant)',
-                        backgroundColor: paymentMethod === opt.value ? primaryColor : 'transparent',
-                        boxShadow: paymentMethod === opt.value ? 'inset 0 0 0 3px var(--md-sys-color-surface)' : 'none',
-                      }}
-                    />
-                    <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{opt.label}</span>
-                  </label>
-                ))}
-              </div>
-
-              {/* Sender phone for digital payments */}
-              {paymentMethod !== 'cash' && (
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-xs uppercase tracking-widest font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                    {paymentMethod === 'wallet' ? 'رقم المحفظة / رقم الهاتف المحوِّل' : 'رقم إنستاباي / رقم الهاتف المحوِّل'}
-                  </label>
+        {/* ---------- MISSING DATA ---------- */}
+        {phase === 'data' && (
+          <div className="rounded-md3-md p-5 space-y-4"
+            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <div>
+              <h2 className="text-base font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>استكمال بياناتك</h2>
+              <p className="text-xs leading-relaxed" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                نحتاج هذه البيانات فقط لإتمام التسجيل. بياناتك المعروفة لدينا لا نطلبها مرة أخرى.
+              </p>
+            </div>
+            {missing.map(key => {
+              const meta = FIELD_META[key] || { label: key, placeholder: '' };
+              return (
+                <div key={key} className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{meta.label}</label>
                   <input
-                    type="text"
-                    value={senderPhone}
-                    onChange={e => setSenderPhone(e.target.value)}
-                    placeholder="أدخل الرقم الذي ستحول منه"
-                    className="w-full text-sm outline-none transition-all duration-200"
+                    type={meta.type || 'text'}
+                    dir={meta.ltr ? 'ltr' : 'rtl'}
+                    value={form[key] || ''}
+                    onChange={e => setForm({ ...form, [key]: e.target.value })}
+                    placeholder={meta.placeholder}
+                    className="w-full text-sm outline-none"
                     style={{
                       backgroundColor: 'var(--md-sys-color-surface-container-low)',
                       border: '1px solid var(--md-sys-color-outline-variant)',
@@ -320,273 +339,97 @@ function CheckoutContent() {
                       padding: '12px 16px',
                       color: 'var(--md-sys-color-on-surface)',
                     }}
-                    onFocus={e => { e.target.style.borderColor = primaryColor; e.target.style.boxShadow = `0 0 0 1px ${primaryColor}`; }}
-                    onBlur={e => { e.target.style.borderColor = 'var(--md-sys-color-outline-variant)'; e.target.style.boxShadow = 'none'; }}
                   />
                 </div>
-              )}
-
-              {/* Receipt upload — required for digital payments */}
-              {paymentMethod !== 'cash' && (
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs uppercase tracking-widest font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                  إرفاق إيصال الدفع <span style={{ color: 'var(--md-sys-color-error)' }}>*</span>
-                </label>
-                <input
-                  id="receipt-upload"
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={e => setFile(e.target.files?.[0] || null)}
-                />
-                <button
-                  type="button"
-                  onClick={() => document.getElementById('receipt-upload')?.click()}
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-medium transition-all duration-200 hover:opacity-90 active:scale-[0.99]"
-                  style={{
-                    backgroundColor: file ? 'var(--md-sys-color-surface-container-high)' : 'var(--md-sys-color-surface-container-low)',
-                    border: `1px solid ${file ? primaryColor : 'var(--md-sys-color-outline-variant)'}`,
-                    borderRadius: 'var(--md-sys-shape-corner-small)',
-                    color: file ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-on-surface-variant)',
-                  }}
-                >
-                  {file ? (
-                    <>
-                      <span className="material-symbols-outlined text-[20px]">attach_file</span>
-                      <span className="truncate max-w-[200px]">{file.name}</span>
-                      <span
-                        className="text-xs mr-auto px-2 py-0.5 rounded-full"
-                        style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}
-                      >
-                        تم الرفع
-                      </span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-[20px]">upload</span>
-                      <span>اضغط لاختيار صورة الإيصال</span>
-                    </>
-                  )}
-                </button>
-              </div>
-              )}
-
-              {/* Notes */}
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs uppercase tracking-widest font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                  ملاحظات
-                </label>
-                <textarea
-                  value={noteStudent}
-                  onChange={e => setNoteStudent(e.target.value)}
-                  placeholder="أي ملاحظات تريد إضافتها لطلبك..."
-                  rows={3}
-                  className="w-full text-sm outline-none transition-all duration-200 resize-none"
-                  style={{
-                    backgroundColor: 'var(--md-sys-color-surface-container-low)',
-                    border: '1px solid var(--md-sys-color-outline-variant)',
-                    borderRadius: 'var(--md-sys-shape-corner-small)',
-                    padding: '12px 16px',
-                    color: 'var(--md-sys-color-on-surface)',
-                  }}
-                    onFocus={e => { e.target.style.borderColor = primaryColor; e.target.style.boxShadow = `0 0 0 1px ${primaryColor}`; }}
-                    onBlur={e => { e.target.style.borderColor = 'var(--md-sys-color-outline-variant)'; e.target.style.boxShadow = 'none'; }}
-                  />
-                </div>
-
-              <div className="flex items-center justify-between pt-2">
-                <Link
-                  href={isDirect ? `/courses/${courseId}` : '/cart'}
-                  className="text-sm transition-all duration-200 hover:opacity-70"
-                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-                >
-                  ← رجوع
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => setActiveStep(1)}
-                  className="flex items-center gap-2 px-6 py-3 text-sm font-medium transition-all duration-200 active:scale-[0.99]"
-                  style={{
-                    backgroundColor: primaryColor,
-                    color: 'var(--md-sys-color-on-primary)',
-                    borderRadius: 'var(--md-sys-shape-corner-small)',
-                  }}
-                >
-                  مراجعة →
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-
-      /* ========== STEP 2: Review & Confirm ========== */
-      case 1:
-        return (
-          <div className="rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)', padding: '20px 24px' }}>
-            <div className="flex items-center gap-3 mb-6">
-              <StepBadge num={2} active={activeStep === 1} color={primaryColor} />
-              <h2
-                className="text-lg font-semibold tracking-tight"
-                style={{ color: activeStep === 1 ? 'var(--md-sys-color-on-surface)' : 'var(--md-sys-color-outline)', fontWeight: 600, fontSize: '18px' }}
-              >
-                مراجعة الطلب
-              </h2>
-            </div>
-
-            <div
-              className="space-y-5"
-              style={{
-                opacity: activeStep === 1 ? 1 : 0.4,
-                filter: activeStep === 1 ? 'none' : 'grayscale(0.6)',
-                pointerEvents: activeStep === 1 ? 'auto' : 'none',
-                transition: 'all 0.3s ease',
-              }}
-            >
-              {/* Order Summary Collapsible */}
-              <OrderSummary
-                items={displayItems}
-                total={totalAmount}
-                currency={currency}
-                isOpen={summaryOpen}
-                onToggle={() => setSummaryOpen(!summaryOpen)}
-              />
-
-              {/* Total */}
-              <div className="flex items-center justify-between py-3">
-                <span className="text-sm font-semibold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الإجمالي</span>
-                <span className="text-lg font-bold" style={{ color: primaryColor }}>
-                  {totalAmount.toLocaleString()} {currency}
-                </span>
-              </div>
-
-              {/* Disclaimer */}
-              <p className="text-xs leading-relaxed" style={{ color: 'var(--md-sys-color-outline)' }}>
-                هذه المنصة مقدمة من {systemName || 'وحدة التدريب و التطوير'} بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)
-              </p>
-              <p className="text-xs" style={{ color: 'var(--md-sys-color-outline)' }}>
-                {sloganAr || 'نحو تعليم أفضل'} — <span dir="ltr">{sloganEn || 'Towards Better Learning'}</span>
-              </p>
-
-              {/* CTA Button */}
-              <button
-                type="submit"
-                disabled={loading || (isDirect ? false : cartItems.length === 0)}
-                className="w-full py-4 text-base font-medium transition-all duration-200 active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-                style={{
-                  backgroundColor: primaryColor,
-                  color: 'var(--md-sys-color-on-primary)',
-                  borderRadius: 'var(--md-sys-shape-corner-small)',
-                }}
-              >
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: `${primaryColor}33`, borderTopColor: 'var(--md-sys-color-on-primary)' }} />
-                    جاري التقديم...
-                  </span>
-                ) : (
-                  <span className="flex items-center gap-2">
-                    تأكيد الطلب
-                    <span className="text-lg" style={{ lineHeight: 1 }}>→</span>
-                  </span>
-                )}
-              </button>
-
-              {/* Secured badge */}
-              <div className="flex items-center justify-center gap-1.5 text-xs pt-1" style={{ color: 'var(--md-sys-color-outline)' }}>
-                <span className="material-symbols-outlined text-[16px]">lock</span>
-                <span>Secured</span>
-              </div>
-
-              {/* Back */}
-              <div className="text-center pt-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveStep(0)}
-                  className="text-sm transition-all duration-200 hover:opacity-70"
-                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
-                >
-                  ← تعديل طريقة الدفع
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-
-      default:
-        return null;
-    }
-  };
-
-  /* ================================================================
-     PAGE LAYOUT
-     ================================================================ */
-  return (
-    <form onSubmit={handleSubmit} style={{ backgroundColor: 'var(--md-sys-color-surface)', minHeight: '100vh' }}>
-      {/* ---------- HEADER ---------- */}
-      <div
-        className="flex items-center justify-between px-4 py-4"
-        style={{
-          borderBottom: '1px solid var(--md-sys-color-outline-variant)',
-          maxWidth: '520px',
-          margin: '0 auto',
-        }}
-      >
-        <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[22px]" style={{ color: 'var(--md-sys-color-primary)' }}>shopping_bag</span>
-          <h1
-            className="text-xl font-semibold tracking-tight"
-            style={{ color: 'var(--md-sys-color-on-surface)', fontWeight: 600, fontSize: '20px', letterSpacing: '-0.025em' }}
-          >
-            إتمام الشراء
-          </h1>
-        </div>
-        <span
-          className="text-xs uppercase tracking-wider font-medium"
-          style={{ color: 'var(--md-sys-color-outline)', fontSize: '10px' }}
-        >
-          الخطوة {activeStep + 1} من {totalSteps}
-        </span>
-      </div>
-
-      {/* ---------- PROGRESS BADGES ROW ---------- */}
-      <div
-        className="flex items-center justify-center gap-1 py-5"
-        style={{ maxWidth: '520px', margin: '0 auto' }}
-      >
-        {[0, 1].map(step => (
-          <div key={step} className="flex items-center">
-            <button
-              type="button"
-              onClick={() => {
-                if (step <= activeStep) setActiveStep(step);
-              }}
-              className="transition-all duration-200"
-              style={{ cursor: step <= activeStep ? 'pointer' : 'default' }}
-            >
-              <StepBadge num={step + 1} active={step <= activeStep} color={primaryColor} />
+              );
+            })}
+            <button type="button" onClick={saveData} disabled={savingData}
+              className="w-full h-12 rounded-full text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+              {savingData && <span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.35)', borderTopColor: 'var(--md-sys-color-on-primary)' }} />}
+              {savingData ? 'جاري الحفظ...' : 'حفظ ومتابعة'}
             </button>
-            {step < 1 && (
-              <div
-                className="w-12 sm:w-20 h-px mx-2 transition-all duration-300"
-                style={{ backgroundColor: step < activeStep ? primaryColor : 'var(--md-sys-color-outline-variant)' }}
-              />
-            )}
           </div>
-        ))}
-      </div>
+        )}
 
-      {/* ---------- STEP CONTENT ---------- */}
-      <div
-        className="px-4 pb-12"
-        style={{ maxWidth: '520px', margin: '0 auto' }}
-      >
-        {renderStep(activeStep)}
+        {/* ---------- CONFIRM BOOKING ---------- */}
+        {phase === 'booking' && (
+          <div className="rounded-md3-md p-5 space-y-4"
+            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <h2 className="text-base font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تأكيد الحجز</h2>
+            <div className="p-3 rounded-md3-sm space-y-1" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+              {items.map(item => (
+                <div key={item.course_id} className="flex items-center justify-between gap-2 text-sm">
+                  <span className="truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>{item.title_ar}</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{item.price.toLocaleString()} {currency}</span>
+                </div>
+              ))}
+              <div className="flex items-center justify-between pt-2 mt-1 text-sm font-bold"
+                style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }}>
+                <span>الإجمالي</span>
+                <span style={{ color: primaryColor }}>{total.toLocaleString()} {currency}</span>
+              </div>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>ملاحظات (اختياري)</label>
+              <textarea value={note} onChange={e => setNote(e.target.value)} rows={3}
+                placeholder="أي ملاحظات تريد إضافتها لحجزك..."
+                className="w-full text-sm outline-none resize-none"
+                style={{
+                  backgroundColor: 'var(--md-sys-color-surface-container-low)',
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                  borderRadius: 'var(--md-sys-shape-corner-small)',
+                  padding: '12px 16px',
+                  color: 'var(--md-sys-color-on-surface)',
+                }} />
+            </div>
+            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--md-sys-color-outline)' }}>
+              بالحجز تُثبَّت الأسعار ويُخصَّص مقعدك، ويكتمل الأمر بالدفع. تُفرَّغ السلة بعد تأكيد الحجز.
+            </p>
+            <button type="button" onClick={confirmBooking} disabled={booking}
+              className="w-full h-12 rounded-full text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+              style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+              {booking && <span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.35)', borderTopColor: 'var(--md-sys-color-on-primary)' }} />}
+              {booking ? 'جاري تأكيد الحجز...' : 'تأكيد الحجز'}
+            </button>
+          </div>
+        )}
+
+        {/* ---------- PAYMENT ---------- */}
+        {phase === 'payment' && order && (
+          <div className="rounded-md3-md p-5 space-y-4"
+            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <div>
+              <h2 className="text-base font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>تم الحجز ✅</h2>
+              <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                رقم حجزك #{order.id}. أكمل الدفع الآن أو لاحقاً من صفحة طلباتي.
+              </p>
+            </div>
+            <PaymentStep orderId={order.id} amount={order.amount} onDone={() => setPhase('done')} />
+          </div>
+        )}
+
+        {/* ---------- DONE ---------- */}
+        {phase === 'done' && order && (
+          <div className="rounded-md3-md p-6 text-center space-y-4"
+            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <span className="material-symbols-outlined text-[56px] block" style={{ color: primaryColor }}>check_circle</span>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تم استلام طلبك</h2>
+            <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              رقم الحجز <span dir="ltr" className="font-bold">#{order.id}</span> — ستتابع حالته من صفحة طلباتي.
+            </p>
+            <Link href="/orders" className="block w-full h-12 rounded-full text-sm font-bold flex items-center justify-center"
+              style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
+              طلباتي
+            </Link>
+            <Link href="/courses" className="block text-sm" style={{ color: primaryColor }}>تصفح كورسات أخرى</Link>
+          </div>
+        )}
       </div>
-    </form>
+    </div>
   );
 }
 
-/* ---- Wrap in Suspense for useSearchParams ---- */
 export default function CheckoutPage() {
   return (
     <Suspense

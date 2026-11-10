@@ -12,6 +12,7 @@ import {
   normalizePermissions,
   parsePermissions,
 } from '../../middleware/rbac';
+import { attachOrderDetails } from '../../services/orderService';
 
 const router = Router();
 
@@ -246,6 +247,7 @@ router.delete(
       await sql('DELETE FROM cart_items WHERE user_id=?', id);
       await sql('DELETE FROM group_students WHERE user_id=?', id);
       await sql('DELETE FROM receipts WHERE order_id IN (SELECT id FROM orders WHERE user_id=?)', id);
+      await sql('DELETE FROM order_items WHERE order_id IN (SELECT id FROM orders WHERE user_id=?)', id);
       await sql('DELETE FROM orders WHERE user_id=?', id);
       await sql('DELETE FROM certificates WHERE user_id=?', id);
       await sql('DELETE FROM users WHERE id=?', id);
@@ -288,9 +290,10 @@ router.get(
       );
       if (user.rows.length === 0) return res.status(404).json({ error: 'User not found' });
       const orders = await sql(
-        `SELECT o.*, c.title_ar, c.title_en FROM orders o JOIN courses c ON o.course_id=c.id WHERE o.user_id=? ORDER BY o.created_at DESC`,
+        `SELECT o.* FROM orders o WHERE o.user_id=? ORDER BY o.created_at DESC`,
         req.params.id,
       );
+      const ordersWithItems = await attachOrderDetails(orders.rows as any[]);
       const groups = await sql(
         `SELECT g.*, c.title_ar as course_name FROM groups g
          JOIN group_students gs ON g.id=gs.group_id JOIN courses c ON g.course_id=c.id
@@ -304,7 +307,7 @@ router.get(
         role_id: Number(row.role_id),
         permissions: parsePermissions(row.permissions),
         role_permissions: parsePermissions(row.role_permissions),
-        orders: orders.rows,
+        orders: ordersWithItems,
         groups: groups.rows,
       });
     } catch {

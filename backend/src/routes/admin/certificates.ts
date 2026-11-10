@@ -74,27 +74,29 @@ router.get('/students', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePer
     let result;
     try {
       result = await sql(
-        `SELECT DISTINCT o.user_id as id, u.name, u.email, o.course_id, c.title_ar as course_name
+        `SELECT DISTINCT o.user_id as id, u.name, u.email, oi.course_id, c.title_ar as course_name
          FROM orders o
+         JOIN order_items oi ON oi.order_id=o.id
          JOIN users u ON o.user_id=u.id
-         JOIN courses c ON o.course_id=c.id
+         JOIN courses c ON oi.course_id=c.id
          WHERE o.status='paid'
          AND NOT EXISTS (
            SELECT 1 FROM certificates cert
-           WHERE cert.user_id=o.user_id AND cert.course_id=o.course_id AND cert.status='active'
+           WHERE cert.user_id=o.user_id AND cert.course_id=oi.course_id AND cert.status='active'
          )
          ORDER BY u.name`,
       );
     } catch {
       result = await sql(
-        `SELECT DISTINCT o.user_id as id, u.name, u.email, o.course_id, c.title_ar as course_name
+        `SELECT DISTINCT o.user_id as id, u.name, u.email, oi.course_id, c.title_ar as course_name
          FROM orders o
+         JOIN order_items oi ON oi.order_id=o.id
          JOIN users u ON o.user_id=u.id
-         JOIN courses c ON o.course_id=c.id
+         JOIN courses c ON oi.course_id=c.id
          WHERE o.status='paid'
          AND NOT EXISTS (
            SELECT 1 FROM certificates cert
-           WHERE cert.user_id=o.user_id AND cert.course_id=o.course_id
+           WHERE cert.user_id=o.user_id AND cert.course_id=oi.course_id
          )
          ORDER BY u.name`,
       );
@@ -239,7 +241,7 @@ router.put('/:id/revoke', authMiddleware, requireRole(ADMIN, EMPLOYEE), requireP
       await sendNotification(cert.user_id, 'certificate_revoked', {
         courseTitle: cert.title_ar,
         reason: reason || 'لم يتم تحديد سبب',
-      }).catch(() => {});
+      }).catch((e: any) => console.error(`[Notify] certificate_revoked failed for user ${cert.user_id}:`, e?.message || e));
     }
 
     res.json({ message: 'Certificate revoked successfully' });
@@ -283,7 +285,7 @@ router.put('/:id/restore', authMiddleware, requireRole(ADMIN, EMPLOYEE), require
       await sendNotification(cert.user_id, 'certificate_restored', {
         courseTitle: cert.title_ar,
         serialId: cert.serial_id,
-      }).catch(() => {});
+      }).catch((e: any) => console.error(`[Notify] certificate_restored failed for user ${cert.user_id}:`, e?.message || e));
     }
 
     res.json({ message: 'Certificate restored successfully' });

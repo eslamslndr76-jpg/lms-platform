@@ -16,7 +16,8 @@ const router = Router();
 router.get('/', authMiddleware, async (req: Request, res: Response) => {
   try {
     const limit = req.query.limit ? Number(req.query.limit) : 20;
-    const notifications = await inAppNotificationService.getMyNotifications(req.user!.userId, limit);
+    const offset = req.query.offset ? Number(req.query.offset) : 0;
+    const notifications = await inAppNotificationService.getMyNotifications(req.user!.userId, limit, offset);
     res.json(notifications);
   } catch {
     res.status(500).json({ error: 'Failed to fetch notifications' });

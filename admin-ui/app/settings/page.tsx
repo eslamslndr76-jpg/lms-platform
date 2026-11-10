@@ -7,7 +7,7 @@ import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey' | 'announcement' | 'reports'>('branding');
+  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey' | 'announcement' | 'reports' | 'payments' | 'appversion'>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -83,6 +83,34 @@ export default function SettingsPage() {
   const [placeId, setPlaceId] = useState<number | null>(null);
   const [placeForm, setPlaceForm] = useState({ name: '', capacity: '' });
   const [placeSaving, setPlaceSaving] = useState(false);
+
+  // Payment methods (phase 1)
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentModal, setPaymentModal] = useState(false);
+  const [paymentId, setPaymentId] = useState<number | null>(null);
+  const [paymentSaving, setPaymentSaving] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({
+    key: '', label: '', kind: 'digital', account_number: '', account_name: '',
+    instructions: '', is_active: 1, sort_order: 0,
+  });
+
+  // Booking window — unpaid bookings auto-cancel after this many hours
+  const [bookingHours, setBookingHours] = useState<number>(168);
+  const [bookingSaving, setBookingSaving] = useState(false);
+
+  // Mobile app version + update broadcast
+  const [versionForm, setVersionForm] = useState({
+    latestVersion: '1.0.2',
+    buildNumber: 3,
+    forceUpdate: false,
+    title: 'تحديث جديد متوفر',
+    message: 'يتوفر إصدار جديد من تطبيق الهاتف، اضغط للتحديث الآن.',
+    downloadUrl: 'https://lms-user.vercel.app/download',
+    apkDirectUrl: '',
+  });
+  const [versionSaving, setVersionSaving] = useState(false);
+  const [versionBroadcasting, setVersionBroadcasting] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -219,6 +247,71 @@ export default function SettingsPage() {
   useEffect(() => {
     if (tab === 'notification') loadNotification();
   }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'payments') {
+      loadPaymentMethods();
+      // Booking window is shown in the payments tab.
+      api('/api/settings/booking').then((b: any) => { if (b && b.hours) setBookingHours(Number(b.hours)); }).catch(() => { /* ignore */ });
+    }
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab === 'appversion') {
+      api('/api/settings/app-version').then((v: any) => {
+        if (v && typeof v === 'object') setVersionForm(prev => ({ ...prev, ...v }));
+      }).catch(() => { /* ignore */ });
+    }
+  }, [tab]);
+
+  const saveBookingWindow = async () => {
+    const hours = Number(bookingHours);
+    if (!Number.isInteger(hours) || hours < 1 || hours > 720) {
+      setMsg('المدة يجب أن تكون بين ساعة و720 ساعة');
+      setTimeout(() => setMsg(''), 3000);
+      return;
+    }
+    setBookingSaving(true);
+    try {
+      await api('/api/settings/booking', { method: 'PUT', body: JSON.stringify({ hours }) });
+      setBookingHours(hours);
+      setMsg('تم تحديث مدة الحجز');
+    } catch {
+      setMsg('فشل تحديث مدة الحجز');
+    }
+    setBookingSaving(false);
+    setTimeout(() => setMsg(''), 3000);
+  };
+
+  const saveAppVersion = async () => {
+    setVersionSaving(true);
+    try {
+      const res: any = await api('/api/settings/app-version', {
+        method: 'PUT',
+        body: JSON.stringify({ ...versionForm, buildNumber: Number(versionForm.buildNumber) || 0 }),
+      });
+      setMsg(res?.broadcastCount != null && res.broadcastCount > 0
+        ? `تم حفظ الإصدار وإرسال إشعار التحديث إلى ${res.broadcastCount} مستخدم`
+        : 'تم حفظ إعدادات الإصدار');
+    } catch {
+      setMsg('فشل حفظ إعدادات الإصدار');
+    }
+    setVersionSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const broadcastAppVersionNow = async () => {
+    if (!window.confirm('إرسال إشعار التحديث لكل مستخدمي التطبيق الآن؟')) return;
+    setVersionBroadcasting(true);
+    try {
+      const res: any = await api('/api/settings/app-version/broadcast', { method: 'POST' });
+      setMsg(res?.count != null ? `تم إرسال إشعار التحديث إلى ${res.count} مستخدم` : 'تم إرسال الإشعار');
+    } catch {
+      setMsg('فشل إرسال إشعار التحديث');
+    }
+    setVersionBroadcasting(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
 
   const saveNotification = async () => {
     setNotifSaving(true);
@@ -646,6 +739,132 @@ export default function SettingsPage() {
     setTimeout(() => setMsg(''), 4000);
   };
 
+  // ─── Payment Methods Functions ──────────────────
+  const loadPaymentMethods = async () => {
+    setPaymentsLoading(true);
+    try {
+      const data = await api('/api/admin/payment-methods');
+      setPaymentMethods(Array.isArray(data) ? data : []);
+    } catch (err: any) {
+      setMsg(err.message || 'فشل تحميل طرق الدفع');
+      setTimeout(() => setMsg(''), 4000);
+    } finally {
+      setPaymentsLoading(false);
+    }
+  };
+
+  const openAddPayment = () => {
+    setPaymentId(null);
+    setPaymentForm({
+      key: '', label: '', kind: 'digital', account_number: '', account_name: '',
+      instructions: '', is_active: 1, sort_order: paymentMethods.length + 1,
+    });
+    setPaymentModal(true);
+  };
+
+  const startEditPayment = (method: any) => {
+    setPaymentId(method.id);
+    setPaymentForm({
+      key: method.key || '',
+      label: method.label || '',
+      kind: method.kind || 'digital',
+      account_number: method.account_number || '',
+      account_name: method.account_name || '',
+      instructions: method.instructions || '',
+      is_active: Number(method.is_active) ? 1 : 0,
+      sort_order: Number(method.sort_order) || 0,
+    });
+    setPaymentModal(true);
+  };
+
+  const savePayment = async () => {
+    if (!paymentForm.label.trim()) { setMsg('اسم طريقة الدفع مطلوب'); setTimeout(() => setMsg(''), 4000); return; }
+    if (!paymentId && !/^[a-z0-9_]{2,40}$/.test(paymentForm.key.trim())) {
+      setMsg('المفتاح يجب أن يكون حروفاً إنجليزية صغيرة وأرقاماً وشرطة سفلية (2-40 حرفاً)');
+      setTimeout(() => setMsg(''), 4000);
+      return;
+    }
+    setPaymentSaving(true);
+    try {
+      const body = {
+        key: paymentForm.key.trim(),
+        label: paymentForm.label.trim(),
+        kind: paymentForm.kind,
+        account_number: paymentForm.account_number.trim(),
+        account_name: paymentForm.account_name.trim(),
+        instructions: paymentForm.instructions.trim(),
+        is_active: paymentForm.is_active,
+        sort_order: Number(paymentForm.sort_order) || 0,
+      };
+      const res = paymentId
+        ? await api(`/api/admin/payment-methods/${paymentId}`, { method: 'PUT', body: JSON.stringify(body) })
+        : await api('/api/admin/payment-methods', { method: 'POST', body: JSON.stringify(body) });
+      setMsg(res.message || 'تم الحفظ');
+      setPaymentModal(false);
+      setPaymentId(null);
+      await loadPaymentMethods();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل حفظ طريقة الدفع');
+    }
+    setPaymentSaving(false);
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const togglePaymentActive = async (method: any) => {
+    try {
+      await api(`/api/admin/payment-methods/${method.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ is_active: Number(method.is_active) ? 0 : 1 }),
+      });
+      setMsg(Number(method.is_active) ? 'تم تعطيل طريقة الدفع' : 'تم تفعيل طريقة الدفع');
+      await loadPaymentMethods();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل تغيير حالة طريقة الدفع');
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const deletePayment = async (method: any) => {
+    if (!confirm(`حذف طريقة الدفع "${method.label}"؟ إذا كانت مستخدمة في طلبات سابقة فستُعطَّل فقط.`)) return;
+    try {
+      const res = await api(`/api/admin/payment-methods/${method.id}`, { method: 'DELETE' });
+      setMsg(res.message || 'تم الحذف');
+      await loadPaymentMethods();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل حذف طريقة الدفع');
+    }
+    setTimeout(() => setMsg(''), 4000);
+  };
+
+  const movePayment = async (index: number, direction: -1 | 1) => {
+    const target = index + direction;
+    if (target < 0 || target >= paymentMethods.length) return;
+    const current = paymentMethods[index];
+    const other = paymentMethods[target];
+    try {
+      await api(`/api/admin/payment-methods/${current.id}`, {
+        method: 'PUT', body: JSON.stringify({ sort_order: target + 1 }),
+      });
+      await api(`/api/admin/payment-methods/${other.id}`, {
+        method: 'PUT', body: JSON.stringify({ sort_order: index + 1 }),
+      });
+      await loadPaymentMethods();
+    } catch (err: any) {
+      setMsg(err.message || 'فشل تغيير الترتيب');
+      setTimeout(() => setMsg(''), 4000);
+    }
+  };
+
+  const copyAccountNumber = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setMsg('تم نسخ الرقم');
+    } catch {
+      setMsg('تعذر النسخ، انسخ الرقم يدوياً');
+    }
+    setTimeout(() => setMsg(''), 3000);
+  };
+
   if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
   if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={retry} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
 
@@ -656,11 +875,11 @@ export default function SettingsPage() {
       {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
 
       <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey', 'announcement', 'reports'] as const).map(t => (
+        {(['branding', 'payments', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey', 'announcement', 'reports', 'appversion'] as const).map(t => (
           <button key={t} onClick={() => setTab(t)}
             className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
             style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : t === 'survey' ? '⭐ الاستبيان' : t === 'announcement' ? '📣 الإعلانات' : '📄 التقارير'}
+            {t === 'branding' ? 'العلامة التجارية' : t === 'payments' ? '💳 طرق الدفع' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : t === 'survey' ? '⭐ الاستبيان' : t === 'announcement' ? '📣 الإعلانات' : t === 'reports' ? '📄 التقارير' : '📱 إصدار التطبيق'}
           </button>
         ))}
       </div>
@@ -779,6 +998,189 @@ export default function SettingsPage() {
                 className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
               <button onClick={saveEditCategory}
                 className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+            </div>
+          </Modal>
+        </div>
+      )}
+
+      {/* Payment methods */}
+      {tab === 'payments' && (
+        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>⏳ مدة الحجز قبل الدفع</p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  الحجز غير المدفوع (بانتظار الدفع) يُلغى تلقائياً بعد هذه المدة، ويصبح بإمكان الطالب الحجز من جديد. الطلبات قيد المراجعة لا تُلغى تلقائياً.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                <input type="number" min={1} max={720} value={bookingHours}
+                  onChange={e => setBookingHours(Number(e.target.value))}
+                  className="w-24 px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>ساعة</span>
+                <button onClick={saveBookingWindow} disabled={bookingSaving}
+                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm disabled:opacity-50">
+                  {bookingSaving ? 'جارٍ الحفظ...' : 'حفظ'}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="font-bold" style={{ color: 'var(--text)' }}>💳 طرق الدفع</h2>
+              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                الطرق التي يراها الطالب عند الدفع مع رقم التحويل والتعليمات. الطريقة الرقمية بلا رقم لا تظهر للطلاب.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={loadPaymentMethods} disabled={paymentsLoading}
+                className="px-4 py-2 rounded-xl text-sm border disabled:opacity-50"
+                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                {paymentsLoading ? 'جاري التحديث...' : '🔄 تحديث'}
+              </button>
+              <button onClick={openAddPayment}
+                className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة طريقة</button>
+            </div>
+          </div>
+
+          {paymentMethods.length === 0 && !paymentsLoading && (
+            <div className="text-center py-10 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+              <p className="text-3xl mb-2">💳</p>
+              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد طرق دفع بعد. أضف أول طريقة ليستخدمها الطلاب.</p>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            {paymentMethods.map((method: any, index: number) => (
+              <div key={method.id} className="p-3 rounded-xl space-y-2" style={{ backgroundColor: 'var(--bg)' }}>
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-xl">{method.kind === 'cash' ? '🏦' : '💳'}</span>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate" style={{ color: 'var(--text)' }}>
+                        {method.label}
+                        <span className="text-[11px] mx-2 px-2 py-0.5 rounded-lg" style={{ backgroundColor: 'var(--card)', color: 'var(--text-muted)' }}>
+                          {method.kind === 'cash' ? 'كاش' : 'تحويل'} · {method.key}
+                        </span>
+                      </p>
+                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                        {method.account_number
+                          ? `رقم التحويل: ${method.account_number}${method.account_name ? ` — ${method.account_name}` : ''}`
+                          : method.kind === 'cash'
+                            ? 'الدفع في خزنة المعهد — لا يحتاج رقم تحويل'
+                            : '⚠️ بلا رقم تحويل — لا تظهر للطلاب حتى يُضاف الرقم'}
+                        {method.orders_count > 0 ? ` • مستخدمة في ${method.orders_count} طلب` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[11px] px-2 py-1 rounded-lg ${method.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+                      {method.is_active ? 'مفعّلة' : 'معطّلة'}
+                    </span>
+                    <button onClick={() => movePayment(index, -1)} disabled={index === 0}
+                      className="text-xs px-2 py-1 rounded-lg border disabled:opacity-30"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }} title="تحريك لأعلى">▲</button>
+                    <button onClick={() => movePayment(index, 1)} disabled={index === paymentMethods.length - 1}
+                      className="text-xs px-2 py-1 rounded-lg border disabled:opacity-30"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }} title="تحريك لأسفل">▼</button>
+                    <button onClick={() => startEditPayment(method)}
+                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">تعديل</button>
+                    <button onClick={() => togglePaymentActive(method)}
+                      className="text-xs px-2 py-1 rounded-lg border"
+                      style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                      {method.is_active ? 'تعطيل' : 'تفعيل'}
+                    </button>
+                    <button onClick={() => deletePayment(method)} className="text-red-500 text-xs px-1">حذف</button>
+                  </div>
+                </div>
+                {method.account_number && (
+                  <div className="flex items-center gap-2">
+                    <code dir="ltr" className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}>
+                      {method.account_number}
+                    </code>
+                    <button onClick={() => copyAccountNumber(method.account_number)}
+                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">نسخ</button>
+                  </div>
+                )}
+                {method.instructions && (
+                  <p className="text-xs whitespace-pre-line" style={{ color: 'var(--text-muted)' }}>{method.instructions}</p>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <p className="text-xs p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            ℹ️ الطريقة المستخدمة في طلبات سابقة لا تُحذف نهائياً — تُعطَّل فقط ويبقى سجل الطلبات سليماً.
+          </p>
+
+          <Modal open={paymentModal} onClose={() => { setPaymentModal(false); setPaymentId(null); }} title={paymentId ? 'تعديل طريقة الدفع' : 'إضافة طريقة دفع'}>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الاسم المعروض *</label>
+                <input placeholder="مثال: محفظة إلكترونية" value={paymentForm.label}
+                  onChange={e => setPaymentForm({ ...paymentForm, label: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>المفتاح (إنجليزي) *</label>
+                <input dir="ltr" placeholder="wallet" value={paymentForm.key}
+                  onChange={e => setPaymentForm({ ...paymentForm, key: e.target.value.toLowerCase() })}
+                  disabled={paymentId !== null && Number(paymentMethods.find((m: any) => m.id === paymentId)?.orders_count) > 0}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm disabled:opacity-60" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  يُخزَّن في الطلبات، ولا يُغيَّر بعد استخدامه في أي طلب.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>النوع</label>
+                <select value={paymentForm.kind} onChange={e => setPaymentForm({ ...paymentForm, kind: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                  <option value="digital">تحويل رقمي (يحتاج إيصال)</option>
+                  <option value="cash">كاش في الخزنة</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم التحويل / الحساب</label>
+                <input dir="ltr" placeholder="010xxxxxxxx" value={paymentForm.account_number}
+                  onChange={e => setPaymentForm({ ...paymentForm, account_number: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  الطريقة الرقمية بلا رقم لا تظهر للطلاب حتى تضيفه.
+                </p>
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم الحساب (اختياري)</label>
+                <input placeholder="مثال: وحدة التدريب والتطوير" value={paymentForm.account_name}
+                  onChange={e => setPaymentForm({ ...paymentForm, account_name: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div>
+                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>تعليمات تظهر للطالب</label>
+                <textarea placeholder="حوّل المبلغ ثم ارفع صورة الإيصال..." value={paymentForm.instructions}
+                  onChange={e => setPaymentForm({ ...paymentForm, instructions: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl border text-sm h-20" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الترتيب</label>
+                  <input type="number" min="0" value={paymentForm.sort_order}
+                    onChange={e => setPaymentForm({ ...paymentForm, sort_order: Number(e.target.value) })}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                </div>
+                <div>
+                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</label>
+                  <select value={paymentForm.is_active} onChange={e => setPaymentForm({ ...paymentForm, is_active: Number(e.target.value) })}
+                    className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                    <option value={1}>مفعّلة</option>
+                    <option value={0}>معطّلة</option>
+                  </select>
+                </div>
+              </div>
+              <button onClick={savePayment} disabled={paymentSaving}
+                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium disabled:opacity-50">
+                {paymentSaving ? 'جاري الحفظ...' : 'حفظ'}
+              </button>
             </div>
           </Modal>
         </div>
@@ -1322,6 +1724,84 @@ export default function SettingsPage() {
       )}
 
       {/* AI Providers */}
+      {/* Mobile app version + update broadcast */}
+      {tab === 'appversion' && (
+        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div>
+            <h2 className="font-bold" style={{ color: 'var(--text)' }}>📱 إصدار تطبيق الهاتف</h2>
+            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              عند حفظ رقم إصدار (build) أحدث يُرسَل إشعار التحديث تلقائياً لكل مستخدمي التطبيق (طلبة ومحاضرين)، ويمكنك أيضاً إرساله يدوياً في أي وقت.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم الإصدار (مثل 1.0.3)</label>
+              <input value={versionForm.latestVersion}
+                onChange={e => setVersionForm({ ...versionForm, latestVersion: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم البناء (Build Number)</label>
+              <input type="number" min={1} value={versionForm.buildNumber}
+                onChange={e => setVersionForm({ ...versionForm, buildNumber: Number(e.target.value) })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان إشعار التحديث</label>
+              <input value={versionForm.title}
+                onChange={e => setVersionForm({ ...versionForm, title: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص إشعار التحديث</label>
+              <textarea value={versionForm.message}
+                onChange={e => setVersionForm({ ...versionForm, message: e.target.value })}
+                rows={3} maxLength={500}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رابط صفحة التنزيل</label>
+              <input value={versionForm.downloadUrl}
+                onChange={e => setVersionForm({ ...versionForm, downloadUrl: e.target.value })}
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+            <div>
+              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رابط APK مباشر (اختياري)</label>
+              <input value={versionForm.apkDirectUrl}
+                onChange={e => setVersionForm({ ...versionForm, apkDirectUrl: e.target.value })}
+                placeholder="اتركه فارغاً لاستخدام رابط صفحة التنزيل"
+                className="w-full px-4 py-2.5 rounded-xl border text-sm"
+                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text)' }}>
+            <input type="checkbox" checked={versionForm.forceUpdate}
+              onChange={e => setVersionForm({ ...versionForm, forceUpdate: e.target.checked })}
+              className="w-4 h-4 accent-[var(--primary)]" />
+            تحديث إجباري (يمنع استخدام الإصدار الأقدم)
+          </label>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            <button onClick={saveAppVersion} disabled={versionSaving}
+              className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm disabled:opacity-50">
+              {versionSaving ? 'جارٍ الحفظ...' : '💾 حفظ الإصدار'}
+            </button>
+            <button onClick={broadcastAppVersionNow} disabled={versionBroadcasting}
+              className="px-5 py-2.5 rounded-xl text-sm border disabled:opacity-50"
+              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+              {versionBroadcasting ? 'جارٍ الإرسال...' : '📣 إشعار المستخدمين بالتحديث'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {tab === 'ai' && (
         <div className="space-y-4">
           <div className="rounded-2xl p-6 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>

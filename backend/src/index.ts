@@ -26,9 +26,12 @@ import adminUsersRouter from './routes/admin/users';
 import adminCertificatesRouter from './routes/admin/certificates';
 import adminUnassignedRouter from './routes/admin/unassigned';
 import adminProposalsRouter from './routes/admin/proposals';
+import paymentMethodsRouter from './routes/paymentMethods';
+import adminPaymentMethodsRouter from './routes/admin/paymentMethods';
 import instructorRouter from './routes/instructor';
 import { warmNotificationCache } from './config/notification';
 import { runSurveyReminderSweep } from './services/surveyService';
+import { expireStaleBookings } from './services/orderService';
 import { cleanupOldNotifications } from './services/notificationService';
 
 const app = express();
@@ -119,6 +122,8 @@ app.use('/api/admin/users', adminUsersRouter);
 app.use('/api/admin/certificates', adminCertificatesRouter);
 app.use('/api/admin/unassigned', adminUnassignedRouter);
 app.use('/api/admin/proposals', adminProposalsRouter);
+app.use('/api/payment-methods', paymentMethodsRouter);
+app.use('/api/admin/payment-methods', adminPaymentMethodsRouter);
 app.use('/api/instructor', instructorRouter);
 
 const PORT = process.env.PORT || 3001;
@@ -130,6 +135,8 @@ const dbInitPromise = initializeDatabase().then(() => {
   cleanupOldNotifications(true).catch(e => console.error('Notification cleanup failed:', e.message));
   // Survey reminders (2 and 5 days after completion by default) are idempotent.
   runSurveyReminderSweep().catch(e => console.error('Survey reminder sweep failed:', e.message));
+  // Cancel unpaid bookings older than the admin-configured booking window.
+  expireStaleBookings().catch(e => console.error('Booking expiry sweep failed:', e.message));
 });
 if (process.env.NODE_ENV !== 'production') {
   dbInitPromise.then(() => {
@@ -139,6 +146,7 @@ if (process.env.NODE_ENV !== 'production') {
     // Keep reminders flowing while the dev server stays up.
     const timer = setInterval(() => {
       runSurveyReminderSweep().catch(e => console.error('Survey reminder sweep failed:', e.message));
+      expireStaleBookings().catch(e => console.error('Booking expiry sweep failed:', e.message));
     }, 6 * 60 * 60 * 1000);
     timer.unref?.();
   });

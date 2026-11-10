@@ -235,7 +235,7 @@ async function notifyAdminsOfProposal(proposal: any): Promise<void> {
       `${proposal.instructor_name} قدّم مقترح دورة "${proposal.course_title}".`,
       'info',
       '/proposals',
-    ).catch(() => undefined);
+    ).catch((e: any) => console.error(`[Proposal] Admin notification failed for user ${adminId}:`, e?.message || e));
   }
 }
 

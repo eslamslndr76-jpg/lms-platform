@@ -7,6 +7,7 @@ import { useAuth } from '../../lib/auth';
 import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 import PasswordInput from '../../components/PasswordInput';
+import { postLoginTarget } from '../../lib/redirect';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -23,7 +24,7 @@ export default function LoginPage() {
     try {
       await login(email, password);
       show('تم تسجيل الدخول بنجاح');
-      router.push('/dashboard');
+      router.push(postLoginTarget(window.location.search));
     } catch (err: any) {
       show(err.message || 'فشل تسجيل الدخول', 'error');
     } finally {

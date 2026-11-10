@@ -146,6 +146,16 @@ export async function seed() {
     await execSQL("INSERT INTO system_settings (key,value) VALUES ('aiKeys','[]')");
   }
 
+  // Seed the initial payment methods once. Numbers stay empty until the admin
+  // fills them, and digital methods without a number are hidden from students.
+  const paymentCount = await count('SELECT COUNT(*) as count FROM payment_methods');
+  if (paymentCount === 0) {
+    await execSQL(`INSERT INTO payment_methods (key, label, kind, account_number, account_name, instructions, is_active, sort_order) VALUES
+      ('wallet', 'محفظة إلكترونية', 'digital', '', '', '', 1, 1),
+      ('instapay', 'إنستاباي', 'digital', '', '', '', 1, 2),
+      ('cash', 'كاش في خزنة المعهد', 'cash', '', '', '', 1, 3)`);
+  }
+
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@lms.com';
   const adminCount = await count(`SELECT COUNT(*) as count FROM users WHERE email='${adminEmail.replace(/'/g, "''")}'`);
   if (adminCount === 0) {

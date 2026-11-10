@@ -154,16 +154,41 @@ router.put('/:id', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermissi
 router.delete('/:id', authMiddleware, requireRole(ADMIN), async (req: Request, res: Response) => {
   try {
     const id = req.params.id;
+
+    // A course inside a paid or under-review order must never be deleted.
+    const blocking = await sql(
+      `SELECT COUNT(*) as cnt FROM order_items oi
+       JOIN orders o ON oi.order_id=o.id
+       WHERE oi.course_id=? AND o.status IN ('paid','review')`,
+      id,
+    );
+    if (Number((blocking.rows[0] as any)?.cnt || 0) > 0) {
+      return res.status(409).json({ error: 'لا يمكن حذف الكورس لارتباطه بطلبات مدفوعة أو قيد المراجعة. أوقفه بدلاً من حذفه.' });
+    }
+
     await sql('DELETE FROM cart_items WHERE course_id=?', id);
     await sql('DELETE FROM group_students WHERE group_id IN (SELECT id FROM groups WHERE course_id=?)', id);
     await sql('DELETE FROM lectures WHERE group_id IN (SELECT id FROM groups WHERE course_id=?)', id);
     await sql('DELETE FROM groups WHERE course_id=?', id);
-    await sql('DELETE FROM receipts WHERE order_id IN (SELECT id FROM orders WHERE course_id=?)', id);
     await sql('DELETE FROM certificates WHERE course_id=?', id);
-    await sql('DELETE FROM orders WHERE course_id=?', id);
+
+    // Drop the course from pending/cancelled orders, then remove orders that
+    // ended up with no items at all (and their receipts).
+    await sql(
+      `DELETE FROM order_items WHERE course_id=? AND order_id IN (SELECT id FROM orders WHERE status IN ('pending','cancelled'))`,
+      id,
+    );
+    await sql(
+      `DELETE FROM receipts WHERE order_id IN (SELECT o.id FROM orders o WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id=o.id))`,
+    );
+    await sql(
+      `DELETE FROM orders WHERE NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id=orders.id)`,
+    );
+
     await sql('DELETE FROM courses WHERE id=?', id);
     res.json({ message: 'Course deleted permanently' });
-  } catch {
+  } catch (err: any) {
+    console.error('Course delete error:', err?.message || err);
     res.status(500).json({ error: 'Failed to delete course' });
   }
 });

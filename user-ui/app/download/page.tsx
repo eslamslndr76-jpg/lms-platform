@@ -42,8 +42,8 @@ export default function DownloadPage() {
     {
       id: 'attendance',
       icon: 'qr_code_scanner',
-      title: 'تسجيل الحضور الذكي بـ QR & BLE',
-      desc: 'سجّل حضورك في المحاضرة بثانية واحدة عبر الكاميرا أو استشعار البلوتوث المنخفض الطاقة دون أي انتظار.',
+      title: 'تسجيل الحضور الذكي بـ QR',
+      desc: 'سجّل حضورك في المحاضرة بثانية واحدة بمسح كود الـ QR بكاميرا هاتفك دون أي انتظار.',
       badge: 'حصري للتطبيق',
       color: '#2563eb',
     },
@@ -128,7 +128,7 @@ export default function DownloadPage() {
             <p className="text-base sm:text-lg leading-relaxed max-w-2xl mx-auto lg:mx-0"
               style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
             >
-              حمل التطبيق الرسمي لـ <strong className="font-bold">{systemName}</strong> واستمتع بتسجيل الحضور الذكي بالبلوتوث وكود الـ QR، التصفح بدون إنترنت، والإشعارات اللحظية لكافة دوراتك وشهاداتك.
+              حمل التطبيق الرسمي لـ <strong className="font-bold">{systemName}</strong> واستمتع بتسجيل الحضور الذكي بمسح كود الـ QR، التصفح بدون إنترنت، والإشعارات اللحظية لكافة دوراتك وشهاداتك.
             </p>
 
             {/* Quick Metrics Bar */}
@@ -271,7 +271,7 @@ export default function DownloadPage() {
                           <span className="material-symbols-outlined text-3xl">qr_code_scanner</span>
                         </div>
                         <h4 className="font-black text-xs text-slate-900 dark:text-slate-100">مسح كود الحضور الذكي</h4>
-                        <p className="text-[10px] text-slate-500">تم التعرف على المحاضرة عبر تقنية Bluetooth BLE</p>
+                        <p className="text-[10px] text-slate-500">تم التعرف على المحاضرة عبر مسح كود الـ QR</p>
                         
                         <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-700 text-right">
                           <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold text-[11px]">

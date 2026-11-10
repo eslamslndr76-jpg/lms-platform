@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/auth';
 import { useRouter } from 'next/navigation';
 import DashboardSidebar from '../../components/DashboardSidebar';
 import { SidebarProvider } from '../../components/SidebarContext';
+import { loginUrl } from '../../lib/redirect';
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth();
@@ -13,7 +14,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push('/login');
+      router.push(loginUrl());
       return;
     }
     if (user.role === 'instructor') router.push('/instructor');

@@ -16,6 +16,8 @@ export type NotificationType =
   | 'order_created'
   | 'order_paid'
   | 'order_cancelled'
+  | 'order_expired'
+  | 'order_course_removed'
   | 'assigned_to_group'
   | 'moved_to_group'
   | 'removed_from_group'
@@ -62,13 +64,19 @@ function buildMessage(type: NotificationType, data: any): string {
       return `✅ تم إعادة تعيين كلمة المرور بنجاح!\n\nيمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.${sep}\n${brand}`;
 
     case 'order_created':
-      return `📋 طلب تسجيل جديد\n\nالدورة: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الطلب: #${data.orderId || '—'}\n\n⏳ في انتظار المراجعة والتأكيد${sep}\n${brand}`;
+      return `📋 تم تسجيل حجزك\n\nالكورسات: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الحجز: #${data.orderId || '—'}\n\n⏳ أكمل الدفع من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
 
     case 'order_paid':
-      return `✅ تم تأكيد الدفع!\n\nالدورة: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}تم إضافتك في المجموعة. تابع دوراتك من:\n${FRONTEND_URL}/my-courses${sep}\n${brand}`;
+      return `✅ تم تأكيد الدفع!\n\nالكورسات: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}تم تسجيلك في مجموعات هذه الكورسات. تابع طلباتك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
 
     case 'order_cancelled':
-      return `❌ تم إلغاء طلب التسجيل\n\nالدورة: ${data.courseTitle}\n\nيمكنك التواصل مع الإدارة لمزيد من التفاصيل.${sep}\n${brand}`;
+      return `❌ تم إلغاء طلب التسجيل\n\nالكورسات: ${data.courseTitle}\n\nيمكنك التواصل مع الإدارة لمزيد من التفاصيل.${sep}\n${brand}`;
+
+    case 'order_expired':
+      return `⏰ انتهت مدة الحجز\n\nالكورسات: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}رقم الحجز: #${data.orderId || '—'}\n\nلم يُكتمل الدفع خلال المدة المتاحة للحجز، لذا أُلغي الحجز تلقائياً. يمكنك الحجز من جديد في أي وقت من:\n${FRONTEND_URL}/courses${sep}\n${brand}`;
+
+    case 'order_course_removed':
+      return `✂️ تم حذف كورس من طلبك\n\nالكورس المحذوف: ${data.courseTitle}\nرقم الطلب: #${data.orderId || '—'}${data.newAmount !== undefined ? `\nالمبلغ المتبقي: ${data.newAmount} ج.م` : ''}\n\nراجع طلبك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
 
     case 'assigned_to_group':
       return `👥 تعيين في مجموعة جديدة\n\nالدورة: ${data.courseTitle}\nالمجموعة: ${data.groupName}\n${data.instructor ? 'المدرب: ' + data.instructor + '\n' : ''}${data.location ? 'المكان: ' + data.location + '\n' : ''}${data.startDate ? 'من: ' + data.startDate : ''}${data.endDate ? ' إلى: ' + data.endDate : ''}\n\nتابع جدولك من:\n${FRONTEND_URL}/my-courses${sep}\n${brand}`;
@@ -206,8 +214,10 @@ async function sendToUser(userId: number, type: NotificationType, data: any): Pr
       user.fcm_token,
       subject,
       shortSummary,
-      { link: link || '/notifications', type: notifType, notificationId: notifId ? String(notifId) : '', groupId: data?.groupId ? String(data.groupId) : '', lectureId: data?.lectureId ? String(data.lectureId) : '' },
-    ).catch(() => {});
+      { link: link || '/notifications', type: notifType, notificationId: notifId ? String(notifId) : '', groupId: data?.groupId ? String(data.groupId) : '', lectureId: data?.lectureId ? String(data.lectureId) : '', orderId: data?.orderId ? String(data.orderId) : '', courseId: data?.courseId ? String(data.courseId) : '' },
+    ).catch((err: any) => {
+      console.error(`[Notify] FCM push failed for user ${userId} (${type}):`, err?.message || err);
+    });
   }
 
   // Email
@@ -243,6 +253,8 @@ function getCategoryForType(type: NotificationType): 'info' | 'success' | 'warni
   switch (type) {
     case 'attendance_opened':
     case 'order_cancelled':
+    case 'order_expired':
+    case 'order_course_removed':
     case 'certificate_revoked':
     case 'removed_from_group':
       return 'warning';
@@ -258,25 +270,42 @@ function getCategoryForType(type: NotificationType): 'info' | 'success' | 'warni
 
 function getLinkForType(type: NotificationType, data: any): string {
   switch (type) {
+    case 'account_created':
+    case 'password_reset_done':
+      return '/account';
     case 'attendance_opened':
       return `/attendance/${data.lectureId}`;
+    case 'attendance_confirmed':
+      return '/my-courses';
     case 'certificate_issued':
     case 'certificate_restored':
-      return '/certificates';
+    case 'certificate_revoked':
+      return '/account?tab=certificates';
     case 'order_created':
+    case 'order_paid':
     case 'order_cancelled':
+    case 'order_expired':
+    case 'order_course_removed':
       return '/orders';
     case 'survey_opened':
     case 'survey_reminder':
       return `/survey/${data.groupId}`;
     case 'instructor_eval_opened':
+      return data?.groupId ? `/instructor/evaluate/${data.groupId}` : '/instructor';
+    case 'instructor_eval_submitted':
       return '/instructor';
     case 'proposal_reviewed':
       return `/instructor/proposals/${data.proposalId}`;
+    case 'lecture_completed':
+      // The course page is the closest place that lists a group's lectures.
+      return data?.courseId ? `/courses/${data.courseId}` : '/my-courses';
     case 'assigned_to_group':
     case 'moved_to_group':
+    case 'removed_from_group':
     case 'lecture_added':
-      return data?.groupId ? `/groups/${data.groupId}` : '/my-courses';
+    case 'group_completed':
+      // No /groups/:id page in the web app: /my-courses lists the student's groups.
+      return '/my-courses';
     default:
       return '/my-courses';
   }
@@ -308,6 +337,8 @@ function getSubjectForType(type: NotificationType, data: any): string {
     case 'order_created': return '📋 طلب تسجيل جديد';
     case 'order_paid': return '✅ تم تأكيد الدفع';
     case 'order_cancelled': return '❌ تم إلغاء طلب التسجيل';
+    case 'order_expired': return '⏰ انتهت مدة الحجز';
+    case 'order_course_removed': return '✂️ تم حذف كورس من طلبك';
     case 'assigned_to_group': return '👥 تعيين في مجموعة جديدة';
     case 'moved_to_group': return '🔄 نقل إلى مجموعة أخرى';
     case 'removed_from_group': return '🚪 إزالة من مجموعة';
@@ -466,19 +497,69 @@ export async function broadcastAnnouncement(
     let bNotifId: number | null = null;
     try {
       bNotifId = await createNotification(uid, title, message, type, link || '/dashboard');
-    } catch (_) {}
+    } catch (notifErr: any) {
+      console.error(`[Notify] Broadcast in-app row failed for user ${uid} (${type}):`, notifErr?.message || notifErr);
+    }
     if (isFcmEnabled() && row.fcm_token) {
       sendFcmToToken(row.fcm_token, title, message, {
         link: link || '/dashboard',
         type,
         notificationId: bNotifId ? String(bNotifId) : '',
-      }).catch(() => {});
+      }).catch((err: any) => {
+        console.error(`[Notify] Broadcast FCM failed for user ${uid}:`, err?.message || err);
+      });
     }
     if (row.email && Number(row.email_notifications) && isEmailEnabled()) {
-      sendGenericEmail(row.email, title, `${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});
+      sendGenericEmail(row.email, title, `${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`)
+        .catch((err: any) => console.error(`[Notify] Broadcast email failed for user ${uid}:`, err?.message || err));
     }
     if (row.telegram_chat_id && Number(row.telegram_notifications) && isTelegramEnabled()) {
-      sendGenericTelegram(row.telegram_chat_id, `📢 <b>${title}</b>\n\n${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`).catch(() => {});
+      sendGenericTelegram(row.telegram_chat_id, `📢 <b>${title}</b>\n\n${message}\n\n${link ? FRONTEND_URL + link : FRONTEND_URL}`)
+        .catch((err: any) => console.error(`[Notify] Broadcast telegram failed for user ${uid}:`, err?.message || err));
+    }
+  }
+  return { count: users.rows.length };
+}
+
+/**
+ * Broadcasts a "new app version" notification to every app user
+ * (students + instructors). Returns how many users were notified.
+ */
+export async function broadcastAppUpdate(
+  title: string,
+  message: string,
+): Promise<{ count: number }> {
+  const users = await sql(
+    `SELECT id, email, telegram_chat_id, fcm_token,
+            COALESCE(NULLIF(email_notifications, 0), 1) as email_notifications,
+            COALESCE(NULLIF(telegram_notifications, 0), 1) as telegram_notifications
+     FROM users WHERE role_id IN (3, 4)`,
+  );
+  const link = '/download';
+  for (const row of users.rows as any[]) {
+    const uid = Number(row.id);
+    let notifId: number | null = null;
+    try {
+      notifId = await createNotification(uid, title, message, 'info', link);
+    } catch (notifErr: any) {
+      console.error(`[Notify] App-update in-app row failed for user ${uid}:`, notifErr?.message || notifErr);
+    }
+    if (isFcmEnabled() && row.fcm_token) {
+      sendFcmToToken(row.fcm_token, title, message, {
+        link,
+        type: 'info',
+        notificationId: notifId ? String(notifId) : '',
+      }).catch((err: any) => {
+        console.error(`[Notify] App-update FCM failed for user ${uid}:`, err?.message || err);
+      });
+    }
+    if (row.email && Number(row.email_notifications) && isEmailEnabled()) {
+      sendGenericEmail(row.email, title, `${message}\n\n${FRONTEND_URL}${link}`)
+        .catch((err: any) => console.error(`[Notify] App-update email failed for user ${uid}:`, err?.message || err));
+    }
+    if (row.telegram_chat_id && Number(row.telegram_notifications) && isTelegramEnabled()) {
+      sendGenericTelegram(row.telegram_chat_id, `📢 <b>${title}</b>\n\n${message}\n\n${FRONTEND_URL}${link}`)
+        .catch((err: any) => console.error(`[Notify] App-update telegram failed for user ${uid}:`, err?.message || err));
     }
   }
   return { count: users.rows.length };

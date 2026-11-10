@@ -66,14 +66,15 @@ export async function notifyGroupStudents(
   }
 }
 
-export async function getMyNotifications(userId: number, limit: number = 20): Promise<any[]> {
+export async function getMyNotifications(userId: number, limit: number = 20, offset: number = 0): Promise<any[]> {
   const safeLimit = Math.min(Math.max(Number(limit) || 20, 1), 50);
+  const safeOffset = Math.max(Number(offset) || 0, 0);
   const result = await sql(
     `SELECT * FROM notifications
      WHERE user_id=? AND created_at >= ${RETENTION_CUTOFF}
      ORDER BY created_at DESC, id DESC
-     LIMIT ?`,
-    userId, safeLimit,
+     LIMIT ? OFFSET ?`,
+    userId, safeLimit, safeOffset,
   );
   return result.rows;
 }

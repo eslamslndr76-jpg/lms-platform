@@ -178,9 +178,11 @@ router.get('/students/:courseId', requirePermission('students', 'read'), async (
     const courseName = String((course.rows[0] as any).title_ar);
 
     const students = await sql(
-      `SELECT u.name, u.email, u.phone, o.status, o.amount, o.created_at AS order_date
-       FROM orders o JOIN users u ON o.user_id=u.id
-       WHERE o.course_id=? AND o.status='paid'
+      `SELECT u.name, u.email, u.phone, o.status, oi.price AS amount, o.created_at AS order_date
+       FROM order_items oi
+       JOIN orders o ON oi.order_id=o.id
+       JOIN users u ON o.user_id=u.id
+       WHERE oi.course_id=? AND o.status='paid'
        ORDER BY u.name ASC`,
       courseId,
     );

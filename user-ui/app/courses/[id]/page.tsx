@@ -7,6 +7,7 @@ import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { useToast } from '../../../components/Toast';
+import { loginUrl } from '../../../lib/redirect';
 
 /* ─── Types ─── */
 interface Course {
@@ -230,7 +231,7 @@ export default function CourseDetailPage() {
   /* ── Add to Cart ── */
   const handleAddToCart = async () => {
     if (!token) {
-      router.push('/login');
+      router.push(loginUrl());
       return;
     }
     setCartLoading(true);
@@ -240,6 +241,7 @@ export default function CourseDetailPage() {
         body: JSON.stringify({ course_id: courseId }),
       });
       showToast('✓ تمت إضافة الكورس إلى السلة', 'success');
+      window.dispatchEvent(new Event('cart:updated'));
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'فشلت الإضافة إلى السلة', 'error');
     } finally {
@@ -573,7 +575,7 @@ export default function CourseDetailPage() {
                 {!token ? (
                   <>
                     <button
-                      onClick={() => router.push('/login')}
+                      onClick={() => router.push(loginUrl())}
                       className="w-full py-3.5 rounded-2xl text-white font-bold text-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-xl ripple-btn"
                       style={{ background: heroGradient }}
                     >
@@ -746,7 +748,7 @@ export default function CourseDetailPage() {
             {/* CTA Button */}
             {!token ? (
               <button
-                onClick={() => router.push('/login')}
+                onClick={() => router.push(loginUrl())}
                 className="px-6 py-3 rounded-2xl text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all duration-300 active:scale-95 ripple-btn"
                 style={{ background: heroGradient }}
               >

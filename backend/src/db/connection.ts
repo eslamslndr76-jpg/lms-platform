@@ -44,6 +44,7 @@ export async function initializeDatabase() {
     "ALTER TABLE users ADD COLUMN university_name TEXT",
     "ALTER TABLE users ADD COLUMN university_code TEXT",
     "ALTER TABLE orders ADD COLUMN sender_phone TEXT",
+    "ALTER TABLE orders ADD COLUMN cancel_reason TEXT",
     "ALTER TABLE courses ADD COLUMN auto_assign INTEGER DEFAULT 1",
     "UPDATE courses SET auto_assign=1 WHERE auto_assign IS NULL OR auto_assign=0",
     "ALTER TABLE courses ADD COLUMN prevent_overlap INTEGER DEFAULT 1",
@@ -115,6 +116,18 @@ export async function initializeDatabase() {
     "ALTER TABLE users ADD COLUMN fcm_token TEXT",
     // Course material link supplied by the instructor (Drive/PDF > 20MB).
     "ALTER TABLE course_proposals ADD COLUMN materials_url TEXT",
+    // Payment methods are managed from the admin dashboard (phase 1).
+    "CREATE TABLE IF NOT EXISTS payment_methods (id INTEGER PRIMARY KEY AUTOINCREMENT, key TEXT UNIQUE NOT NULL, label TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'digital', account_number TEXT DEFAULT '', account_name TEXT DEFAULT '', instructions TEXT DEFAULT '', is_active INTEGER NOT NULL DEFAULT 1, sort_order INTEGER NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    // Multi-item orders (phase 2). `order_items` is the source of truth; the
+    // legacy `orders.course_id` is still written for the installed app.
+    "CREATE TABLE IF NOT EXISTS order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, course_id INTEGER NOT NULL, price REAL NOT NULL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP)",
+    "CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id)",
+    "CREATE INDEX IF NOT EXISTS idx_order_items_course ON order_items(course_id)",
+    // Convert every legacy order (one course) into a one-item order. Idempotent:
+    // orders that already have items are skipped.
+    "INSERT INTO order_items (order_id, course_id, price, created_at) SELECT o.id, o.course_id, o.amount, o.created_at FROM orders o WHERE o.course_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id)",
+    // Move legacy inline receipts into the `receipts` table (one row per order).
+    "INSERT INTO receipts (order_id, file_url, payment_method, verified_by, verified_at, created_at) SELECT o.id, o.receipt_url, COALESCE(o.payment_method,'cash'), o.verified_by, o.verified_at, o.created_at FROM orders o WHERE o.receipt_url IS NOT NULL AND TRIM(o.receipt_url) <> '' AND NOT EXISTS (SELECT 1 FROM receipts r WHERE r.order_id = o.id)",
   ];
   for (const m of migrations) {
     try { await execute(m); } catch { /* column may already exist */ }

@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../../lib/auth';
 import { api } from '../../../../lib/api';
+import { loginUrl } from '../../../../lib/redirect';
 
 interface EvalQuestion {
   key: string;
@@ -103,7 +104,7 @@ export default function InstructorEvaluationPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push('/login');
+      router.push(loginUrl());
       return;
     }
     if (user.role !== 'instructor') router.push('/dashboard');

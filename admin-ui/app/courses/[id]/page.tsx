@@ -1406,7 +1406,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{o.student_email}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <span style={{ color: 'var(--text-muted)' }}>{o.amount} ج.م</span>
+                    <span style={{ color: 'var(--text-muted)' }}>{(o.items?.find((i: any) => Number(i.course_id) === Number(course.id))?.price ?? o.amount)} ج.م</span>
                     <StatusBadge status={o.status} />
                   </div>
                 </div>

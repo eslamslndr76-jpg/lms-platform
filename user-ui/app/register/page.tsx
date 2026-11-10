@@ -8,6 +8,7 @@ import { useToast } from '../../components/Toast';
 import { useBranding } from '../../components/BrandingProvider';
 import { parseNationalId } from '../../lib/nationalId';
 import { api } from '../../lib/api';
+import { postLoginTarget } from '../../lib/redirect';
 
 function RegisterParticleBg() {
   return (
@@ -214,7 +215,7 @@ const handleSendEmailOtp = async () => {
         isEnrolled ? universityCode.trim() : undefined,
       );
       show('تم إنشاء الحساب بنجاح');
-      router.push('/dashboard');
+      router.push(postLoginTarget(window.location.search));
     } catch (err: any) {
       show(err.message || 'فشل إنشاء الحساب', 'error');
     } finally {

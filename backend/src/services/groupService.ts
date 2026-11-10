@@ -238,8 +238,9 @@ async function autoIssueCertificates(groupId: number, courseId: number): Promise
   const studentsResult = await sql(
     `SELECT DISTINCT gs.user_id
      FROM group_students gs
-     JOIN orders o ON o.user_id = gs.user_id AND o.course_id = ?
-     WHERE gs.group_id = ? AND o.status = 'paid'`,
+     JOIN orders o ON o.user_id = gs.user_id AND o.status = 'paid'
+     JOIN order_items oi ON oi.order_id = o.id AND oi.course_id = ?
+     WHERE gs.group_id = ?`,
     courseId, groupId,
   );
 
@@ -1069,12 +1070,13 @@ export async function autoAssignStudent(studentId: number, courseId: number): Pr
 
 export async function getUnassignedCount(): Promise<number> {
   const result = await sql(
-    `SELECT COUNT(*) as cnt FROM orders o
-     JOIN courses c ON o.course_id=c.id
+    `SELECT COUNT(*) as cnt FROM order_items oi
+     JOIN orders o ON oi.order_id=o.id
+     JOIN courses c ON oi.course_id=c.id
      WHERE o.status='paid'
      AND o.user_id NOT IN (
        SELECT gs.user_id FROM group_students gs
-       JOIN groups g ON gs.group_id=g.id WHERE g.course_id=o.course_id
+       JOIN groups g ON gs.group_id=g.id WHERE g.course_id=oi.course_id
      )`,
   );
   return Number(result.rows[0].cnt);
@@ -1084,13 +1086,14 @@ export async function getUnassignedStudents(): Promise<any[]> {
   const result = await sql(
     `SELECT o.id as order_id, u.id as user_id, u.name, u.email, u.phone,
             c.id as course_id, c.title_ar as course_name, c.auto_assign
-     FROM orders o
+     FROM order_items oi
+     JOIN orders o ON oi.order_id=o.id
      JOIN users u ON o.user_id=u.id
-     JOIN courses c ON o.course_id=c.id
+     JOIN courses c ON oi.course_id=c.id
      WHERE o.status='paid'
      AND o.user_id NOT IN (
        SELECT gs.user_id FROM group_students gs
-       JOIN groups g ON gs.group_id=g.id WHERE g.course_id=o.course_id
+       JOIN groups g ON gs.group_id=g.id WHERE g.course_id=oi.course_id
      )
      ORDER BY o.created_at DESC`,
   );
@@ -1100,9 +1103,10 @@ export async function getUnassignedStudents(): Promise<any[]> {
 export async function getUnassignedByCourse(courseId: number): Promise<any[]> {
   const result = await sql(
     `SELECT o.id as order_id, u.id as user_id, u.name, u.email, u.phone
-     FROM orders o
+     FROM order_items oi
+     JOIN orders o ON oi.order_id=o.id
      JOIN users u ON o.user_id=u.id
-     WHERE o.course_id=? AND o.status='paid'
+     WHERE oi.course_id=? AND o.status='paid'
      AND o.user_id NOT IN (
        SELECT gs.user_id FROM group_students gs
        JOIN groups g ON gs.group_id=g.id WHERE g.course_id=?

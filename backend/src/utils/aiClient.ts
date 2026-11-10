@@ -10,7 +10,8 @@ const SYSTEM_INSTRUCTION = `أنت مساعد ذكي متخصص لنظام إد�
   الأدوار: 1=admin (مدير), 2=employee (موظف), 3=student (طالب)
 - courses: الكورسات (id, title_ar, title_en, description, price, category_id, max_students, instructor, is_active, featured)
 - categories: التصنيفات (id, name_ar, name_en)
-- orders: الطلبات (id, user_id, course_id, amount, status, payment_method, notes, created_at)
+- orders: الطلبات (id, user_id, amount, status, payment_method, notes, created_at)
+- order_items: عناصر الطلب (id, order_id, course_id, price) — الطلب قد يحتوي أكثر من كورس
   حالات الطلب: pending (معلق) ← review (قيد المراجعة) ← paid (مدفوع) أو cancelled (ملغي)
 - groups: المجموعات الدراسية (id, course_id, name, schedule, zoom_link, start_date, end_date, is_active)
 - group_students: طلاب المجموعات (group_id, user_id)

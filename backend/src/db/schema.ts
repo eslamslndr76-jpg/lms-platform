@@ -112,6 +112,8 @@ CREATE TABLE IF NOT EXISTS group_student_history (
   FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
 );
 
+-- An order is now a header (one total, one receipt) with N items. The legacy
+-- course_id column is kept for old clients and is NOT the source of truth.
 CREATE TABLE IF NOT EXISTS orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
@@ -123,8 +125,21 @@ CREATE TABLE IF NOT EXISTS orders (
   notes TEXT,
   notes_team TEXT,
   notes_student TEXT,
+  cancel_reason TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+-- One row per course inside an order. price is the course price at the time
+-- of booking, so later price changes never rewrite old order totals.
+CREATE TABLE IF NOT EXISTS order_items (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  order_id INTEGER NOT NULL,
+  course_id INTEGER NOT NULL,
+  price REAL NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (order_id) REFERENCES orders(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
 );
 
@@ -213,6 +228,21 @@ CREATE TABLE IF NOT EXISTS cart_items (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
   FOREIGN KEY (course_id) REFERENCES courses(id)
+);
+
+-- Payment methods configured by the admin. orders.payment_method stores the
+-- key, so rows used by an order are only ever disabled, never deleted.
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  key TEXT UNIQUE NOT NULL,
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'digital',
+  account_number TEXT DEFAULT '',
+  account_name TEXT DEFAULT '',
+  instructions TEXT DEFAULT '',
+  is_active INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Post-course student survey (edit-plan.md §4.4). One row per student per

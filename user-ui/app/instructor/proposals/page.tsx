@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '../../../lib/auth';
 import { api } from '../../../lib/api';
+import { loginUrl } from '../../../lib/redirect';
 
 interface Proposal {
   id: number;
@@ -45,7 +46,7 @@ export default function InstructorProposalsPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push('/login');
+      router.push(loginUrl());
       return;
     }
     if (user.role !== 'instructor') router.push('/dashboard');

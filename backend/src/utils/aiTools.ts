@@ -1,4 +1,5 @@
 import { sql } from '../db/helpers';
+import { attachOrderDetails } from '../services/orderService';
 
 interface ToolHandler {
   declaration: {
@@ -25,9 +26,12 @@ reg({
   },
   handler: async (_a, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك بعرض إحصائيات الكورسات';
-    const rows = await sql(`SELECT c.id, c.title_ar, COUNT(o.id) as students, COALESCE(SUM(o.amount),0) as revenue
-      FROM courses c LEFT JOIN orders o ON c.id=o.course_id AND o.status='paid'
-      GROUP BY c.id ORDER BY revenue DESC`);
+    const rows = await sql(`SELECT c.id, c.title_ar,
+      (SELECT COUNT(*) FROM order_items oi JOIN orders o ON oi.order_id=o.id
+       WHERE oi.course_id=c.id AND o.status='paid') as students,
+      (SELECT COALESCE(SUM(oi.price),0) FROM order_items oi JOIN orders o ON oi.order_id=o.id
+       WHERE oi.course_id=c.id AND o.status='paid') as revenue
+      FROM courses c ORDER BY revenue DESC`);
     const total = await sql(`SELECT COUNT(*) as count FROM courses WHERE is_active=1`);
     return JSON.stringify({ totalCourses: total.rows[0].count, courses: rows.rows });
   },
@@ -231,10 +235,10 @@ reg({
     if (roleId > 2) return 'غير مصرح لك';
     const where = args.status && args.status !== 'all' ? `WHERE o.status='${args.status}'` : '';
     const limit = Math.min(args.limit || 50, 200);
-    const rows = await sql(`SELECT o.*, u.name as student_name, c.title_ar as course_name
-      FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id
+    const rows = await sql(`SELECT o.*, u.name as student_name
+      FROM orders o JOIN users u ON o.user_id=u.id
       ${where} ORDER BY o.created_at DESC LIMIT ${limit}`);
-    return JSON.stringify(rows.rows);
+    return JSON.stringify(await attachOrderDetails(rows.rows as any[]));
   },
 });
 
@@ -250,10 +254,11 @@ reg({
   },
   handler: async (args, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك';
-    const rows = await sql(`SELECT o.*, u.name as student_name, u.email, u.phone, c.title_ar as course_name
-      FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id WHERE o.id=?`, args.id);
+    const rows = await sql(`SELECT o.*, u.name as student_name, u.email, u.phone
+      FROM orders o JOIN users u ON o.user_id=u.id WHERE o.id=?`, args.id);
     if (rows.rows.length === 0) return 'لم يتم العثور على الطلب';
-    return JSON.stringify(rows.rows[0]);
+    const [order] = await attachOrderDetails(rows.rows as any[]);
+    return JSON.stringify(order);
   },
 });
 
@@ -265,9 +270,9 @@ reg({
   },
   handler: async (_a, userId, roleId) => {
     if (roleId === 3) {
-      const rows = await sql(`SELECT o.*, c.title_ar FROM orders o JOIN courses c ON o.course_id=c.id WHERE o.user_id=?`, userId);
+      const rows = await sql(`SELECT o.* FROM orders o WHERE o.user_id=?`, userId);
       if (rows.rows.length === 0) return 'لا توجد طلبات';
-      return JSON.stringify(rows.rows);
+      return JSON.stringify(await attachOrderDetails(rows.rows as any[]));
     }
     return 'هذه الأداة خاصة بالطلاب. استخدم get_all_orders لعرض جميع الطلبات.';
   },
@@ -294,7 +299,10 @@ reg({
     const r = await sql(`INSERT INTO orders (user_id,course_id,amount,status,notes,verified_by,verified_at)
       VALUES (?,?,?,?,?,?,CASE WHEN ?='paid' THEN CURRENT_TIMESTAMP ELSE NULL END)`,
       args.user_id, args.course_id, args.amount, args.status || 'paid', args.notes || '', args.status === 'paid' ? 1 : null);
-    return JSON.stringify({ message: 'تم إنشاء الطلب بنجاح', id: Number(r.lastInsertRowid?.toString()) });
+    const orderId = Number(r.lastInsertRowid);
+    await sql('INSERT INTO order_items (order_id, course_id, price) VALUES (?,?,?)',
+      orderId, args.course_id, args.amount);
+    return JSON.stringify({ message: 'تم إنشاء الطلب بنجاح', id: orderId });
   },
 });
 
@@ -377,10 +385,11 @@ reg({
     if (roleId > 2) return 'غير مصرح لك';
     const user = await sql('SELECT id,name,email,phone,is_active,created_at FROM users WHERE id=?', args.id);
     if (user.rows.length === 0) return 'لم يتم العثور على الطالب';
-    const orders = await sql(`SELECT o.*, c.title_ar FROM orders o JOIN courses c ON o.course_id=c.id WHERE o.user_id=?`, args.id);
+    const orders = await sql(`SELECT o.* FROM orders o WHERE o.user_id=?`, args.id);
+    const ordersWithItems = await attachOrderDetails(orders.rows as any[]);
     const groups = await sql(`SELECT g.id,g.name,g.start_date,g.end_date,c.title_ar as course_name
       FROM group_students gs JOIN groups g ON gs.group_id=g.id JOIN courses c ON g.course_id=c.id WHERE gs.user_id=?`, args.id);
-    return JSON.stringify({ student: user.rows[0], orders: orders.rows, groups: groups.rows });
+    return JSON.stringify({ student: user.rows[0], orders: ordersWithItems, groups: groups.rows });
   },
 });
 
@@ -396,8 +405,8 @@ reg({
   },
   handler: async (args, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك';
-    const rows = await sql(`SELECT o.*, c.title_ar FROM orders o JOIN courses c ON o.course_id=c.id WHERE o.user_id=? ORDER BY o.created_at DESC`, args.user_id);
-    return JSON.stringify(rows.rows);
+    const rows = await sql(`SELECT o.* FROM orders o WHERE o.user_id=? ORDER BY o.created_at DESC`, args.user_id);
+    return JSON.stringify(await attachOrderDetails(rows.rows as any[]));
   },
 });
 
@@ -728,10 +737,13 @@ reg({
   },
   handler: async (args, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك';
-    const where = args.course_id ? `AND o.course_id=${Number(args.course_id)}` : '';
-    const rows = await sql(`SELECT DISTINCT u.id,u.name,u.email,c.title_ar as course_name,o.course_id
-      FROM orders o JOIN users u ON o.user_id=u.id JOIN courses c ON o.course_id=c.id
-      WHERE o.status='paid' AND NOT EXISTS (SELECT 1 FROM certificates cert WHERE cert.user_id=o.user_id AND cert.course_id=o.course_id) ${where}
+    const where = args.course_id ? `AND oi.course_id=${Number(args.course_id)}` : '';
+    const rows = await sql(`SELECT DISTINCT u.id,u.name,u.email,c.title_ar as course_name,oi.course_id
+      FROM order_items oi
+      JOIN orders o ON oi.order_id=o.id
+      JOIN users u ON o.user_id=u.id
+      JOIN courses c ON oi.course_id=c.id
+      WHERE o.status='paid' AND NOT EXISTS (SELECT 1 FROM certificates cert WHERE cert.user_id=o.user_id AND cert.course_id=oi.course_id) ${where}
       ORDER BY u.name`);
     return JSON.stringify(rows.rows);
   },
@@ -789,9 +801,13 @@ reg({
   },
   handler: async (_a, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك';
-    const rows = await sql(`SELECT c.id, c.title_ar, c.price, COUNT(o.id) as student_count, COALESCE(SUM(o.amount),0) as revenue
-      FROM courses c LEFT JOIN orders o ON c.id=o.course_id AND o.status='paid'
-      GROUP BY c.id HAVING student_count < 5 ORDER BY student_count`);
+    const rows = await sql(`SELECT c.id, c.title_ar, c.price,
+      (SELECT COUNT(*) FROM order_items oi JOIN orders o ON oi.order_id=o.id
+       WHERE oi.course_id=c.id AND o.status='paid') as student_count,
+      (SELECT COALESCE(SUM(oi.price),0) FROM order_items oi JOIN orders o ON oi.order_id=o.id
+       WHERE oi.course_id=c.id AND o.status='paid') as revenue
+      FROM courses c
+      WHERE student_count < 5 ORDER BY student_count`);
     return JSON.stringify(rows.rows);
   },
 });

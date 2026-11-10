@@ -8,6 +8,8 @@ import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { PageSkeleton } from '../../../components/Skeleton';
 import M3BottomSheet from '../../../components/M3BottomSheet';
+import PaymentStep from '../../../components/PaymentStep';
+import { loginUrl } from '../../../lib/redirect';
 
 interface Order {
   id: number;
@@ -21,6 +23,9 @@ interface Order {
   created_at: string;
   notes_student?: string;
   payment_method?: string;
+  cancel_reason?: string | null;
+  items?: Array<{ course_id: number; price: number; title_ar: string; title_en: string }>;
+  receipt?: { file_url: string; payment_method?: string; created_at?: string; verified_at?: string } | null;
 }
 
 interface OrderDetail extends Order {
@@ -34,7 +39,55 @@ const statusStyles: Record<string, { bg: string; fg: string }> = {
   paid: { bg: '#dcfce7', fg: '#166534' },
   cancelled: { bg: '#fee2e2', fg: '#991b1b' },
 };
-const statusLabels: Record<string, string> = { pending: 'قيد الانتظار', review: 'قيد المراجعة', paid: 'تم الدفع', cancelled: 'ملغي' };
+const statusLabels: Record<string, string> = { pending: 'حجز', review: 'قيد المراجعة', paid: 'مدفوع', cancelled: 'ملغي' };
+
+/* Items + receipt shared by the mobile sheet and the desktop dialog. */
+function OrderExtra({ order, onRemoveItem, busy }: { order: OrderDetail; onRemoveItem?: (courseId: number) => void; busy?: boolean }) {
+  const receipt = order.receipt?.file_url;
+  const canEditItems = onRemoveItem && (order.status === 'pending' || order.status === 'review');
+  return (
+    <>
+      {order.items && order.items.length > 0 && (
+        <div>
+          <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>كورسات الطلب</h4>
+          <div className="space-y-1">
+            {order.items.map(item => (
+              <div key={item.course_id} className="flex items-center justify-between gap-2 p-3 rounded-md3-md text-sm" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{item.title_ar}</span>
+                <span className="flex items-center gap-2">
+                  <span style={{ color: 'var(--md-sys-color-primary)' }}>{item.price} ج.م</span>
+                  {canEditItems && (
+                    <button type="button" disabled={busy} onClick={() => onRemoveItem(item.course_id)}
+                      title="حذف الكورس من الطلب" className="w-8 h-8 rounded-full flex items-center justify-center"
+                      style={{ color: 'var(--md-sys-color-error)' }}>
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
+          {canEditItems && (
+            <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              حذف آخر كورس في الطلب يلغي الحجز بالكامل
+            </p>
+          )}
+        </div>
+      )}
+      {receipt && (
+        <div className="p-3 rounded-md3-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
+          <p className="text-xs mb-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>إيصال الدفع</p>
+          <a href={receipt} target="_blank" rel="noreferrer">
+            <img src={receipt} alt="إيصال الدفع" className="w-full max-h-56 object-contain rounded-md3-sm" />
+          </a>
+          <p className="text-xs mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+            {order.receipt?.verified_at ? 'تم التحقق من الإيصال ✅' : 'الإيصال بانتظار مراجعة الإدارة'}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
 
 export default function OrdersPage() {
   const { user, loading: authLoading } = useAuth();
@@ -45,6 +98,8 @@ export default function OrdersPage() {
   const [detailOrder, setDetailOrder] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [payOrder, setPayOrder] = useState<OrderDetail | null>(null);
+  const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 1024);
@@ -59,7 +114,7 @@ export default function OrdersPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!authLoading && !user) { router.push('/login'); return; }
+    if (!authLoading && !user) { router.push(loginUrl()); return; }
     fetchOrders();
   }, [user, authLoading, router, fetchOrders]);
 
@@ -67,6 +122,44 @@ export default function OrdersPage() {
     setDetailLoading(true); setDetailOrder(null);
     try { setDetailOrder(await api(`/api/orders/my/${orderId}`)); } catch { setDetailOrder(null); }
     setDetailLoading(false);
+  };
+
+  const openPay = async (orderId: number) => {
+    try { setPayOrder(await api(`/api/orders/my/${orderId}`)); }
+    catch { /* keep the list usable; the toast layer reports real failures */ }
+  };
+
+  /* Student cancels an unpaid booking (pending or review only). */
+  const cancelOrder = async (orderId: number) => {
+    if (!window.confirm('هل تريد إلغاء هذا الحجز؟ يمكنك الحجز من جديد في أي وقت.')) return;
+    setBusyOrderId(orderId);
+    try {
+      await api(`/api/orders/${orderId}/cancel`, { method: 'PATCH' });
+      await fetchOrders();
+      if (detailOrder?.id === orderId) setDetailOrder(null);
+    } catch (e: any) {
+      window.alert(e?.message || 'فشل إلغاء الحجز');
+    } finally {
+      setBusyOrderId(null);
+    }
+  };
+
+  /* Remove one course from an unpaid booking; the server recomputes the total. */
+  const removeItem = async (orderId: number, courseId: number) => {
+    if (!window.confirm('حذف هذا الكورس من الطلب؟ سيُعاد حساب الإجمالي.')) return;
+    setBusyOrderId(orderId);
+    try {
+      const res: any = await api(`/api/orders/${orderId}/items/${courseId}`, { method: 'DELETE' });
+      await fetchOrders();
+      if (detailOrder?.id === orderId) {
+        if (res?.status === 'cancelled') setDetailOrder(null);
+        else await openDetail(orderId);
+      }
+    } catch (e: any) {
+      window.alert(e?.message || 'فشل حذف الكورس من الطلب');
+    } finally {
+      setBusyOrderId(null);
+    }
   };
 
   if (authLoading || loading) return <PageSkeleton />;
@@ -97,7 +190,8 @@ export default function OrdersPage() {
           {orders.map(order => {
             const st = statusStyles[order.status] || { bg: '#f3f4f6', fg: '#374151' };
             return (
-              <button key={order.id} onClick={() => openDetail(order.id)} className="w-full text-right">
+              <div key={order.id} className="space-y-2">
+              <button onClick={() => openDetail(order.id)} className="w-full text-right">
                 <div className="rounded-md3-md p-4 w-full transition-all hover:shadow-md" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{order.title_ar}</h3>
@@ -122,8 +216,34 @@ export default function OrdersPage() {
                       <span className="material-symbols-outlined text-[14px]">sticky_note_2</span> {order.notes_student}
                     </div>
                   )}
+                  {order.items && order.items.length > 1 && (
+                    <div className="mt-2 pt-2 text-xs" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                      {order.items.length} كورسات في هذا الطلب
+                    </div>
+                  )}
+                  {order.status === 'cancelled' && order.cancel_reason === 'expired' && (
+                    <div className="mt-2 pt-2 text-xs flex items-center gap-1" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-error)' }}>
+                      <span className="material-symbols-outlined text-[14px]">schedule</span>
+                      انتهت مدة الحجز لعدم إتمام الدفع — يمكنك الحجز من جديد
+                    </div>
+                  )}
                 </div>
               </button>
+              {order.status === 'pending' && (
+                <button onClick={() => openPay(order.id)}
+                  className="w-full h-11 rounded-full text-sm font-bold"
+                  style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
+                  ادفع الآن
+                </button>
+              )}
+              {(order.status === 'pending' || order.status === 'review') && (
+                <button onClick={() => cancelOrder(order.id)} disabled={busyOrderId === order.id}
+                  className="w-full h-9 rounded-full text-xs font-medium"
+                  style={{ color: 'var(--md-sys-color-error)' }}>
+                  {busyOrderId === order.id ? 'جارٍ الإلغاء...' : 'إلغاء الحجز'}
+                </button>
+              )}
+              </div>
             );
           })}
         </div>
@@ -168,6 +288,9 @@ export default function OrdersPage() {
                     <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.notes_student}</p>
                   </div>
                 )}
+                <OrderExtra order={detailOrder} busy={busyOrderId === detailOrder.id}
+                  onRemoveItem={detailOrder.status === 'pending' || detailOrder.status === 'review'
+                    ? (courseId) => removeItem(detailOrder.id, courseId) : undefined} />
                 {detailOrder.groups && detailOrder.groups.length > 0 && (
                   <div>
                     <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>المجموعات</h4>
@@ -231,6 +354,9 @@ export default function OrdersPage() {
                       <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailOrder.notes_student}</p>
                     </div>
                   )}
+                  <OrderExtra order={detailOrder} busy={busyOrderId === detailOrder.id}
+                    onRemoveItem={detailOrder.status === 'pending' || detailOrder.status === 'review'
+                      ? (courseId) => removeItem(detailOrder.id, courseId) : undefined} />
                   {detailOrder.groups && detailOrder.groups.length > 0 && (
                     <div>
                       <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>المجموعات</h4>
@@ -247,6 +373,33 @@ export default function OrdersPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        )
+      )}
+
+      {payOrder && (
+        isMobile ? (
+          <M3BottomSheet open={!!payOrder} onClose={() => setPayOrder(null)} title="الدفع" maxHeightVh={85}>
+            <div className="px-5 pb-6">
+              <PaymentStep orderId={payOrder.id} amount={Number(payOrder.amount)}
+                onDone={() => { setPayOrder(null); fetchOrders(); }} />
+            </div>
+          </M3BottomSheet>
+        ) : (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPayOrder(null)}>
+            <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} />
+            <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-md3-md p-6 shadow-xl"
+              style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }} onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>دفع الطلب</h2>
+                <button onClick={() => setPayOrder(null)} className="w-10 h-10 rounded-full flex items-center justify-center"
+                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <PaymentStep orderId={payOrder.id} amount={Number(payOrder.amount)}
+                onDone={() => { setPayOrder(null); fetchOrders(); }} />
             </div>
           </div>
         )

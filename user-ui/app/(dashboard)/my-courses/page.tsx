@@ -8,6 +8,7 @@ import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { Skeleton } from '../../../components/Skeleton';
 import M3BottomSheet from '../../../components/M3BottomSheet';
+import { loginUrl } from '../../../lib/redirect';
 
 interface MyGroup {
   id: number;
@@ -150,7 +151,7 @@ export default function MyCoursesPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login');
+    if (!authLoading && !user) router.push(loginUrl());
     if (user) load();
   }, [user, authLoading, router]);
 

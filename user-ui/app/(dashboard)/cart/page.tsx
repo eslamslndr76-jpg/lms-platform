@@ -8,6 +8,7 @@ import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { useToast } from '../../../components/Toast';
 import { PageSkeleton } from '../../../components/Skeleton';
+import { loginUrl } from '../../../lib/redirect';
 
 interface CartItem { id: number; course_id: number; title_ar: string; price: number; image_url?: string; instructor?: string; category_name_ar?: string; }
 interface Suggestion { id: number; title_ar: string; price: number; image_url?: string; instructor?: string; category_name_ar?: string; }
@@ -34,7 +35,7 @@ export default function CartPage() {
   }, [user]);
 
   useEffect(() => {
-    if (!authLoading && !user) { router.push('/login'); return; }
+    if (!authLoading && !user) { router.push(loginUrl()); return; }
     Promise.all([fetchCart(), fetchSuggestions()]);
   }, [user, authLoading, router, fetchCart, fetchSuggestions]);
 

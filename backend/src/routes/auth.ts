@@ -177,7 +177,10 @@ router.put('/change-password', authMiddleware, async (req: Request, res: Respons
 
 router.put('/profile', authMiddleware, async (req: Request, res: Response) => {
   try {
-    const { name, phone, avatar, birthDate, gender, governorate, universityName, universityCode } = req.body;
+    const { name, phone, avatar, birthDate, gender, governorate, universityName, universityCode, nationalId, isEnrolled } = req.body;
+    if (nationalId !== undefined && nationalId !== null && nationalId !== '' && !/^\d{14}$/.test(String(nationalId).replace(/\s/g, ''))) {
+      return res.status(400).json({ error: 'الرقم القومى يجب أن يكون 14 رقماً' });
+    }
     const normalizedPhone = phone !== undefined ? normalizePhone(phone) : null;
     await sql(
       `UPDATE users SET
@@ -195,9 +198,17 @@ router.put('/profile', authMiddleware, async (req: Request, res: Response) => {
       universityName || null, universityCode || null,
       req.user!.userId,
     );
+    if ((nationalId !== undefined && nationalId !== null && nationalId !== '') || isEnrolled !== undefined) {
+      await sql(
+        'UPDATE users SET national_id=COALESCE(?,national_id), is_enrolled=COALESCE(?,is_enrolled) WHERE id=?',
+        nationalId ? String(nationalId).replace(/\s/g, '') : null,
+        isEnrolled === undefined ? null : (isEnrolled ? 1 : 0),
+        req.user!.userId,
+      );
+    }
     const updated = await sql(
       `SELECT id, name, email, phone, avatar, role_id,
-              birth_date, gender, governorate, university_name, university_code
+              birth_date, gender, governorate, university_name, university_code, national_id, is_enrolled
        FROM users WHERE id=?`,
       req.user!.userId,
     );

@@ -32,6 +32,8 @@ const TYPE_META: Record<string, { icon: string; color: string }> = {
   info: { icon: 'info', color: 'var(--md-sys-color-primary)' },
 };
 
+const PAGE_SIZE = 30;
+
 function formatRelativeTime(value?: string | null): string {
   if (!value) return '';
   const raw = String(value);
@@ -71,6 +73,8 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unread, setUnread] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [toast, setToast] = useState<ToastState | null>(null);
@@ -98,11 +102,18 @@ export default function NotificationBell() {
       }
       try {
         const [list, count] = await Promise.all([
-          api('/api/notifications?limit=30'),
+          api(`/api/notifications?limit=${PAGE_SIZE}`),
           api('/api/notifications/unread-count'),
         ]);
         const items: AppNotification[] = Array.isArray(list) ? list : [];
-        setNotifications(items);
+        // Silent refreshes keep already loaded older pages instead of collapsing them.
+        if (silent) {
+          const freshIds = new Set(items.map((item) => item.id));
+          setNotifications((prev) => [...items, ...prev.filter((p) => !freshIds.has(p.id))]);
+        } else {
+          setNotifications(items);
+        }
+        setHasMore(items.length === PAGE_SIZE);
         setUnread(Number(count?.count) || 0);
         setError('');
         loadedOnceRef.current = true;
@@ -123,6 +134,25 @@ export default function NotificationBell() {
     },
     [showToast],
   );
+
+  /* Older pages via `offset` (a short page means the list ended). */
+  const loadMore = useCallback(async () => {
+    setLoadingMore(true);
+    setActionError('');
+    try {
+      const list = await api(`/api/notifications?limit=${PAGE_SIZE}&offset=${notifications.length}`);
+      const items: AppNotification[] = Array.isArray(list) ? list : [];
+      setNotifications((prev) => {
+        const seen = new Set(prev.map((item) => item.id));
+        return [...prev, ...items.filter((item) => !seen.has(item.id))];
+      });
+      setHasMore(items.length === PAGE_SIZE);
+    } catch {
+      setActionError('تعذّر تحميل إشعارات إضافية. حاول مرة أخرى.');
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [notifications.length]);
 
   // Initial load + lightweight polling so the badge and toast stay current.
   useEffect(() => {
@@ -388,7 +418,8 @@ export default function NotificationBell() {
                   </p>
                 </div>
               ) : (
-                notifications.map((notification) => {
+                <>
+                  {notifications.map((notification) => {
                   const isRead = Boolean(Number(notification.is_read));
                   const meta = TYPE_META[notification.type || 'info'] || TYPE_META.info;
                   return (
@@ -450,7 +481,29 @@ export default function NotificationBell() {
                       </span>
                     </button>
                   );
-                })
+                })}
+                  {hasMore && (
+                    <div className="pt-1 pb-1 flex justify-center">
+                      <button
+                        type="button"
+                        data-testid="notification-load-more"
+                        onClick={() => void loadMore()}
+                        disabled={loadingMore}
+                        className="px-4 py-2 rounded-full text-xs font-medium flex items-center gap-1"
+                        style={{
+                          backgroundColor: 'var(--md-sys-color-surface-container-lowest)',
+                          color: 'var(--md-sys-color-primary)',
+                          opacity: loadingMore ? 0.6 : 1,
+                        }}
+                      >
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                          {loadingMore ? 'progress_activity' : 'expand_more'}
+                        </span>
+                        {loadingMore ? 'جارٍ التحميل...' : 'تحميل المزيد'}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
 

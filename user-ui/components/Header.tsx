@@ -48,7 +48,12 @@ export default function Header() {
   }, [user]);
 
   useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
-  useEffect(() => { const onFocus = () => fetchCartCount(); window.addEventListener('focus', onFocus); return () => window.removeEventListener('focus', onFocus); }, [fetchCartCount]);
+  useEffect(() => {
+    const onFocus = () => fetchCartCount();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('cart:updated', onFocus);
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('cart:updated', onFocus); };
+  }, [fetchCartCount]);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 15);

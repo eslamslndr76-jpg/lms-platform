@@ -29,7 +29,12 @@ export default function MobileBottomNav() {
   }, [user]);
 
   useEffect(() => { fetchCart(); }, [fetchCart]);
-  useEffect(() => { const onFocus = () => fetchCart(); window.addEventListener('focus', onFocus); return () => window.removeEventListener('focus', onFocus); }, [fetchCart]);
+  useEffect(() => {
+    const onFocus = () => fetchCart();
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('cart:updated', onFocus);
+    return () => { window.removeEventListener('focus', onFocus); window.removeEventListener('cart:updated', onFocus); };
+  }, [fetchCart]);
 
   if (!user) return null;
 

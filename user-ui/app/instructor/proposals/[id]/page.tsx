@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../../../lib/auth';
 import { api, downloadFile } from '../../../../lib/api';
+import { loginUrl } from '../../../../lib/redirect';
 
 interface DayContent {
   day: string;
@@ -64,7 +65,7 @@ export default function ProposalEditorPage() {
   useEffect(() => {
     if (loading) return;
     if (!user) {
-      router.push('/login');
+      router.push(loginUrl());
       return;
     }
     if (user.role !== 'instructor') router.push('/dashboard');

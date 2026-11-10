@@ -11,6 +11,7 @@ import { useBranding } from '../../../components/BrandingProvider';
 import { Skeleton } from '../../../components/Skeleton';
 import PasswordInput from '../../../components/PasswordInput';
 import { downloadCertPdf } from '../../../lib/certPdfUtils';
+import { loginUrl } from '../../../lib/redirect';
 
 const GENDER_OPTIONS = [
   { value: '', label: 'غير محدد' },
@@ -26,6 +27,17 @@ const GOVERNORATES = [
   'أسوان', 'البحر الأحمر', 'الوادي الجديد', 'مطروح',
 ];
 
+type AccountTab = 'profile' | 'password' | 'certificates' | 'notifications';
+
+const ACCOUNT_TABS: AccountTab[] = ['profile', 'password', 'certificates', 'notifications'];
+
+/** Reads ?tab= so links from notifications (e.g. a new certificate) open the right tab. */
+function resolveInitialTab(): AccountTab {
+  if (typeof window === 'undefined') return 'profile';
+  const requested = new URLSearchParams(window.location.search).get('tab');
+  return ACCOUNT_TABS.includes(requested as AccountTab) ? (requested as AccountTab) : 'profile';
+}
+
 export default function AccountPage() {
   const { user, loading: authLoading, refreshUser } = useAuth();
   const { show } = useToast();
@@ -33,7 +45,7 @@ export default function AccountPage() {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
 
-  const [tab, setTab] = useState<'profile' | 'password' | 'certificates' | 'notifications'>('profile');
+  const [tab, setTab] = useState<AccountTab>(resolveInitialTab);
   const [editing, setEditing] = useState(false);
 
   /* ── profile form state ── */
@@ -65,7 +77,7 @@ export default function AccountPage() {
   const [unlinking, setUnlinking] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login');
+    if (!authLoading && !user) router.push(loginUrl());
     if (user) syncFormFromUser(user);
   }, [user, authLoading, router]);
 

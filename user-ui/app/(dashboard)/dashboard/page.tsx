@@ -7,6 +7,7 @@ import { api } from '../../../lib/api';
 import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { Skeleton } from '../../../components/Skeleton';
+import { loginUrl } from '../../../lib/redirect';
 
 interface Order {
   id: number;
@@ -92,7 +93,7 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login');
+    if (!authLoading && !user) router.push(loginUrl());
     if (user) load();
     const onFocus = () => { if (user) load(); };
     window.addEventListener('focus', onFocus);

@@ -174,7 +174,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args.push(params.status);
       }
       if (params.courseId) {
-        where += ' AND o.course_id = ?';
+        where += ' AND EXISTS (SELECT 1 FROM order_items oi WHERE oi.order_id = o.id AND oi.course_id = ?)';
         args.push(params.courseId);
       }
       if (params.studentId) {
@@ -184,11 +184,13 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       where += searchClause(['u.name', 'u.email'], params, args);
       where += dateClause('o.created_at', params, args);
       return {
-        text: `SELECT o.id, u.name AS student, u.email, c.title_ar AS course, o.amount, o.status,
+        text: `SELECT o.id, u.name AS student, u.email,
+                 (SELECT GROUP_CONCAT(c.title_ar, '، ') FROM order_items oi
+                  JOIN courses c ON oi.course_id = c.id WHERE oi.order_id = o.id) AS course,
+                 o.amount, o.status,
                  COALESCE(o.payment_method,'cash') AS payment_method, o.created_at, o.notes
                FROM orders o
                JOIN users u ON o.user_id = u.id
-               JOIN courses c ON o.course_id = c.id
                WHERE ${where} ORDER BY o.created_at DESC`,
         args,
       };
@@ -225,7 +227,8 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         text: `SELECT c.id, c.title_ar, c.title_en, cat.name_ar AS category, c.price, c.lecture_count,
                  c.max_students, c.created_at,
                  CASE WHEN c.is_active = 1 THEN 1 ELSE 0 END AS is_active,
-                 (SELECT COUNT(*) FROM orders o WHERE o.course_id = c.id AND o.status = 'paid') AS paid_students,
+                 (SELECT COUNT(*) FROM order_items oi JOIN orders o ON oi.order_id = o.id
+                  WHERE oi.course_id = c.id AND o.status = 'paid') AS paid_students,
                  (SELECT COUNT(*) FROM groups g WHERE g.course_id = c.id) AS groups_count
                FROM courses c LEFT JOIN categories cat ON c.category_id = cat.id
                WHERE ${where} ORDER BY c.created_at DESC`,
@@ -724,20 +727,21 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       let where = "o.status = 'paid'";
       where += ` AND NOT EXISTS (
         SELECT 1 FROM group_students gs JOIN groups g ON gs.group_id = g.id
-        WHERE gs.user_id = o.user_id AND g.course_id = o.course_id
+        WHERE gs.user_id = o.user_id AND g.course_id = oi.course_id
       )`;
       if (params.courseId) {
-        where += ' AND o.course_id = ?';
+        where += ' AND oi.course_id = ?';
         args.push(params.courseId);
       }
       where += searchClause(['u.name', 'u.email'], params, args);
       where += dateClause('o.created_at', params, args);
       return {
         text: `SELECT o.id AS order_id, u.name AS student, u.email, u.phone, c.title_ar AS course,
-                 o.amount, o.created_at AS paid_at
-               FROM orders o
+                 oi.price AS amount, o.created_at AS paid_at
+               FROM order_items oi
+               JOIN orders o ON oi.order_id = o.id
                JOIN users u ON o.user_id = u.id
-               JOIN courses c ON o.course_id = c.id
+               JOIN courses c ON oi.course_id = c.id
                WHERE ${where} ORDER BY o.created_at DESC`,
         args,
       };
@@ -852,14 +856,16 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       const args: unknown[] = [];
       let where = "o.status = 'paid'";
       if (params.courseId) {
-        where += ' AND o.course_id = ?';
+        where += ' AND oi.course_id = ?';
         args.push(params.courseId);
       }
       where += dateClause('o.created_at', params, args);
       return {
         text: `SELECT strftime('%Y-%m', o.created_at) AS month, c.title_ar AS course,
-                 COUNT(*) AS orders_count, SUM(o.amount) AS total_amount
-               FROM orders o JOIN courses c ON o.course_id = c.id
+                 COUNT(*) AS orders_count, SUM(oi.price) AS total_amount
+               FROM order_items oi
+               JOIN orders o ON oi.order_id = o.id
+               JOIN courses c ON oi.course_id = c.id
                WHERE ${where}
                GROUP BY month, c.id ORDER BY month DESC, total_amount DESC`,
         args,
