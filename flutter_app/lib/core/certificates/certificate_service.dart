@@ -137,13 +137,12 @@ class CertificateService {
     final text =
         'شهادة ${cert.titleAr}\nكود التحقق: ${cert.serialId}${verifyUrl == null ? '' : '\n$verifyUrl'}';
     if (doc != null) {
-      return SharePlus.instance.share(
-        ShareParams(
-          files: [XFile(doc.file.path, mimeType: 'application/pdf')],
-          text: text,
-        ),
+      return Share.shareXFiles(
+        [XFile(doc.file.path, mimeType: 'application/pdf')],
+        text: text,
       );
     }
-    return SharePlus.instance.share(ShareParams(text: text));
+    await Share.share(text);
+    return null;
   }
 }
