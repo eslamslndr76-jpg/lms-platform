@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
@@ -34,9 +35,8 @@ class AppUpdateInfo {
       title: json['title'] as String? ?? 'تحديث جديد متوفر 🚀',
       message: json['message'] as String? ??
           'يتوفر إصدار جديد من تطبيق وحدة التدريب. اضغط للتثبيت الآن.',
-      downloadUrl: json['downloadUrl'] as String? ?? 'https://lms-user.vercel.app/download',
-      apkDirectUrl: json['apkDirectUrl'] as String? ??
-          'https://lms-user.vercel.app/downloads/training-unit.apk',
+      downloadUrl: json['downloadUrl'] as String? ?? AppUpdateService.officialDownloadPage,
+      apkDirectUrl: json['apkDirectUrl'] as String? ?? AppUpdateService.officialApkUrl,
     );
   }
 }
@@ -44,9 +44,22 @@ class AppUpdateInfo {
 class AppUpdateService {
   AppUpdateService._();
 
-  // Current app release version & build number matching pubspec.yaml (1.0.2+3)
-  static const int currentBuildNumber = 3;
-  static const String currentVersionName = '1.0.2';
+  // Official domain — single source for all fallback download links
+  static const String officialDownloadPage = 'https://lms-user.vercel.app/download';
+  static const String officialApkUrl = 'https://lms-user.vercel.app/downloads/training-unit.apk';
+
+  // Current version/build read from the running app (pubspec via package_info_plus)
+  static PackageInfo? _pkg;
+
+  static Future<PackageInfo> get packageInfo async {
+    _pkg ??= await PackageInfo.fromPlatform();
+    return _pkg!;
+  }
+
+  static Future<int> get currentBuildNumber async =>
+      int.tryParse((await packageInfo).buildNumber) ?? 0;
+
+  static Future<String> get currentVersionName async => (await packageInfo).version;
 
   static AppUpdateInfo? _cachedUpdate;
   static bool _checked = false;
@@ -58,13 +71,16 @@ class AppUpdateService {
 
   static CancelToken? _activeCancelToken;
 
-  static Future<AppUpdateInfo?> check() async {
-    if (_checked) return _cachedUpdate;
+  /// Checks the backend for a newer build. [force] bypasses the one-shot cache
+  /// (used by the "check now" action in settings).
+  static Future<AppUpdateInfo?> check({bool force = false}) async {
+    if (_checked && !force) return _cachedUpdate;
     try {
       final res = await ApiClient().get('/api/settings/app-version');
       if (res.statusCode == 200 && res.data != null) {
         final info = AppUpdateInfo.fromJson(res.data as Map<String, dynamic>);
-        if (info.buildNumber > currentBuildNumber) {
+        final currentBuild = await currentBuildNumber;
+        if (info.buildNumber > currentBuild) {
           _cachedUpdate = info;
         } else {
           _cachedUpdate = null;
@@ -76,6 +92,19 @@ class AppUpdateService {
       _checked = true;
     }
     return _cachedUpdate;
+  }
+
+  /// Throws if the check fails, so callers can surface a retry UI.
+  static Future<AppUpdateInfo?> checkNow() async {
+    final res = await ApiClient().get('/api/settings/app-version');
+    if (res.statusCode == 200 && res.data != null) {
+      final info = AppUpdateInfo.fromJson(res.data as Map<String, dynamic>);
+      final currentBuild = await currentBuildNumber;
+      _cachedUpdate = info.buildNumber > currentBuild ? info : null;
+      _checked = true;
+      return _cachedUpdate;
+    }
+    throw 'استجابة غير متوقعة من الخادم';
   }
 
   static Future<void> _initNotificationChannel() async {
@@ -130,7 +159,7 @@ class AppUpdateService {
       context: context,
       barrierDismissible: false,
       builder: (ctx) => _DownloadProgressDialog(
-        apkUrl: directApkUrl ?? 'https://lms-user.vercel.app/downloads/training-unit.apk',
+        apkUrl: directApkUrl ?? officialApkUrl,
         version: version ?? '1.0.1',
       ),
     );
@@ -149,103 +178,105 @@ class AppUpdateService {
     );
   }
 
-  static void showUpdatePrompt(
+  static Future<void> showUpdatePrompt(
     BuildContext context,
     AppUpdateInfo info, {
     VoidCallback? onDismiss,
-  }) {
+  }) async {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final versionName = await currentVersionName;
+    if (!context.mounted) return;
 
-    showModalBottomSheet(
+    // Decision dialog (not a sheet): the update prompt can be mandatory and
+    // blocks progress until the user decides.
+    await showDialog<void>(
       context: context,
-      isDismissible: !info.forceUpdate,
-      enableDrag: !info.forceUpdate,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return PopScope(
-          canPop: !info.forceUpdate,
-          onPopInvokedWithResult: (didPop, _) {
-            if (didPop) onDismiss?.call();
-          },
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cs.primaryContainer,
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    Icons.system_update_rounded,
-                    size: 40,
-                    color: cs.onPrimaryContainer,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  info.title,
-                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  info.message,
-                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: cs.surfaceContainerHigh,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'الإصدار الحالي: $currentVersionName  ←  الإصدار الجديد: ${info.latestVersion}',
-                    style: tt.bodySmall?.copyWith(
-                      color: cs.primary,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(ctx).pop();
-                    onDismiss?.call();
-                    startDownloadWithDialog(
-                      context: context,
-                      directApkUrl: info.apkDirectUrl,
-                      version: info.latestVersion,
-                    );
-                  },
-                  icon: const Icon(Icons.download_rounded),
-                  label: const Text('تحميل وتثبيت التحديث'),
-                  style: FilledButton.styleFrom(
-                    minimumSize: const Size.fromHeight(50),
-                  ),
-                ),
-                if (!info.forceUpdate) ...[
-                  const SizedBox(height: 10),
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(ctx).pop();
-                      onDismiss?.call();
-                    },
-                    child: const Text('تذكيري لاحقاً'),
-                  ),
-                ],
-              ],
+      barrierDismissible: !info.forceUpdate,
+      builder: (ctx) => PopScope(
+        canPop: !info.forceUpdate,
+        onPopInvokedWithResult: (didPop, _) {
+          if (didPop) onDismiss?.call();
+        },
+        child: AlertDialog(
+          icon: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.system_update_rounded,
+              size: 40,
+              color: cs.onPrimaryContainer,
             ),
           ),
-        );
-      },
+          title: Text(
+            info.title,
+            textAlign: TextAlign.center,
+            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                info.message,
+                textAlign: TextAlign.center,
+                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'الإصدار الحالي: $versionName  ←  الجديد: ${info.latestVersion}',
+                  textAlign: TextAlign.center,
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              if (info.forceUpdate) ...[
+                const SizedBox(height: 12),
+                Text(
+                  'هذا التحديث إلزامي للمتابعة.',
+                  style: tt.bodySmall?.copyWith(
+                    color: cs.error,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            if (!info.forceUpdate)
+              TextButton(
+                onPressed: () {
+                  Navigator.of(ctx).pop();
+                  onDismiss?.call();
+                },
+                child: const Text('تذكيري لاحقاً'),
+              ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.of(ctx).pop();
+                onDismiss?.call();
+                startDownloadWithDialog(
+                  context: context,
+                  directApkUrl: info.apkDirectUrl,
+                  version: info.latestVersion,
+                );
+              },
+              icon: const Icon(Icons.download_rounded),
+              label: const Text('تحميل وتثبيت'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

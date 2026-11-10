@@ -1,12 +1,11 @@
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+import 'notification_channels.dart';
 
 class LocalNotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
-
-  static const _channelId = 'training_unit_channel';
-  static const _channelName = 'وحدة التدريب';
-  static const _channelDesc = 'إشعارات منصة وحدة التدريب والتطوير';
 
   static Future<void> init() async {
     const android = AndroidInitializationSettings('@mipmap/launcher_icon');
@@ -19,39 +18,33 @@ class LocalNotificationService {
     await _plugin.initialize(settings,
         onDidReceiveNotificationResponse: _onTap);
 
-    // Create notification channel (Android 8+)
-    const channel = AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      description: _channelDesc,
-      importance: Importance.high,
-    );
-    await _plugin
+    // Create all notification channels
+    final androidImpl = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      await NotificationChannels.createAll(androidImpl);
+    }
   }
 
   static void _onTap(NotificationResponse response) {
     // payload is the notification link – handled by AppLinks elsewhere
   }
 
+  /// Shows a notification using the appropriate channel.
+  /// [type] and [link] are used to infer the channel (matching backend's type field).
   static Future<void> show({
     required int id,
     required String title,
     required String body,
     String? payload,
+    String? type,
+    String? link,
   }) async {
-    const android = AndroidNotificationDetails(
-      _channelId,
-      _channelName,
-      channelDescription: _channelDesc,
-      importance: Importance.high,
-      priority: Priority.high,
-      icon: '@mipmap/launcher_icon',
-    );
+    final channelId = NotificationChannels.channelIdFor(type: type, link: link);
+    final android = NotificationChannels.detailsFor(channelId);
     const ios = DarwinNotificationDetails();
-    const details = NotificationDetails(android: android, iOS: ios);
+    final details = NotificationDetails(android: android, iOS: ios);
     await _plugin.show(id, title, body, details, payload: payload);
   }
 
@@ -61,4 +54,40 @@ class LocalNotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.requestNotificationsPermission();
   }
+
+  /// Schedules a reminder at an exact local instant (lecture reminder, phase 14).
+  /// The instant is converted to UTC before scheduling, so DST changes can't
+  /// shift it.
+  static Future<bool> scheduleAt({
+    required int id,
+    required DateTime when,
+    required String title,
+    required String body,
+    String? payload,
+    String? type,
+    String? link,
+  }) async {
+    if (!when.isAfter(DateTime.now())) return false;
+    tzdata.initializeTimeZones();
+    final channelId = NotificationChannels.channelIdFor(type: type, link: link);
+    final details = NotificationDetails(
+      android: NotificationChannels.detailsFor(channelId),
+      iOS: const DarwinNotificationDetails(),
+    );
+    await _plugin.zonedSchedule(
+      id,
+      title,
+      body,
+      tz.TZDateTime.from(when.toUtc(), tz.UTC),
+      details,
+      androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: payload,
+    );
+    return true;
+  }
+
+  /// Cancels a previously scheduled reminder.
+  static Future<void> cancel(int id) => _plugin.cancel(id);
 }

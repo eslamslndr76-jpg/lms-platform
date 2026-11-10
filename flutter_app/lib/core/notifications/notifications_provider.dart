@@ -24,28 +24,41 @@ class NotificationsProvider extends ChangeNotifier {
       notifyListeners();
     }
 
+    // Fetch list separately so one failure doesn't kill both
     try {
-      final responses = await Future.wait([
-        _api.get(ApiConstants.notifications),
-        _api.get(ApiConstants.unreadNotificationsCount),
-      ]);
-
-      if (responses[0].statusCode == 200 && responses[0].data is List) {
-        final list = responses[0].data as List;
-        _notifications = list
-            .map((item) => NotificationModel.fromJson(item as Map<String, dynamic>))
-            .toList();
+      final listRes = await _api.get(ApiConstants.notifications);
+      if (listRes.statusCode == 200 && listRes.data is List) {
+        final list = listRes.data as List;
+        final parsed = <NotificationModel>[];
+        for (final item in list) {
+          if (item is! Map<String, dynamic>) continue;
+          try {
+            parsed.add(NotificationModel.fromJson(item));
+          } catch (e) {
+            debugPrint('[NOTIF] Skipped bad row: $e — $item');
+          }
+        }
+        _notifications = parsed;
+      } else if (!silent) {
+        _error = 'فشل تحميل قائمة الإشعارات (${listRes.statusCode})';
       }
+    } catch (e) {
+      if (!silent) _error = 'تعذر الوصول للخادم';
+      debugPrint('[NOTIF] list fetch error: $e');
+    }
 
-      if (responses[1].statusCode == 200 && responses[1].data is Map<String, dynamic>) {
-        final data = responses[1].data as Map<String, dynamic>;
-        _unreadCount = (data['count'] as num?)?.toInt() ?? 0;
+    // Fetch count separately
+    try {
+      final countRes = await _api.get(ApiConstants.unreadNotificationsCount);
+      if (countRes.statusCode == 200 && countRes.data is Map<String, dynamic>) {
+        _unreadCount = (countRes.data!['count'] as num?)?.toInt() ?? 0;
       }
+    } catch (e) {
+      debugPrint('[NOTIF] count fetch error: $e');
+      // Count is non-critical; don't set _error
+    }
 
-      _error = null;
-    } catch (_) {
-      _error = 'تعذر تحميل الإشعارات';
-    } finally {
+    if (!silent) {
       _isLoading = false;
       notifyListeners();
     }

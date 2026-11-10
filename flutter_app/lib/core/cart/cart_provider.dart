@@ -10,12 +10,14 @@ class CartProvider extends ChangeNotifier {
   double _total = 0.0;
   bool _isLoading = false;
   String? _error;
+  List<Map<String, dynamic>> _suggestions = [];
 
   List<CartItemModel> get items => _items;
   double get total => _total;
   int get count => _items.length;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  List<Map<String, dynamic>> get suggestions => _suggestions;
 
   bool isInCart(int courseId) {
     return _items.any((item) => item.courseId == courseId);
@@ -77,5 +79,36 @@ class CartProvider extends ChangeNotifier {
       }
     } catch (_) {}
     return false;
+  }
+
+  // ── Clear Cart ────────────────────────────────────────────────────────────
+  Future<bool> clearCart() async {
+    try {
+      final res = await _api.delete(ApiConstants.cart);
+      if (res.statusCode == 200) {
+        _items = [];
+        _total = 0.0;
+        _suggestions = [];
+        notifyListeners();
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  // ── Suggestions ("مقترحات لك") ────────────────────────────────────────────
+  Future<void> fetchSuggestions() async {
+    try {
+      final res = await _api.get('${ApiConstants.cart}/suggestions');
+      if (res.statusCode == 200 && res.data is List) {
+        _suggestions = (res.data as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        notifyListeners();
+      }
+    } catch (_) {
+      // Silent: suggestions are secondary content, never an error screen.
+    }
   }
 }

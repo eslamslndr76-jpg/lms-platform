@@ -51,7 +51,6 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final tt = Theme.of(context).textTheme;
     final provider = context.watch<NotificationsProvider>();
 
     final allItems = provider.notifications;
@@ -111,57 +110,25 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               onRefresh: () => provider.fetchNotifications(silent: true),
               child: provider.isLoading
                   ? const Center(child: CircularProgressIndicator())
-                  : displayedItems.isEmpty
-                      ? Center(
-                          child: SingleChildScrollView(
-                            physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.all(32),
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Container(
-                                  padding: const EdgeInsets.all(20),
-                                  decoration: BoxDecoration(
-                                    color: cs.primaryContainer.withValues(alpha: 0.3),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                    Icons.notifications_none_rounded,
-                                    size: 64,
-                                    color: cs.primary,
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                Text(
-                                  _filter == 'unread'
-                                      ? 'لا توجد إشعارات غير مقروءة'
-                                      : 'سجل الإشعارات فارغ حالياً',
-                                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  _filter == 'unread'
-                                      ? 'لقد اطلعت على جميع الإشعارات والتنبيهات بنجاح.'
-                                      : 'ستظهر هنا كافة الإشعارات الواردة، مثل فتح باب الحضور، المجموعات الجديدة، والمحاضرات.',
-                                  textAlign: TextAlign.center,
-                                  style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-                                ),
-                              ],
-                            ),
-                          ),
+                  : provider.error != null
+                      ? _ErrorView(
+                          message: provider.error!,
+                          onRetry: () => provider.fetchNotifications(silent: false),
                         )
-                      : ListView.separated(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: displayedItems.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 10),
-                          itemBuilder: (context, index) {
-                            final item = displayedItems[index];
-                            return _NotificationCard(
-                              notification: item,
-                              timeText: _formatRelativeTime(item.createdAt),
-                            );
-                          },
-                        ),
+                      : displayedItems.isEmpty
+                          ? _EmptyView(filter: _filter)
+                          : ListView.separated(
+                              padding: const EdgeInsets.all(16),
+                              itemCount: displayedItems.length,
+                              separatorBuilder: (_, __) => const SizedBox(height: 10),
+                              itemBuilder: (context, index) {
+                                final item = displayedItems[index];
+                                return _NotificationCard(
+                                  notification: item,
+                                  timeText: _formatRelativeTime(item.createdAt),
+                                );
+                              },
+                            ),
             ),
           ),
         ],
@@ -338,6 +305,113 @@ class _NotificationCard extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Error view with retry button — shown when fetch fails but cached data may exist.
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _ErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cs.errorContainer.withValues(alpha: 0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline_rounded,
+                size: 64,
+                color: cs.error,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'تعذر تحميل الإشعارات',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800, color: cs.error),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh_rounded),
+              label: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Empty state view — shown when there are genuinely no notifications.
+class _EmptyView extends StatelessWidget {
+  final String filter;
+
+  const _EmptyView({required this.filter});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    final isUnread = filter == 'unread';
+
+    return Center(
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.3),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.notifications_none_rounded,
+                size: 64,
+                color: cs.primary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              isUnread ? 'لا توجد إشعارات غير مقروءة' : 'سجل الإشعارات فارغ حالياً',
+              style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              isUnread
+                  ? 'لقد اطلعت على جميع الإشعارات والتنبيهات بنجاح.'
+                  : 'ستظهر هنا كافة الإشعارات الواردة، مثل فتح باب الحضور، المجموعات الجديدة، والمحاضرات.',
+              textAlign: TextAlign.center,
+              style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
         ),
       ),
     );

@@ -1,15 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/services/app_update_service.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_constants.dart';
 import '../certificates/certificates_screen.dart';
+import '../certificates/verify_certificate_screen.dart';
 import '../cart/cart_screen.dart';
 import '../auth/login_screen.dart';
+import '../orders/orders_screen.dart';
+import '../settings/settings_screen.dart';
+import '../surveys/surveys_list_screen.dart';
+import '../../core/widgets/app_bottom_sheet.dart';
+import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  bool _hasUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkForUpdateBadge();
+  }
+
+  Future<void> _checkForUpdateBadge() async {
+    // Cached one-shot check; also refreshed by the home banner flow.
+    final info = await AppUpdateService.check();
+    if (mounted && info != null) setState(() => _hasUpdate = true);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -51,9 +77,30 @@ class ProfileScreen extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            user?.name ?? 'طالب المنصة',
-                            style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  user?.name ?? 'طالب المنصة',
+                                  style: tt.titleLarge?.copyWith(
+                                      fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              IconButton(
+                                tooltip: 'تعديل البيانات',
+                                onPressed: () async {
+                                  final changed = await Navigator.of(context)
+                                      .push<bool>(
+                                    MaterialPageRoute(
+                                      builder: (_) => const EditProfileScreen(),
+                                    ),
+                                  );
+                                  if (changed == true) setState(() {});
+                                },
+                                icon: Icon(Icons.edit_outlined,
+                                    size: 18, color: cs.primary),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -89,6 +136,66 @@ class ProfileScreen extends StatelessWidget {
             Card(
               child: Column(
                 children: [
+                  ListTile(
+                    leading: Icon(Icons.settings_outlined, color: cs.primary),
+                    title: const Text('الإعدادات', style: TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: _hasUpdate
+                        ? Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(
+                                  color: cs.error,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.chevron_left_rounded),
+                            ],
+                          )
+                        : const Icon(Icons.chevron_left_rounded),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.receipt_long_outlined, color: cs.primary),
+                    title: const Text('طلباتي', style: TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.assignment_outlined, color: cs.primary),
+                    title: const Text('استبيانات الدورات', style: TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const SurveysListScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.verified_outlined, color: cs.primary),
+                    title: const Text('التحقق من شهادة', style: TextStyle(fontWeight: FontWeight.w700)),
+                    trailing: const Icon(Icons.chevron_left_rounded),
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(builder: (_) => const VerifyCertificateScreen()),
+                      );
+                    },
+                  ),
+                  const Divider(height: 1),
                   ListTile(
                     leading: Icon(Icons.workspace_premium_outlined, color: cs.primary),
                     title: const Text('شهاداتي المعتمدة', style: TextStyle(fontWeight: FontWeight.w700)),
@@ -201,99 +308,95 @@ class ProfileScreen extends StatelessWidget {
     final currentPassCtrl = TextEditingController();
     final newPassCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final isSaving = ValueNotifier<bool>(false);
+    final messenger = ScaffoldMessenger.of(context);
+    final nav = Navigator.of(context);
 
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        bool isLoading = false;
-
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            return AlertDialog(
-              title: const Text('تغيير كلمة المرور'),
-              content: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextFormField(
-                      controller: currentPassCtrl,
-                      obscureText: true,
-                      textDirection: TextDirection.ltr,
-                      decoration: const InputDecoration(
-                        labelText: 'كلمة المرور الحالية',
-                      ),
-                      validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: newPassCtrl,
-                      obscureText: true,
-                      textDirection: TextDirection.ltr,
-                      decoration: const InputDecoration(
-                        labelText: 'كلمة المرور الجديدة',
-                      ),
-                      validator: (v) => (v == null || v.length < 6)
-                          ? 'يجب أن لا تقل عن 6 أحرف'
-                          : null,
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('إلغاء'),
-                ),
-                FilledButton(
-                  onPressed: isLoading
-                      ? null
-                      : () async {
-                          if (!formKey.currentState!.validate()) return;
-                          setDialogState(() => isLoading = true);
-                          final messenger = ScaffoldMessenger.of(context);
-                          final nav = Navigator.of(ctx);
-
-                          try {
-                            final res = await ApiClient().put(
-                              ApiConstants.changePassword,
-                              data: {
-                                'currentPassword': currentPassCtrl.text,
-                                'newPassword': newPassCtrl.text,
-                              },
-                            );
-
-                            if (res.statusCode == 200) {
-                              nav.pop();
-                              messenger.showSnackBar(
-                                const SnackBar(content: Text('تم تغيير كلمة المرور بنجاح!')),
-                              );
-                            }
-                          } catch (e) {
-                            String err = 'فشل تغيير كلمة المرور';
-                            try {
-                              err = (e as dynamic).response?.data?['error'] ?? err;
-                            } catch (_) {}
-                            messenger.showSnackBar(
-                              SnackBar(content: Text(err), backgroundColor: Colors.red),
-                            );
-                          } finally {
-                            setDialogState(() => isLoading = false);
-                          }
-                        },
-                  child: isLoading
-                      ? const SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                        )
-                      : const Text('حفظ التغييرات'),
-                ),
-              ],
-            );
+    Future<void> submit() async {
+      if (!formKey.currentState!.validate()) return;
+      isSaving.value = true;
+      try {
+        final res = await ApiClient().put(
+          ApiConstants.changePassword,
+          data: {
+            'currentPassword': currentPassCtrl.text,
+            'newPassword': newPassCtrl.text,
           },
         );
-      },
+
+        if (res.statusCode == 200) {
+          if (nav.canPop()) nav.pop();
+          messenger.showSnackBar(
+            const SnackBar(content: Text('تم تغيير كلمة المرور بنجاح!')),
+          );
+        }
+      } catch (e) {
+        String err = 'فشل تغيير كلمة المرور';
+        try {
+          err = (e as dynamic).response?.data?['error'] ?? err;
+        } catch (_) {}
+        messenger.showSnackBar(
+          SnackBar(content: Text(err), backgroundColor: Colors.red),
+        );
+      } finally {
+        isSaving.value = false;
+      }
+    }
+
+    AppBottomSheet.show(
+      context: context,
+      title: 'تغيير كلمة المرور',
+      subtitle: 'أدخل كلمة المرور الحالية ثم الجديدة (6 أحرف على الأقل).',
+      initialSize: 0.62,
+      body: (ctx, scrollController) => Form(
+        key: formKey,
+        child: ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          children: [
+            TextFormField(
+              controller: currentPassCtrl,
+              obscureText: true,
+              textDirection: TextDirection.ltr,
+              decoration: const InputDecoration(
+                labelText: 'كلمة المرور الحالية',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+              validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: newPassCtrl,
+              obscureText: true,
+              textDirection: TextDirection.ltr,
+              decoration: const InputDecoration(
+                labelText: 'كلمة المرور الجديدة',
+                prefixIcon: Icon(Icons.lock_reset_outlined),
+              ),
+              validator: (v) =>
+                  (v == null || v.length < 6) ? 'يجب أن لا تقل عن 6 أحرف' : null,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        ValueListenableBuilder<bool>(
+          valueListenable: isSaving,
+          builder: (context, saving, _) => FilledButton(
+            onPressed: saving ? null : submit,
+            child: saving
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  )
+                : const Text('حفظ التغييرات'),
+          ),
+        ),
+      ],
     );
   }
 }

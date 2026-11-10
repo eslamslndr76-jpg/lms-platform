@@ -62,8 +62,8 @@ router.get('/app-version', async (_req: Request, res: Response) => {
       return res.json({ apkDirectUrl: '', ...JSON.parse(result.rows[0].value as string) });
     }
     res.json({
-      latestVersion: '1.0.2',
-      buildNumber: 3,
+      latestVersion: '1.0.3',
+      buildNumber: 4,
       forceUpdate: false,
       title: 'تحديث جديد متوفر',
       message: 'يتوفر إصدار جديد من تطبيق الهاتف يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',
@@ -265,7 +265,7 @@ const DEFAULT_CERT_SETTINGS = {
   minAttendancePercent: 80,
   certificateTitle: 'شهادة إتمام',
   certificateTitleEn: 'Certificate of Completion',
-  directorName: '',
+  directorName: 'دكتور شيماء محمد محمد عبد الدايم',
   directorTitle: 'مدير وحدة التدريب و التطوير',
   footerText: 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
 };

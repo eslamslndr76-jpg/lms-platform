@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 let JWT_SECRET: string;
 
-function getJwtSecret(): string {
+export function getJwtSecret(): string {
   if (JWT_SECRET) return JWT_SECRET;
   const secret = process.env.JWT_SECRET;
   if (!secret) {

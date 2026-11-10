@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
+import '../../core/services/calendar_service.dart';
 import '../attendance/qr_scanner_screen.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
@@ -302,6 +303,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                 final myAtt = lec['my_attendance']?.toString() ?? (attendedBool ? 'attended' : null);
 
                 final isHighlighted = widget.highlightLectureId == lecId;
+                final lectureStart = CalendarService.parseLectureStart(date, timeFrom);
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -466,6 +468,33 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
                               },
                               icon: const Icon(Icons.videocam_rounded, size: 18),
                               label: const Text('رابط البث / Zoom'),
+                              style: OutlinedButton.styleFrom(
+                                visualDensity: VisualDensity.compact,
+                              ),
+                            ),
+                          ],
+
+                          // أضف للتقويم (المرحلة 14)
+                          if (lectureStart != null) ...[
+                            const SizedBox(height: 8),
+                            OutlinedButton.icon(
+                              onPressed: () async {
+                                final messenger = ScaffoldMessenger.of(context);
+                                final res = await CalendarService.addLecture(
+                                  lectureId: lecId,
+                                  start: lectureStart,
+                                  title: topic,
+                                  description:
+                                      'المجموعة: ${_group?['name'] ?? ''} — الكورس: ${_group?['course_title'] ?? ''}',
+                                  location: lecLoc,
+                                  link: '/groups/${widget.groupId}',
+                                );
+                                messenger.showSnackBar(
+                                  SnackBar(content: Text(res.message)),
+                                );
+                              },
+                              icon: const Icon(Icons.event_available_rounded, size: 18),
+                              label: const Text('أضف للتقويم'),
                               style: OutlinedButton.styleFrom(
                                 visualDensity: VisualDensity.compact,
                               ),

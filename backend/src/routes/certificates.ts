@@ -5,6 +5,10 @@ import { authMiddleware } from '../middleware/auth';
 
 const router = Router();
 
+// توقيع الشهادة الافتراضي: مدير وحدة التدريب والتطوير.
+const DEFAULT_DIRECTOR_NAME = 'دكتور شيماء محمد محمد عبد الدايم';
+const DEFAULT_DIRECTOR_TITLE = 'مدير وحدة التدريب و التطوير';
+
 const CERTIFICATE_TEMPLATE = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -798,8 +802,8 @@ router.get('/verify/:serial/html', async (req: Request, res: Response) => {
       systemName: branding.systemName || 'وحدة التدريب و التطوير',
       primaryColor: branding.primaryColor || '#2563eb',
       secondaryColor: branding.secondaryColor || '#7c3aed',
-      directorName: certSettings.directorName || '',
-      directorTitle: certSettings.directorTitle || 'مدير وحدة التدريب و التطوير',
+      directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME,
+      directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
       certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
       certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
       footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
@@ -950,8 +954,8 @@ router.get('/:id/html', authMiddleware, async (req: Request, res: Response) => {
       systemName: branding.systemName || 'وحدة التدريب و التطوير',
       primaryColor: branding.primaryColor || '#2563eb',
       secondaryColor: branding.secondaryColor || '#7c3aed',
-      directorName: certSettings.directorName || '',
-      directorTitle: certSettings.directorTitle || 'مدير وحدة التدريب و التطوير',
+      directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME,
+      directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
       certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
       certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
       footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
@@ -1056,7 +1060,7 @@ router.get('/:id/download', authMiddleware, async (req: Request, res: Response) 
       serialId: cert.serial_id || '', verificationUrl, qrDataUrl, logoHtml,
       systemName: branding.systemName || 'وحدة التدريب و التطوير',
       primaryColor: branding.primaryColor || '#2563eb', secondaryColor: branding.secondaryColor || '#7c3aed',
-      directorName: certSettings.directorName || '', directorTitle: certSettings.directorTitle || 'مدير وحدة التدريب و التطوير',
+        directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME, directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
       certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
       certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
       footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',

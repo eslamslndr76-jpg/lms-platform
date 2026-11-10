@@ -5,7 +5,9 @@ import '../../core/services/app_update_service.dart';
 import '../../core/theme/branding_provider.dart';
 import '../../shared/widgets/logo_widget.dart';
 import '../home/home_screen.dart';
+import '../instructors/instructor_shell_screen.dart';
 import 'register_screen.dart';
+import 'forgot_password_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -51,8 +53,13 @@ class _LoginScreenState extends State<LoginScreen> {
     final auth = context.read<AuthProvider>();
     final success = await auth.login(_emailCtrl.text.trim(), _passCtrl.text);
     if (success && mounted) {
+      final isInstructor = auth.user?.role == 'instructor';
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(
+          builder: (_) => isInstructor
+              ? const InstructorShellScreen()
+              : const HomeScreen(),
+        ),
       );
     }
   }
@@ -343,11 +350,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                   // Forgot Password
                                   TextButton(
                                     onPressed: () {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'لإعادة تعيين كلمة المرور يرجى التواصل مع إدارة المعهد أو مسؤول النظام',
-                                          ),
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => const ForgotPasswordScreen(),
                                         ),
                                       );
                                     },

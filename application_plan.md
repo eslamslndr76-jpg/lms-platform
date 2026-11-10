@@ -19,15 +19,15 @@
 | 04 | ✅ مكتملة (2026-11-07) | `flutter_app/plan/phase-4-notifications-surveys-profile.md` | الإشعارات، الاستبيانات، الشهادات |
 | 05 | ✅ مكتملة (2026-11-07) | `flutter_app/plan/phase-5-offline-caching-and-hardening.md` | العمل دون إنترنت وتحصين الأداء |
 | 06 | ✅ مكتملة (2026-11-07) | `flutter_app/plan/phase-6-release-and-apk-build.md` | الهوية والتوقيع وبناء الـ APK |
-| 07 | ⏳ لم تبدأ | `flutter_app/plan/phase-7-explore-and-parity.md` | الاستكشاف، جدول المقارنة، تشخيص مركز الإشعارات |
-| 08 | ⏳ لم تبدأ | `flutter_app/plan/phase-8-remove-ble-settings-sheet.md` | إزالة البلوتوث، شاشة الإعدادات والتحديث، مكوّن Bottom Sheet |
-| 09 | ⏳ لم تبدأ | `flutter_app/plan/phase-9-notifications-and-links.md` | الإشعارات والتوجيه وروابط QR وإشعار التحديث |
-| 10 | ⏳ لم تبدأ | `flutter_app/plan/phase-10-student-parity.md` | ميزات الطالب الناقصة مقارنةً بالويب |
-| 11 | ⏳ لم تبدأ | `flutter_app/plan/phase-11-purchase-flow.md` | الشراء والدفع بالإيصال (بعد المرحلة 5 للمنصة) |
-| 12 | ⏳ لم تبدأ | `flutter_app/plan/phase-12-instructor-area.md` | منطقة المحاضر |
-| 13 | ⏳ لم تبدأ | `flutter_app/plan/phase-13-bottom-sheet-review.md` | مراجعة استخدام الـ Bottom Sheet |
-| 14 | ⏳ لم تبدأ | `flutter_app/plan/phase-14-app-extras.md` | الميزات الخاصة بالتطبيق |
-| 15 | ⏳ لم تبدأ | `flutter_app/plan/phase-15-final-review.md` | المراجعة النهائية والإصدار |
+| 07 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-7-explore-and-parity.md` | الاستكشاف، جدول المقارنة، تشخيص مركز الإشعارات |
+| 08 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-8-remove-ble-settings-sheet.md` | إزالة البلوتوث، شاشة الإعدادات والتحديث، مكوّن Bottom Sheet |
+| 09 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-9-notifications-and-links.md` | الإشعارات والتوجيه وروابط QR وإشعار التحديث |
+| 10 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-10-student-parity.md` | ميزات الطالب الناقصة مقارنةً بالويب |
+| 11 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-11-purchase-flow.md` | الشراء والدفع بالإيصال (بعد المرحلة 5 للمنصة) |
+| 12 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-12-instructor-area.md` | منطقة المحاضر |
+| 13 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-13-bottom-sheet-review.md` | مراجعة استخدام الـ Bottom Sheet |
+| 14 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-14-app-extras.md` | الميزات الخاصة بالتطبيق |
+| 15 | ✅ مكتملة (2026-11-10) | `flutter_app/plan/phase-15-final-review.md` | المراجعة النهائية والإصدار |
 
 ---
 

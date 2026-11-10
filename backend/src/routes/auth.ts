@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { sql } from '../db/helpers';
-import { generateToken, authMiddleware } from '../middleware/auth';
+import { generateToken, authMiddleware, getJwtSecret } from '../middleware/auth';
 import { sendNotification } from '../services/externalNotificationService';
 import { normalizePhone } from '../db/helpers';
 import { mergePermissions, parsePermissions } from '../middleware/rbac';
@@ -215,6 +216,51 @@ router.put('/profile', authMiddleware, async (req: Request, res: Response) => {
     res.json(updated.rows[0]);
   } catch {
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// POST /refresh — issue a fresh 7-day token without re-entering the password.
+// Accepts a valid token, or one expired by at most 30 days (grace window),
+// and always re-checks that the account is still active. The JWT payload shape
+// stays { userId, roleId, role }.
+router.post('/refresh', async (req: Request, res: Response) => {
+  try {
+    const header = req.headers.authorization;
+    const raw =
+      (header && header.startsWith('Bearer ') ? header.slice(7) : '') ||
+      (typeof req.body?.token === 'string' ? req.body.token : '');
+    if (!raw) return res.status(400).json({ error: 'التوكن مطلوب' });
+
+    let payload: any;
+    try {
+      payload = jwt.verify(raw, getJwtSecret(), { ignoreExpiration: true });
+    } catch {
+      return res.status(401).json({ error: 'توكن غير صالح' });
+    }
+
+    const graceMs = 30 * 24 * 60 * 60 * 1000;
+    if (payload?.exp && Date.now() > payload.exp * 1000 + graceMs) {
+      return res.status(401).json({ error: 'انتهت صلاحية الجلسة، سجّل الدخول من جديد' });
+    }
+
+    const user = await sql(
+      `SELECT u.id, u.role_id, u.is_active, r.name as role_name
+       FROM users u JOIN roles r ON u.role_id = r.id WHERE u.id=?`,
+      payload.userId,
+    );
+    if (user.rows.length === 0 || !Number(user.rows[0].is_active)) {
+      return res.status(401).json({ error: 'الحساب غير نشط' });
+    }
+
+    const row = user.rows[0] as any;
+    const token = generateToken({
+      userId: Number(row.id),
+      roleId: Number(row.role_id),
+      role: row.role_name as string,
+    });
+    res.json({ token, expires_in: 7 * 24 * 60 * 60 });
+  } catch {
+    res.status(500).json({ error: 'Failed to refresh token' });
   }
 });
 

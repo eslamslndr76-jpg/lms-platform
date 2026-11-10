@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'package:app_links/app_links.dart';
 
 import 'core/theme/app_theme.dart';
 import 'core/theme/branding_provider.dart';
@@ -9,6 +8,8 @@ import 'core/auth/auth_provider.dart';
 import 'core/navigation/app_navigation.dart';
 import 'features/auth/login_screen.dart';
 import 'features/home/home_screen.dart';
+import 'features/instructors/instructor_shell_screen.dart';
+import 'features/lock/app_lock_gate.dart';
 
 class TrainingApp extends StatelessWidget {
   const TrainingApp({super.key});
@@ -40,41 +41,17 @@ class TrainingApp extends StatelessWidget {
         GlobalCupertinoLocalizations.delegate,
       ],
 
+      // App lock overlay above the whole navigator (covers pushed routes too).
+      builder: (context, child) => AppLockGate(
+        child: child ?? const SizedBox.shrink(),
+      ),
+
       // Routing
-      home: auth.isAuthenticated ? const _AppRoot() : const LoginScreen(),
+      home: auth.isAuthenticated
+          ? (auth.user?.role == 'instructor'
+              ? const InstructorShellScreen()
+              : const HomeScreen())
+          : const LoginScreen(),
     );
   }
-}
-
-/// Wraps HomeScreen and listens for deep links (QR attendance URLs, notification URLs).
-class _AppRoot extends StatefulWidget {
-  const _AppRoot();
-
-  @override
-  State<_AppRoot> createState() => _AppRootState();
-}
-
-class _AppRootState extends State<_AppRoot> {
-  final _appLinks = AppLinks();
-
-  @override
-  void initState() {
-    super.initState();
-    _initDeepLinks();
-  }
-
-  void _initDeepLinks() {
-    // Handle link that cold-started the app
-    _appLinks.getInitialLink().then((uri) {
-      if (uri != null) AppNavigation.handleLink(uri.toString());
-    });
-
-    // Handle links while app is running
-    _appLinks.uriLinkStream.listen((uri) {
-      AppNavigation.handleLink(uri.toString());
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => const HomeScreen();
 }

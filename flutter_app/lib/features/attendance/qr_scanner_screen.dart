@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../core/attendance/attendance_provider.dart';
+import '../../core/widgets/app_bottom_sheet.dart';
 
 class QrScannerScreen extends StatefulWidget {
   final int? targetLectureId;
@@ -59,47 +60,50 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     if (!mounted) return;
 
     if (result.success) {
-      await showDialog(
+      final cs = Theme.of(context).colorScheme;
+      await AppBottomSheet.show(
         context: context,
-        barrierDismissible: false,
-        builder: (ctx) => AlertDialog(
-          icon: Icon(Icons.check_circle_rounded, size: 56, color: Theme.of(ctx).colorScheme.primary),
-          title: Text(result.alreadyMarked ? 'تم تسجيل حضورك مسبقاً' : 'تم تأكيد الحضور بنجاح!'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                result.message,
+        title: result.alreadyMarked ? 'تم تسجيل حضورك مسبقاً' : 'تم تأكيد الحضور بنجاح!',
+        subtitle: 'كود المحاضرة: $code',
+        initialSize: 0.4,
+        body: (ctx, scrollController) => ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          children: [
+            Icon(Icons.check_circle_rounded, size: 56, color: cs.primary),
+            const SizedBox(height: 12),
+            Text(
+              result.message,
+              textAlign: TextAlign.center,
+              style: Theme.of(ctx).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                'كود المحاضرة: $code',
                 textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: Theme.of(ctx).colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'كود المحاضرة: $code',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    color: Theme.of(ctx).colorScheme.onPrimaryContainer,
-                  ),
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  color: cs.onPrimaryContainer,
                 ),
               ),
-            ],
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop(true);
-              },
-              child: const Text('تم'),
             ),
           ],
         ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('تم'),
+          ),
+        ],
       );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -123,195 +127,96 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
     final codeCtrl = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    showModalBottomSheet(
+    final cs = Theme.of(context).colorScheme;
+
+    AppBottomSheet.show(
       context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        final tt = Theme.of(ctx).textTheme;
-
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
-            left: 24,
-            right: 24,
-            top: 24,
-          ),
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(
-                  'إدخال كود الحضور يدوياً',
-                  style: tt.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                  textAlign: TextAlign.center,
+      title: 'إدخال كود الحضور يدوياً',
+      subtitle:
+          'إذا واجهتك صعوبة في قراءة رمز الـ QR، أدخل الكود المكتوب على الشاشة مباشرة.',
+      initialSize: 0.6,
+      body: (ctx, scrollController) => Form(
+        key: formKey,
+        child: ListView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+          children: [
+            // Lecture ID (if not provided)
+            if (widget.targetLectureId == null) ...[
+              TextFormField(
+                controller: lectureIdCtrl,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'رقم المحاضرة',
+                  prefixIcon: Icon(Icons.tag_rounded),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'إذا واجهتك صعوبة في قراءة رمز الـ QR، يمكنك إدخال الكود المكتوب على الشاشة مباشرة.',
-                  textAlign: TextAlign.center,
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                ),
-                const SizedBox(height: 20),
-
-                // Lecture ID (if not provided)
-                if (widget.targetLectureId == null) ...[
-                  TextFormField(
-                    controller: lectureIdCtrl,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'رقم المحاضرة',
-                      prefixIcon: Icon(Icons.tag_rounded),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null,
-                  ),
-                  const SizedBox(height: 14),
-                ],
-
-                // 6-Character Code
-                TextFormField(
-                  controller: codeCtrl,
-                  textCapitalization: TextCapitalization.characters,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w900,
-                    letterSpacing: 4,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'كود الحضور (6 أحرف/أرقام)',
-                    hintText: 'ABC123',
-                  ),
-                  validator: (v) {
-                    if (v == null || v.trim().length < 4) {
-                      return 'يرجى إدخال الكود بشكل صحيح';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-
-                FilledButton(
-                  onPressed: () async {
-                    if (!formKey.currentState!.validate()) return;
-                    final lecId = widget.targetLectureId ?? int.tryParse(lectureIdCtrl.text.trim());
-                    if (lecId == null) return;
-
-                    Navigator.of(ctx).pop();
-                    setState(() => _isProcessing = true);
-
-                    final provider = context.read<AttendanceProvider>();
-                    final res = await provider.markAttendance(
-                      lectureId: lecId,
-                      code: codeCtrl.text.trim(),
-                      method: 'manual',
-                    );
-
-                    if (!mounted) return;
-                    setState(() => _isProcessing = false);
-
-                    if (res.success) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(res.message)),
-                      );
-                      Navigator.of(context).pop(true);
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(res.message),
-                          backgroundColor: cs.error,
-                        ),
-                      );
-                    }
-                  },
-                  child: const Text('تأكيد الحضور'),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _showBleScannerSheet() {
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) {
-        return Consumer<AttendanceProvider>(
-          builder: (context, att, _) {
-            final cs = Theme.of(context).colorScheme;
-            final tt = Theme.of(context).textTheme;
-
-            return Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.bluetooth_searching_rounded,
-                    size: 48,
-                    color: cs.primary,
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'تسجيل الحضور عبر البلوتوث (BLE)',
-                    style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'تأكد من اقترابك من شاشة القاعة وتشغيل البلوتوث بهاتفك.',
-                    textAlign: TextAlign.center,
-                    style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 20),
-                  if (att.isScanningBle) ...[
-                    const CircularProgressIndicator(),
-                    const SizedBox(height: 12),
-                    const Text('جارٍ البحث عن أجهزة الحضور...'),
-                  ] else ...[
-                    if (att.error != null) ...[
-                      Text(
-                        att.error!,
-                        style: TextStyle(color: cs.error, fontSize: 13),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 12),
-                    ],
-                    FilledButton(
-                      onPressed: () {
-                        final messenger = ScaffoldMessenger.of(context);
-                        final nav = Navigator.of(context);
-                        att.startBleScan(
-                          onBeaconFound: (lecId, code) async {
-                            Navigator.of(ctx).pop();
-                            final res = await att.markAttendance(
-                              lectureId: lecId,
-                              code: code,
-                              method: 'ble',
-                            );
-                            if (mounted) {
-                              messenger.showSnackBar(
-                                SnackBar(content: Text(res.message)),
-                              );
-                              if (res.success) {
-                                nav.pop(true);
-                              }
-                            }
-                          },
-                        );
-                      },
-                      child: const Text('بدء الفحص الآن'),
-                    ),
-                  ],
-                ],
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null,
               ),
+              const SizedBox(height: 14),
+            ],
+
+            // 6-Character Code
+            TextFormField(
+              controller: codeCtrl,
+              textCapitalization: TextCapitalization.characters,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 4,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'كود الحضور (6 أحرف/أرقام)',
+                hintText: 'ABC123',
+              ),
+              validator: (v) {
+                if (v == null || v.trim().length < 4) {
+                  return 'يرجى إدخال الكود بشكل صحيح';
+                }
+                return null;
+              },
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        FilledButton(
+          onPressed: () async {
+            if (!formKey.currentState!.validate()) return;
+            final lecId = widget.targetLectureId ?? int.tryParse(lectureIdCtrl.text.trim());
+            if (lecId == null) return;
+
+            Navigator.of(context).pop();
+            if (!mounted) return;
+            setState(() => _isProcessing = true);
+
+            final provider = context.read<AttendanceProvider>();
+            final res = await provider.markAttendance(
+              lectureId: lecId,
+              code: codeCtrl.text.trim(),
+              method: 'manual',
             );
+
+            if (!mounted) return;
+            setState(() => _isProcessing = false);
+
+            if (res.success) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(res.message)),
+              );
+              Navigator.of(context).pop(true);
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(res.message),
+                  backgroundColor: cs.error,
+                ),
+              );
+            }
           },
-        );
-      },
+          child: const Text('تأكيد الحضور'),
+        ),
+      ],
     );
   }
 
@@ -412,31 +317,17 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
             bottom: 40,
             left: 24,
             right: 24,
-            child: Row(
-              children: [
-                // Manual Entry Button
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: _showManualEntrySheet,
-                    icon: const Icon(Icons.keyboard_rounded),
-                    label: const Text('كتابة الكود'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: Colors.white.withValues(alpha: 0.2),
-                      foregroundColor: Colors.white,
-                    ),
-                  ),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: _showManualEntrySheet,
+                icon: const Icon(Icons.keyboard_rounded),
+                label: const Text('كتابة الكود يدوياً'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: Colors.white.withValues(alpha: 0.2),
+                  foregroundColor: Colors.white,
                 ),
-                const SizedBox(width: 12),
-
-                // Bluetooth BLE Button
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: _showBleScannerSheet,
-                    icon: const Icon(Icons.bluetooth_rounded),
-                    label: const Text('بلوتوث BLE'),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ],

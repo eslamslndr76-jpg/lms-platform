@@ -14,6 +14,9 @@ class CourseModel {
   final int? groupMax;
   final int? groupCurrent;
 
+  /// Google Drive link to the scientific material (staff/enrolled only).
+  final String? materialsUrl;
+
   const CourseModel({
     required this.id,
     required this.titleAr,
@@ -29,6 +32,7 @@ class CourseModel {
     this.featured = false,
     this.groupMax,
     this.groupCurrent,
+    this.materialsUrl,
   });
 
   static int _parseInt(dynamic val, [int defaultVal = 0]) {
@@ -76,7 +80,14 @@ class CourseModel {
       featured: _parseBool(json['featured']),
       groupMax: _parseNullableInt(json['group_max']),
       groupCurrent: _parseNullableInt(json['group_current']),
+      materialsUrl: _parseText(json['materials_url']),
     );
+  }
+
+  static String? _parseText(dynamic val) {
+    if (val == null) return null;
+    final s = val.toString().trim();
+    return s.isEmpty ? null : s;
   }
 
   /// Calculates fill percentage of current group (0.0 to 1.0)

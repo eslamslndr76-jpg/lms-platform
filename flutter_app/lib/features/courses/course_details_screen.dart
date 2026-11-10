@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/courses/courses_provider.dart';
 import '../../core/cart/cart_provider.dart';
 import '../../core/models/course_model.dart';
@@ -277,6 +278,31 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                                       color: cs.onSurfaceVariant,
                                     ),
                                   ),
+
+                                  // Scientific material (enrolled students / staff only —
+                                  // the API only returns materials_url to those callers)
+                                  if (_course!.materialsUrl != null) ...[
+                                    const SizedBox(height: 20),
+                                    OutlinedButton.icon(
+                                      onPressed: () async {
+                                        final uri = Uri.tryParse(_course!.materialsUrl!);
+                                        if (uri == null) return;
+                                        final ok = await launchUrl(uri,
+                                            mode: LaunchMode.externalApplication);
+                                        if (!ok && context.mounted) {
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            const SnackBar(
+                                                content: Text('تعذر فتح رابط المادة العلمية')),
+                                          );
+                                        }
+                                      },
+                                      icon: const Icon(Icons.menu_book_rounded),
+                                      label: const Text('المادة العلمية للدورة'),
+                                      style: OutlinedButton.styleFrom(
+                                        minimumSize: const Size.fromHeight(48),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),

@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
 import '../navigation/app_navigation.dart';
 import '../notifications/notifications_provider.dart';
+import 'notification_channels.dart';
 
 /// Top-level handler for background/terminated FCM messages (required by Firebase).
 @pragma('vm:entry-point')
@@ -23,8 +24,6 @@ class FcmService {
   FcmService._();
 
   static final _plugin = FlutterLocalNotificationsPlugin();
-  static const _channelId = 'training_fcm_channel';
-  static const _channelName = 'وحدة التدريب – إشعارات فورية';
 
   /// Call once in main() after Firebase.initializeApp()
   static Future<void> init() async {
@@ -40,17 +39,13 @@ class FcmService {
       onDidReceiveNotificationResponse: _onTap,
     );
 
-    final channel = const AndroidNotificationChannel(
-      _channelId,
-      _channelName,
-      importance: Importance.max,
-      enableLights: true,
-      enableVibration: true,
-    );
-    await _plugin
+    // Create all notification channels
+    final androidImpl = _plugin
         .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.createNotificationChannel(channel);
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      await NotificationChannels.createAll(androidImpl);
+    }
 
     // Request permission (Android 13+)
     final messaging = FirebaseMessaging.instance;
@@ -136,23 +131,21 @@ class FcmService {
     final title = notification?.title ?? message.data['title'] as String? ?? 'إشعار جديد';
     final body = notification?.body ?? message.data['body'] as String? ?? '';
     final link = message.data['link'] as String? ?? '';
+    final type = message.data['type'] as String? ?? '';
     final notifId = message.data['notificationId'] as String? ?? '';
     final groupId = message.data['groupId'] as String? ?? '';
     final lectureId = message.data['lectureId'] as String? ?? '';
     final payload = '$link|$notifId|$groupId|$lectureId';
+
+    final channelId = NotificationChannels.channelIdFor(type: type, link: link);
+    final android = NotificationChannels.detailsFor(channelId);
 
     await _plugin.show(
       message.hashCode,
       title,
       body,
       NotificationDetails(
-        android: const AndroidNotificationDetails(
-          _channelId,
-          _channelName,
-          importance: Importance.max,
-          priority: Priority.high,
-          icon: '@mipmap/launcher_icon',
-        ),
+        android: android,
         iOS: const DarwinNotificationDetails(),
       ),
       payload: payload,

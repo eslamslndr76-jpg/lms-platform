@@ -167,6 +167,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Refresh the current user after a profile update
+  Future<void> refreshUser() async {
+    await _fetchMe();
+    notifyListeners();
+  }
+
   // Fetch current user from /api/auth/me
   Future<void> _fetchMe() async {
     try {

@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:provider/provider.dart';
+import '../../core/api/api_constants.dart';
+import '../../core/auth/auth_provider.dart';
+import '../../core/certificates/certificate_service.dart';
 import '../../core/certificates/certificates_provider.dart';
 import '../../core/models/certificate_model.dart';
+import '../../core/theme/branding_provider.dart';
 
 class CertificatesScreen extends StatefulWidget {
   const CertificatesScreen({super.key});
@@ -74,10 +79,96 @@ class _CertificatesScreenState extends State<CertificatesScreen> {
   }
 }
 
-class _CertificateCard extends StatelessWidget {
+class _CertificateCard extends StatefulWidget {
   final CertificateModel certificate;
 
   const _CertificateCard({required this.certificate});
+
+  @override
+  State<_CertificateCard> createState() => _CertificateCardState();
+}
+
+class _CertificateCardState extends State<_CertificateCard> {
+  bool _busy = false;
+
+  CertificateModel get certificate => widget.certificate;
+
+  String get _studentName =>
+      context.read<AuthProvider>().user?.name ?? '';
+
+  String get _systemName =>
+      context.read<BrandingProvider>().branding.systemName;
+
+  String get _primaryHex {
+    final color = context.read<BrandingProvider>().branding.primaryColor;
+    final rgb = (color.r * 255).round() << 16 |
+        (color.g * 255).round() << 8 |
+        (color.b * 255).round();
+    return '#${rgb.toRadixString(16).padLeft(6, '0')}';
+  }
+
+  Future<void> _openDocument() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final studentName = _studentName;
+    final systemName = _systemName;
+    final primaryHex = _primaryHex;
+    setState(() => _busy = true);
+    try {
+      final doc = await CertificateService.documentFor(
+        certificate,
+        studentName: studentName,
+        systemName: systemName,
+        primaryHex: primaryHex,
+      );
+      if (!mounted) return;
+      if (doc == null) {
+        messenger.showSnackBar(
+          const SnackBar(content: Text('تعذر تحضير الشهادة، تحقق من اتصالك بالإنترنت')),
+        );
+        return;
+      }
+      await OpenFilex.open(doc.file.path);
+      if (!mounted) return;
+      if (!doc.isPdf) {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('تُعرض الشهادة في المتصفح. لحفظها PDF استخدم "طباعة ← حفظ كـ PDF".'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تعذر فتح الشهادة على هذا الجهاز')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _share() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final studentName = _studentName;
+    final systemName = _systemName;
+    final primaryHex = _primaryHex;
+    setState(() => _busy = true);
+    try {
+      await CertificateService.share(
+        certificate,
+        studentName: studentName,
+        systemName: systemName,
+        primaryHex: primaryHex,
+        verifyUrl: '${ApiConstants.webBaseUrl}/verify?serial=${certificate.serialId}',
+      );
+    } catch (_) {
+      if (!mounted) return;
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تعذرت مشاركة الشهادة')),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +245,34 @@ class _CertificateCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (certificate.isActive) ...[
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: _busy ? null : _openDocument,
+                      icon: _busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.visibility_outlined, size: 18),
+                      label: const Text('عرض الشهادة'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _share,
+                      icon: const Icon(Icons.ios_share_rounded, size: 18),
+                      label: const Text('مشاركة'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

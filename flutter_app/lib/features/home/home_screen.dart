@@ -17,6 +17,9 @@ import '../../core/notifications/notifications_provider.dart';
 import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../../shared/widgets/offline_banner_widget.dart';
+import '../../core/widgets/app_bottom_sheet.dart';
+import '../../core/surveys/surveys_provider.dart';
+import '../surveys/surveys_list_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -287,6 +290,9 @@ class _DashboardTab extends StatelessWidget {
             ),
             const SizedBox(height: 16),
 
+            // ── Pending surveys alert (parity with web /dashboard) ────────
+            _PendingSurveysBanner(),
+
             // ── Statistics Row ────────────────────────────────────────────
             Row(
               children: [
@@ -487,13 +493,27 @@ class _CoursesTab extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
           child: Column(
             children: [
-              // Search Field
-              SearchBar(
-                hintText: 'ابحث عن اسم الكورس أو المدرب...',
-                leading: const Icon(Icons.search_rounded),
-                onChanged: (val) => provider.setSearchQuery(val),
-                elevation: const WidgetStatePropertyAll(0),
-                backgroundColor: WidgetStatePropertyAll(cs.surfaceContainerHighest.withValues(alpha: 0.5)),
+              // Search Field + Filter button (opens AppBottomSheet)
+              Row(
+                children: [
+                  Expanded(
+                    child: SearchBar(
+                      hintText: 'ابحث عن اسم الكورس أو المدرب...',
+                      leading: const Icon(Icons.search_rounded),
+                      onChanged: (val) => provider.setSearchQuery(val),
+                      elevation: const WidgetStatePropertyAll(0),
+                      backgroundColor: WidgetStatePropertyAll(
+                          cs.surfaceContainerHighest.withValues(alpha: 0.5)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.filledTonal(
+                    onPressed: () => _showFilterSheet(context),
+                    icon: const Icon(Icons.tune_rounded),
+                    tooltip: 'الفلاتر',
+                    style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
+                  ),
+                ],
               ),
               const SizedBox(height: 12),
 
@@ -573,6 +593,92 @@ class _CoursesTab extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Catalog filter Bottom Sheet (uses the shared AppBottomSheet component)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Opens the course filter Bottom Sheet (classification + search hint).
+/// Tapping a category updates [CoursesProvider.selectedCategoryId] and refreshes
+/// the catalog list automatically (the tab watches the provider).
+Future<void> _showFilterSheet(BuildContext context) async {
+  final cs = Theme.of(context).colorScheme;
+  final tt = Theme.of(context).textTheme;
+  final provider = context.read<CoursesProvider>();
+
+  await AppBottomSheet.show(
+    context: context,
+    title: 'تصفية الكورسات',
+    subtitle: 'اختر تصنيفاً لعرض الكورسات المطابقة فقط',
+    initialSize: 0.6,
+    body: (ctx, scrollController) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(
+              'التصنيف',
+              style: tt.labelLarge?.copyWith(
+                fontWeight: FontWeight.w800,
+                color: cs.primary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              controller: scrollController,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: provider.categories.length + 1,
+              itemBuilder: (ctx, i) {
+                if (i == 0) {
+                  return ListTile(
+                    leading: const Icon(Icons.category_outlined, size: 20),
+                    title: const Text(
+                      'الكل',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    selected: provider.selectedCategoryId == null,
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      provider.setCategory(null);
+                    },
+                  );
+                }
+                final cat = provider.categories[i - 1];
+                return ListTile(
+                  leading: const Icon(Icons.label_outlined, size: 20),
+                  title: Text(
+                    cat.nameAr,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Text(
+                    cat.nameEn.isNotEmpty ? cat.nameEn : '',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
+                  selected: provider.selectedCategoryId == cat.id,
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    provider.setCategory(cat.id);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      );
+    },
+    actions: [
+      FilledButton.tonal(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('إغلاق'),
+      ),
+    ],
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3. My Courses Tab
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -588,6 +694,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
   List<Map<String, dynamic>> _groups = [];
   bool _loadingGroups = true;
   String _activeTab = 'groups'; // 'groups' | 'orders'
+  String _groupFilter = 'all'; // 'all' | 'active' | 'completed'
 
   @override
   void initState() {
@@ -704,12 +811,46 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.all(16),
-      itemCount: _groups.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 14),
-      itemBuilder: (context, index) {
-        final g = _groups[index];
+    final completedGroups = _groups.where(_isGroupCompleted).toList();
+    final activeGroups = _groups.where((g) => !_isGroupCompleted(g)).toList();
+    final visibleGroups = switch (_groupFilter) {
+      'active' => activeGroups,
+      'completed' => completedGroups,
+      _ => _groups,
+    };
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+          child: Row(
+            children: [
+              _filterChip('الكل', 'all', _groups.length),
+              const SizedBox(width: 8),
+              _filterChip('الجارية', 'active', activeGroups.length),
+              const SizedBox(width: 8),
+              _filterChip('المنتهية', 'completed', completedGroups.length),
+            ],
+          ),
+        ),
+        Expanded(
+          child: visibleGroups.isEmpty
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Text(
+                      'لا توجد مجموعات في هذا التصنيف',
+                      textAlign: TextAlign.center,
+                      style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ),
+                )
+              : ListView.separated(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: visibleGroups.length,
+                  separatorBuilder: (_, __) => const SizedBox(height: 14),
+                  itemBuilder: (context, index) {
+                    final g = visibleGroups[index];
         final groupId = (g['id'] as num?)?.toInt() ?? 0;
         final title = g['title_ar'] as String? ?? g['course_name'] as String? ?? 'دورة تدريبية';
         final groupName = g['name'] as String? ?? 'مجموعة';
@@ -839,7 +980,28 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
             ),
           ),
         );
-      },
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+
+  bool _isGroupCompleted(Map<String, dynamic> g) {
+    return g['status']?.toString() == 'completed' ||
+        g['completed_at'] != null ||
+        g['is_complete'] == 1 ||
+        g['is_complete'] == true;
+  }
+
+  Widget _filterChip(String label, String value, int count) {
+    final cs = Theme.of(context).colorScheme;
+    final selected = _groupFilter == value;
+    return ChoiceChip(
+      label: Text('$label ($count)', style: const TextStyle(fontSize: 12)),
+      selected: selected,
+      onSelected: (_) => setState(() => _groupFilter = value),
+      selectedColor: cs.primaryContainer,
     );
   }
 
@@ -976,6 +1138,70 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
           ),
         );
       },
+    );
+  }
+}
+
+/// شريط "استبيان مطلوب" في لوحة الطالب — يوازي تنبيهات الاستبيانات في الويب.
+class _PendingSurveysBanner extends StatefulWidget {
+  const _PendingSurveysBanner();
+
+  @override
+  State<_PendingSurveysBanner> createState() => _PendingSurveysBannerState();
+}
+
+class _PendingSurveysBannerState extends State<_PendingSurveysBanner> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = context.read<SurveysProvider>();
+      if (provider.surveys.isEmpty && !provider.isLoading) {
+        provider.fetchMySurveys(silent: true);
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+    final surveys = context.watch<SurveysProvider>().surveys;
+    final pending = surveys.where((s) => s.canAnswer).toList();
+
+    if (pending.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: Card(
+        color: cs.tertiaryContainer,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SurveysListScreen()),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(Icons.assignment_turned_in_outlined,
+                    color: cs.onTertiaryContainer),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'لديك ${pending.length} استبيان تقييم بانتظارك — شاركنا رأيك',
+                    style: tt.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onTertiaryContainer,
+                    ),
+                  ),
+                ),
+                Icon(Icons.chevron_left_rounded, color: cs.onTertiaryContainer),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

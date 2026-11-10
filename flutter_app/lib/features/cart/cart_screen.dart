@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/cart/cart_provider.dart';
-import '../../core/orders/orders_provider.dart';
 import '../../shared/widgets/app_network_image.dart';
+import '../orders/checkout_screen.dart';
 
 class CartScreen extends StatefulWidget {
   const CartScreen({super.key});
@@ -18,8 +18,37 @@ class _CartScreenState extends State<CartScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<CartProvider>().fetchCart(silent: true);
+      final cart = context.read<CartProvider>();
+      cart.fetchCart(silent: true);
+      cart.fetchSuggestions();
     });
+  }
+
+  Future<void> _confirmClearCart() async {
+    final cart = context.read<CartProvider>();
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تفريغ السلة'),
+        content: const Text('سيتم حذف كل الدورات من السلة. هل تريد المتابعة؟'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('إلغاء'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('تفريغ'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    final ok = await cart.clearCart();
+    messenger.showSnackBar(
+      SnackBar(content: Text(ok ? 'تم تفريغ السلة' : 'تعذر تفريغ السلة')),
+    );
   }
 
   Future<void> _handleCheckout() async {
@@ -27,52 +56,15 @@ class _CartScreenState extends State<CartScreen> {
     if (cart.items.isEmpty || _isCheckingOut) return;
 
     setState(() => _isCheckingOut = true);
-    final ordersProvider = context.read<OrdersProvider>();
-
-    bool allSuccess = true;
-    for (final item in cart.items) {
-      final success = await ordersProvider.createOrder(
-        courseId: item.courseId,
-        amount: item.price,
-      );
-      if (success) {
-        await cart.removeFromCart(item.id);
-      } else {
-        allSuccess = false;
-      }
-    }
+    final courseIds = cart.items.map((i) => i.courseId).toList();
 
     if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CheckoutScreen(courseIds: courseIds),
+      ),
+    );
     setState(() => _isCheckingOut = false);
-
-    if (allSuccess) {
-      showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          icon: Icon(Icons.check_circle_rounded, size: 48, color: Theme.of(ctx).colorScheme.primary),
-          title: const Text('تم إرسال الطلب بنجاح!'),
-          content: const Text(
-            'تم تسجيل طلبك وحجزه في المنصة. يمكنك متابعة حالة الاشتراك من صفحة "كورساتي".',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                Navigator.of(context).pop();
-              },
-              child: const Text('حسناً'),
-            ),
-          ],
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('حدث خطأ أثناء تأكيد بعض عناصر الطلب'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
-      );
-    }
   }
 
   @override
@@ -84,6 +76,14 @@ class _CartScreenState extends State<CartScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('سلة المشتريات'),
+        actions: [
+          if (cart.items.isNotEmpty)
+            IconButton(
+              tooltip: 'تفريغ السلة',
+              icon: const Icon(Icons.delete_sweep_outlined),
+              onPressed: _confirmClearCart,
+            ),
+        ],
       ),
       body: cart.isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -124,9 +124,12 @@ class _CartScreenState extends State<CartScreen> {
                     Expanded(
                       child: ListView.separated(
                         padding: const EdgeInsets.all(16),
-                        itemCount: cart.items.length,
+                        itemCount: cart.items.length + (cart.suggestions.isEmpty ? 0 : 1),
                         separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, index) {
+                          if (index >= cart.items.length) {
+                            return _suggestionsSection(cart, cs, tt);
+                          }
                           final item = cart.items[index];
                           return Card(
                             child: Padding(
@@ -237,6 +240,101 @@ class _CartScreenState extends State<CartScreen> {
                     ),
                   ],
                 ),
+    );
+  }
+
+  /// "مقترحات لك" — كورسات من نفس المنصة غير الموجودة في السلة.
+  Widget _suggestionsSection(CartProvider cart, ColorScheme cs, TextTheme tt) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Icon(Icons.auto_awesome_rounded, size: 18, color: cs.primary),
+            const SizedBox(width: 6),
+            Text(
+              'مقترحات لك',
+              style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 196,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: cart.suggestions.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final s = cart.suggestions[i];
+              final id = (s['id'] as num?)?.toInt() ?? 0;
+              final title = s['title_ar']?.toString() ?? '';
+              final image = s['image_url']?.toString() ?? '';
+              final price = (s['price'] as num?)?.toDouble() ?? 0;
+              return SizedBox(
+                width: 168,
+                child: Card(
+                  clipBehavior: Clip.antiAlias,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      AppNetworkImage(
+                        imageUrl: image,
+                        width: 168,
+                        height: 86,
+                        borderRadius: BorderRadius.zero,
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: tt.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              price > 0 ? '${price.toInt()} ج.م' : 'مجاناً',
+                              style: tt.labelSmall?.copyWith(
+                                color: cs.primary,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Spacer(),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.tonal(
+                            onPressed: id == 0
+                                ? null
+                                : () async {
+                                    final ok = await cart.addToCart(id);
+                                    if (!ok) return;
+                                    cart.fetchSuggestions();
+                                  },
+                            style: FilledButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            child: const Text('أضف للسلة', style: TextStyle(fontSize: 12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 }

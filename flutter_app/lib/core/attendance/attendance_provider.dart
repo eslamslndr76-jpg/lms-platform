@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
 
@@ -21,12 +20,10 @@ class AttendanceProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
 
   bool _isSubmitting = false;
-  bool _isScanningBle = false;
   String? _error;
   AttendanceResult? _lastResult;
 
   bool get isSubmitting => _isSubmitting;
-  bool get isScanningBle => _isScanningBle;
   String? get error => _error;
   AttendanceResult? get lastResult => _lastResult;
 
@@ -136,72 +133,5 @@ class AttendanceProvider extends ChangeNotifier {
     } catch (_) {}
 
     return null;
-  }
-
-  // Bluetooth LE Scan
-  Future<void> startBleScan({
-    required Function(int lectureId, String code) onBeaconFound,
-  }) async {
-    if (_isScanningBle) return;
-
-    try {
-      // Check bluetooth availability
-      final isSupported = await FlutterBluePlus.isSupported;
-      if (!isSupported) {
-        _error = 'جهازك لا يدعم تقنية البلوتوث منخفض الطاقة (BLE)';
-        notifyListeners();
-        return;
-      }
-
-      // Check adapter state
-      final adapterState = await FlutterBluePlus.adapterState.first;
-      if (adapterState != BluetoothAdapterState.on) {
-        _error = 'يرجى تشغيل البلوتوث لتسجيل الحضور التلقائي';
-        notifyListeners();
-        return;
-      }
-
-      _isScanningBle = true;
-      _error = null;
-      notifyListeners();
-
-      // Start scan with 15 seconds timeout
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-
-      FlutterBluePlus.scanResults.listen((results) {
-        for (final r in results) {
-          // Check manufacturer data or service data for attendance beacon
-          final name = r.device.platformName;
-          if (name.startsWith('TU_LEC_')) {
-            // Format: TU_LEC_<lectureId>_<codePrefix>
-            final parts = name.split('_');
-            if (parts.length >= 4) {
-              final lecId = int.tryParse(parts[2]);
-              final code = parts[3];
-              if (lecId != null && code.isNotEmpty) {
-                FlutterBluePlus.stopScan();
-                _isScanningBle = false;
-                notifyListeners();
-                onBeaconFound(lecId, code);
-                break;
-              }
-            }
-          }
-        }
-      });
-    } catch (e) {
-      _error = 'حدث خطأ أثناء فحص البلوتوث: $e';
-    } finally {
-      _isScanningBle = false;
-      notifyListeners();
-    }
-  }
-
-  void stopBleScan() {
-    try {
-      FlutterBluePlus.stopScan();
-    } catch (_) {}
-    _isScanningBle = false;
-    notifyListeners();
   }
 }
