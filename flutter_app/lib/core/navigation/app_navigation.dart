@@ -274,47 +274,48 @@ class AppRouter {
       context: context,
       title: 'تأكيد الحضور',
       subtitle: 'هل تريد تأكيد حضورك لهذه المحاضرة؟',
-      initialSize: 0.5,
-      body: (context, scrollController) => ListView(
-        controller: scrollController,
+      body: (context, scrollController) => Padding(
         padding: const EdgeInsets.all(24),
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: cs.primaryContainer,
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: Column(
-              children: [
-                Icon(Icons.qr_code_rounded, size: 48, color: cs.onPrimaryContainer),
-                const SizedBox(height: 12),
-                Text(
-                  'كود الحضور: $code',
-                  style: tt.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w900,
-                    color: cs.onPrimaryContainer,
-                    letterSpacing: 2,
-                  ),
-                ),
-                if (lectureId > 0) ...[
-                  const SizedBox(height: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer,
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Icon(Icons.qr_code_rounded, size: 48, color: cs.onPrimaryContainer),
+                  const SizedBox(height: 12),
                   Text(
-                    'المحاضرة رقم: $lectureId',
-                    style: tt.bodyMedium?.copyWith(color: cs.onPrimaryContainer),
+                    'كود الحضور: $code',
+                    style: tt.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w900,
+                      color: cs.onPrimaryContainer,
+                      letterSpacing: 2,
+                    ),
                   ),
+                  if (lectureId > 0) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'المحاضرة رقم: $lectureId',
+                      style: tt.bodyMedium?.copyWith(color: cs.onPrimaryContainer),
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            'بمجرد الضغط على "تأكيد الحضور" سيتم تسجيل حضورك مباشرة. '
-            'تأكد من أنك داخل قاعة المحاضرة.',
-            style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-            textAlign: TextAlign.center,
-          ),
-        ],
+            const SizedBox(height: 20),
+            Text(
+              'بمجرد الضغط على "تأكيد الحضور" سيتم تسجيل حضورك مباشرة. '
+              'تأكد من أنك داخل قاعة المحاضرة.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
       ),
       actions: [
         FilledButton.icon(

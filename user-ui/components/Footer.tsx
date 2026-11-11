@@ -50,18 +50,9 @@ export default function Footer() {
             {/* Brand Column */}
             <div className="lg:col-span-1">
               <Link href="/" className="inline-block group mb-3">
-                {logoFooter ? (
-                  <div className="rounded-md3-sm overflow-hidden inline-block transition-transform duration-200 group-hover:scale-105">
-                    <img src={logoFooter} alt={systemName} className="h-14" />
-                  </div>
-                ) : (
-                  <h3
-                    className="text-xl font-bold tracking-tight"
-                    style={{ color: 'var(--md-sys-color-primary)' }}
-                  >
-                    وحدة التدريب و التطوير
-                  </h3>
-                )}
+                <div className="rounded-md3-sm overflow-hidden inline-block transition-transform duration-200 group-hover:scale-105">
+                  <img src={logoFooter || '/branding/logo.png'} alt={systemName} className="h-14" />
+                </div>
               </Link>
               <p
                 className="text-sm leading-relaxed mb-3"

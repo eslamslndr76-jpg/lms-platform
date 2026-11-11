@@ -101,8 +101,8 @@ export default function CartDrawer({ open, onClose }: { open: boolean; onClose: 
       show('أضيف للسلة');
       fetchCart();
       fetchSuggestions();
-    } catch {
-      show('فشل الإضافة', 'error');
+    } catch (e) {
+      show(e instanceof Error ? e.message : 'فشل الإضافة', 'error');
     }
   };
 

@@ -87,18 +87,9 @@ export default function Header() {
           {/* Logo — only on public pages */}
           {!isDashboard && (
             <Link href="/" className="flex items-center gap-3 group shrink-0">
-              {logoHeader ? (
-                <div className="rounded-md3-sm overflow-hidden transition-transform duration-200 group-hover:scale-105">
-                  <img src={logoHeader} alt={systemName} className="h-10" />
-                </div>
-              ) : (
-                <span
-                  className="text-lg font-bold tracking-tight"
-                  style={{ color: 'var(--md-sys-color-primary)' }}
-                >
-                  {systemName}
-                </span>
-              )}
+              <div className="rounded-md3-sm overflow-hidden transition-transform duration-200 group-hover:scale-105">
+                <img src={logoHeader || '/branding/logo.png'} alt={systemName} className="h-10" />
+              </div>
             </Link>
           )}
 

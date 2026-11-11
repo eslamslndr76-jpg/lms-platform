@@ -120,7 +120,7 @@ class NotificationChannels {
       enableLights: cfg.enableLights,
       enableVibration: cfg.enableVibration,
       playSound: cfg.playSound,
-      icon: '@mipmap/launcher_icon',
+      icon: 'ic_notification',
     );
   }
 }

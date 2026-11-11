@@ -1,5 +1,5 @@
 import { sql } from '../db/helpers';
-import { attachOrderDetails } from '../services/orderService';
+import { attachOrderDetails, removeCoursesFromCart } from '../services/orderService';
 
 interface ToolHandler {
   declaration: {
@@ -302,6 +302,8 @@ reg({
     const orderId = Number(r.lastInsertRowid);
     await sql('INSERT INTO order_items (order_id, course_id, price) VALUES (?,?,?)',
       orderId, args.course_id, args.amount);
+    // The booked course leaves the student's cart (staff-created orders too).
+    await removeCoursesFromCart(Number(args.user_id), [Number(args.course_id)]);
     return JSON.stringify({ message: 'تم إنشاء الطلب بنجاح', id: orderId });
   },
 });

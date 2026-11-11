@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
 import '../storage/cache_service.dart';
+import '../utils/json_utils.dart';
 
 /// User model matching /api/auth/login and /api/auth/me responses.
 class AppUser {
@@ -27,27 +28,21 @@ class AppUser {
   });
 
   factory AppUser.fromJson(Map<String, dynamic> json) {
-    // id may come as int or string from the API
-    final rawId = json['id'];
-    final id = rawId is int ? rawId : int.tryParse(rawId.toString()) ?? 0;
+    // id/role_id may come as int or string from the API
+    final id = toInt(json['id']);
 
     // role_id may be missing; derive from role string as fallback
-    final rawRoleId = json['role_id'];
-    int roleId;
-    if (rawRoleId != null) {
-      roleId = rawRoleId is int ? rawRoleId : int.tryParse(rawRoleId.toString()) ?? 3;
-    } else {
-      final role = json['role'] as String? ?? 'student';
-      roleId = role == 'admin' ? 1 : role == 'employee' ? 2 : 3;
-    }
+    final role = toStrOrNull(json['role']) ?? 'student';
+    final roleId = toIntOrNull(json['role_id']) ??
+        (role == 'admin' ? 1 : role == 'employee' ? 2 : 3);
 
     return AppUser(
       id: id,
-      name: json['name'] as String? ?? '',
-      email: json['email'] as String? ?? '',
-      phone: json['phone'] as String?,
-      avatar: json['avatar'] as String?,
-      role: json['role'] as String? ?? 'student',
+      name: toStr(json['name']),
+      email: toStr(json['email']),
+      phone: toStrOrNull(json['phone']),
+      avatar: toStrOrNull(json['avatar']),
+      role: role,
       roleId: roleId,
     );
   }
@@ -91,9 +86,15 @@ class AuthProvider extends ChangeNotifier {
         data: {'email': emailOrPhone, 'password': password},
       );
       if (res.statusCode == 200) {
-        final data = res.data as Map<String, dynamic>;
-        _token = data['token'] as String;
-        _user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+        final data = toJsonMap(res.data) ?? const <String, dynamic>{};
+        final token = toStrOrNull(data['token']);
+        final userJson = toJsonMap(data['user']);
+        if (token == null || userJson == null) {
+          _error = 'استجابة غير صالحة من الخادم';
+          return false;
+        }
+        _token = token;
+        _user = AppUser.fromJson(userJson);
         await _storage.write(key: _tokenKey, value: _token);
         FcmService.syncToken();
         return true;
@@ -143,9 +144,15 @@ class AuthProvider extends ChangeNotifier {
         },
       );
       if (res.statusCode == 200 || res.statusCode == 201) {
-        final data = res.data as Map<String, dynamic>;
-        _token = data['token'] as String;
-        _user = AppUser.fromJson(data['user'] as Map<String, dynamic>);
+        final data = toJsonMap(res.data) ?? const <String, dynamic>{};
+        final token = toStrOrNull(data['token']);
+        final userJson = toJsonMap(data['user']);
+        if (token == null || userJson == null) {
+          _error = 'استجابة غير صالحة من الخادم';
+          return false;
+        }
+        _token = token;
+        _user = AppUser.fromJson(userJson);
         await _storage.write(key: _tokenKey, value: _token);
         return true;
       }
@@ -177,8 +184,9 @@ class AuthProvider extends ChangeNotifier {
   Future<void> _fetchMe() async {
     try {
       final res = await ApiClient().get(ApiConstants.me);
-      if (res.statusCode == 200) {
-        _user = AppUser.fromJson(res.data as Map<String, dynamic>);
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        _user = AppUser.fromJson(data);
       } else {
         await logout(); // token expired or invalid
       }

@@ -3,6 +3,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:provider/provider.dart';
 import '../../core/attendance/attendance_provider.dart';
 import '../../core/widgets/app_bottom_sheet.dart';
+import '../../core/utils/json_utils.dart';
 
 class QrScannerScreen extends StatefulWidget {
   final int? targetLectureId;
@@ -44,8 +45,12 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       return;
     }
 
-    final lectureId = parsed['lectureId'] as int;
-    final code = parsed['code'] as String;
+    final lectureId = toIntOrNull(parsed['lectureId']);
+    final code = toStr(parsed['code']);
+    if (lectureId == null || code.isEmpty) {
+      // Unrecognized QR code
+      return;
+    }
 
     setState(() => _isProcessing = true);
     await _controller.stop();
@@ -65,35 +70,36 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
         context: context,
         title: result.alreadyMarked ? 'تم تسجيل حضورك مسبقاً' : 'تم تأكيد الحضور بنجاح!',
         subtitle: 'كود المحاضرة: $code',
-        initialSize: 0.4,
-        body: (ctx, scrollController) => ListView(
-          controller: scrollController,
+        body: (ctx, scrollController) => Padding(
           padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          children: [
-            Icon(Icons.check_circle_rounded, size: 56, color: cs.primary),
-            const SizedBox(height: 12),
-            Text(
-              result.message,
-              textAlign: TextAlign.center,
-              style: Theme.of(ctx).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: cs.primaryContainer,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                'كود المحاضرة: $code',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Icon(Icons.check_circle_rounded, size: 56, color: cs.primary),
+              const SizedBox(height: 12),
+              Text(
+                result.message,
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: cs.onPrimaryContainer,
+                style: Theme.of(ctx).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: cs.primaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'كود المحاضرة: $code',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onPrimaryContainer,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           FilledButton(
@@ -134,49 +140,50 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       title: 'إدخال كود الحضور يدوياً',
       subtitle:
           'إذا واجهتك صعوبة في قراءة رمز الـ QR، أدخل الكود المكتوب على الشاشة مباشرة.',
-      initialSize: 0.6,
-      body: (ctx, scrollController) => Form(
-        key: formKey,
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          children: [
-            // Lecture ID (if not provided)
-            if (widget.targetLectureId == null) ...[
-              TextFormField(
-                controller: lectureIdCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'رقم المحاضرة',
-                  prefixIcon: Icon(Icons.tag_rounded),
+      body: (ctx, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+        child: Form(
+          key: formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Lecture ID (if not provided)
+              if (widget.targetLectureId == null) ...[
+                TextFormField(
+                  controller: lectureIdCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'رقم المحاضرة',
+                    prefixIcon: Icon(Icons.tag_rounded),
+                  ),
+                  validator: (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null,
                 ),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'مطلوب' : null,
-              ),
-              const SizedBox(height: 14),
-            ],
+                const SizedBox(height: 14),
+              ],
 
-            // 6-Character Code
-            TextFormField(
-              controller: codeCtrl,
-              textCapitalization: TextCapitalization.characters,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 4,
+              // 6-Character Code
+              TextFormField(
+                controller: codeCtrl,
+                textCapitalization: TextCapitalization.characters,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 4,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'كود الحضور (6 أحرف/أرقام)',
+                  hintText: 'ABC123',
+                ),
+                validator: (v) {
+                  if (v == null || v.trim().length < 4) {
+                    return 'يرجى إدخال الكود بشكل صحيح';
+                  }
+                  return null;
+                },
               ),
-              decoration: const InputDecoration(
-                labelText: 'كود الحضور (6 أحرف/أرقام)',
-                hintText: 'ABC123',
-              ),
-              validator: (v) {
-                if (v == null || v.trim().length < 4) {
-                  return 'يرجى إدخال الكود بشكل صحيح';
-                }
-                return null;
-              },
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [

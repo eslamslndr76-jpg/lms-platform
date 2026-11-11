@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class OrderItemModel {
   final int id;
   final int courseId;
@@ -16,15 +18,13 @@ class OrderItemModel {
   });
 
   factory OrderItemModel.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id'];
-    final rawCourse = json['course_id'];
     return OrderItemModel(
-      id: rawId is num ? rawId.toInt() : int.tryParse('$rawId') ?? 0,
-      courseId: rawCourse is num ? rawCourse.toInt() : int.tryParse('$rawCourse') ?? 0,
-      titleAr: json['title_ar'] as String?,
-      titleEn: json['title_en'] as String?,
-      price: (json['price'] as num?)?.toDouble() ?? 0,
-      instructor: json['instructor'] as String?,
+      id: toInt(json['id']),
+      courseId: toInt(json['course_id']),
+      titleAr: toStrOrNull(json['title_ar']),
+      titleEn: toStrOrNull(json['title_en']),
+      price: toDouble(json['price']),
+      instructor: toStrOrNull(json['instructor']),
     );
   }
 
@@ -62,34 +62,19 @@ class OrderModel {
   });
 
   factory OrderModel.fromJson(Map<String, dynamic> json) {
-    final rawId = json['id'];
-    final id = rawId is num ? rawId.toInt() : int.tryParse(rawId.toString()) ?? 0;
-
-    final rawCourseId = json['course_id'];
-    final courseId =
-        rawCourseId is num ? rawCourseId.toInt() : int.tryParse(rawCourseId.toString()) ?? 0;
-
-    final rawItems = json['items'];
-    final items = rawItems is List
-        ? rawItems
-            .whereType<Map<String, dynamic>>()
-            .map(OrderItemModel.fromJson)
-            .toList()
-        : <OrderItemModel>[];
-
     return OrderModel(
-      id: id,
-      courseId: courseId,
-      amount: (json['amount'] as num?)?.toDouble() ?? 0.0,
-      status: json['status'] as String? ?? 'pending',
-      receiptUrl: json['receipt_url'] as String?,
-      paymentMethod: json['payment_method'] as String?,
-      titleAr: json['title_ar'] as String?,
-      titleEn: json['title_en'] as String?,
-      instructor: json['instructor'] as String?,
-      createdAt: json['created_at'] as String?,
-      cancelReason: json['cancel_reason'] as String?,
-      items: items,
+      id: toInt(json['id']),
+      courseId: toInt(json['course_id']),
+      amount: toDouble(json['amount']),
+      status: toStrOrNull(json['status']) ?? 'pending',
+      receiptUrl: toStrOrNull(json['receipt_url']),
+      paymentMethod: toStrOrNull(json['payment_method']),
+      titleAr: toStrOrNull(json['title_ar']),
+      titleEn: toStrOrNull(json['title_en']),
+      instructor: toStrOrNull(json['instructor']),
+      createdAt: toStrOrNull(json['created_at']),
+      cancelReason: toStrOrNull(json['cancel_reason']),
+      items: toJsonList(json['items']).map(OrderItemModel.fromJson).toList(),
     );
   }
 

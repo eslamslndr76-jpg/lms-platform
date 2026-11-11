@@ -1,6 +1,8 @@
 // موديلات بيانات منطقة المحاضر (المرحلة 12).
 // استجابات API من backend/src/routes/instructor.ts و src/services/instructorEvalService.ts proposalService.ts
 
+import '../utils/json_utils.dart';
+
 class InstructorGroup {
   final int id;
   final String name;
@@ -42,15 +44,15 @@ class InstructorGroup {
 
   factory InstructorGroup.fromJson(Map<String, dynamic> json) {
     return InstructorGroup(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      name: json['name'] as String? ?? '',
-      status: json['status'] as String? ?? '',
-      completedAt: json['completed_at'] as String?,
-      instructorEvalOpenedAt: json['instructor_eval_opened_at'] as String?,
-      courseTitle: json['course_title'] as String? ?? '',
-      studentsCount: (json['students_count'] as num?)?.toInt() ?? 0,
-      lecturesCount: (json['lectures_count'] as num?)?.toInt() ?? 0,
-      evalStatus: json['eval_status'] as String?,
+      id: toInt(json['id']),
+      name: toStr(json['name']),
+      status: toStr(json['status']),
+      completedAt: toStrOrNull(json['completed_at']),
+      instructorEvalOpenedAt: toStrOrNull(json['instructor_eval_opened_at']),
+      courseTitle: toStr(json['course_title']),
+      studentsCount: toInt(json['students_count']),
+      lecturesCount: toInt(json['lectures_count']),
+      evalStatus: toStrOrNull(json['eval_status']),
     );
   }
 }
@@ -60,7 +62,7 @@ class EvalQuestion {
   final String label;
   const EvalQuestion({required this.key, required this.label});
   factory EvalQuestion.fromJson(Map<String, dynamic> json) =>
-      EvalQuestion(key: json['key'] as String? ?? '', label: json['label'] as String? ?? '');
+      EvalQuestion(key: toStr(json['key']), label: toStr(json['label']));
 }
 
 class EvalScaleOption {
@@ -68,7 +70,7 @@ class EvalScaleOption {
   final String label;
   const EvalScaleOption({required this.value, required this.label});
   factory EvalScaleOption.fromJson(Map<String, dynamic> json) =>
-      EvalScaleOption(value: (json['value'] as num?)?.toInt() ?? 0, label: json['label'] as String? ?? '');
+      EvalScaleOption(value: toInt(json['value']), label: toStr(json['label']));
 }
 
 class EvalStudentScore {
@@ -88,18 +90,15 @@ class EvalStudentScore {
 
   factory EvalStudentScore.fromJson(Map<String, dynamic> json) {
     final rawScores = json['scores'];
-    final scores = <int?>[];
-    if (rawScores is List) {
-      for (final s in rawScores) {
-        scores.add(s is num ? s.toInt() : null);
-      }
-    }
+    final scores = <int?>[
+      if (rawScores is List) ...rawScores.map(toIntOrNull),
+    ];
     return EvalStudentScore(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      name: json['name'] as String? ?? '',
+      id: toInt(json['id']),
+      name: toStr(json['name']),
       scores: scores,
-      total: json['total'] is num ? json['total'].toInt() : null,
-      complete: json['complete'] as bool? ?? false,
+      total: toIntOrNull(json['total']),
+      complete: toBool(json['complete']),
     );
   }
 }
@@ -157,34 +156,23 @@ class InstructorEvaluation {
   bool get isDraft => status == 'draft';
 
   factory InstructorEvaluation.fromJson(Map<String, dynamic> json) {
-    final groupJson = (json['group'] as Map?)?.cast<String, dynamic>() ?? {};
-    final questions = ((json['questions'] as List?) ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(EvalQuestion.fromJson)
-        .toList();
-    final scale = ((json['scale'] as List?) ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(EvalScaleOption.fromJson)
-        .toList();
-    final students = ((json['students'] as List?) ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(EvalStudentScore.fromJson)
-        .toList();
+    final groupJson = toJsonMap(json['group']) ?? const {};
     return InstructorEvaluation(
       group: InstructorGroup.fromJson(groupJson),
-      questions: questions,
-      scale: scale,
-      students: students,
-      status: json['status'] as String? ?? 'not_open',
-      submittedAt: json['submitted_at'] as String?,
-      studentsCount: (json['students_count'] as num?)?.toInt() ?? 0,
-      completedCount: (json['completed_count'] as num?)?.toInt() ?? 0,
-      canEdit: json['can_edit'] as bool? ?? false,
-      startDate: groupJson['start_date'] as String? ?? '',
-      placeName: groupJson['place_name'] as String? ?? '',
-      courseMode: groupJson['course_mode'] as String? ?? '',
-      instructorName: groupJson['instructor_name'] as String? ?? '',
-      groupCompletedAt: groupJson['completed_at'] as String?,
+      questions: toJsonList(json['questions']).map(EvalQuestion.fromJson).toList(),
+      scale: toJsonList(json['scale']).map(EvalScaleOption.fromJson).toList(),
+      students:
+          toJsonList(json['students']).map(EvalStudentScore.fromJson).toList(),
+      status: toStrOrNull(json['status']) ?? 'not_open',
+      submittedAt: toStrOrNull(json['submitted_at']),
+      studentsCount: toInt(json['students_count']),
+      completedCount: toInt(json['completed_count']),
+      canEdit: toBool(json['can_edit']),
+      startDate: toStr(groupJson['start_date']),
+      placeName: toStr(groupJson['place_name']),
+      courseMode: toStr(groupJson['course_mode']),
+      instructorName: toStr(groupJson['instructor_name']),
+      groupCompletedAt: toStrOrNull(groupJson['completed_at']),
     );
   }
 }
@@ -194,8 +182,11 @@ class ProposalDay {
   final String topic;
   final String instructor;
   const ProposalDay({required this.day, required this.topic, required this.instructor});
-  factory ProposalDay.fromJson(Map<String, dynamic> json) =>
-      ProposalDay(day: json['day'] as String? ?? '', topic: json['topic'] as String? ?? '', instructor: json['instructor'] as String? ?? '');
+  factory ProposalDay.fromJson(Map<String, dynamic> json) => ProposalDay(
+        day: toStr(json['day']),
+        topic: toStr(json['topic']),
+        instructor: toStr(json['instructor']),
+      );
 }
 
 class InstructorProposal {
@@ -241,29 +232,27 @@ class InstructorProposal {
   bool get isRejected => status == 'rejected';
 
   factory InstructorProposal.fromJson(Map<String, dynamic> json) {
-    final objectives = ((json['objectives'] as List?) ?? [])
-        .whereType<String>()
-        .toList();
-    final dailyContent = ((json['daily_content'] as List?) ?? [])
-        .whereType<Map<String, dynamic>>()
-        .map(ProposalDay.fromJson)
-        .toList();
+    final rawObjectives = json['objectives'];
+    final objectives = <String>[
+      if (rawObjectives is List) ...rawObjectives.map(toStr),
+    ];
     return InstructorProposal(
-      id: (json['id'] as num?)?.toInt() ?? 0,
-      instructorUserId: (json['instructor_user_id'] as num?)?.toInt() ?? 0,
-      instructorName: json['instructor_name'] as String? ?? '',
-      courseTitle: json['course_title'] as String? ?? '',
+      id: toInt(json['id']),
+      instructorUserId: toInt(json['instructor_user_id']),
+      instructorName: toStr(json['instructor_name']),
+      courseTitle: toStr(json['course_title']),
       objectives: objectives,
-      dailyContent: dailyContent,
-      materialsUrl: json['materials_url'] as String? ?? '',
-      status: json['status'] as String? ?? 'draft',
-      statusLabel: json['status_label'] as String? ?? 'مسودة',
-      adminNote: json['admin_note'] as String? ?? '',
-      courseId: json['course_id'] is num ? json['course_id'].toInt() : null,
-      submittedAt: json['submitted_at'] as String?,
-      reviewedAt: json['reviewed_at'] as String?,
-      createdAt: json['created_at'] as String?,
-      updatedAt: json['updated_at'] as String?,
+      dailyContent:
+          toJsonList(json['daily_content']).map(ProposalDay.fromJson).toList(),
+      materialsUrl: toStr(json['materials_url']),
+      status: toStrOrNull(json['status']) ?? 'draft',
+      statusLabel: toStrOrNull(json['status_label']) ?? 'مسودة',
+      adminNote: toStr(json['admin_note']),
+      courseId: toIntOrNull(json['course_id']),
+      submittedAt: toStrOrNull(json['submitted_at']),
+      reviewedAt: toStrOrNull(json['reviewed_at']),
+      createdAt: toStrOrNull(json['created_at']),
+      updatedAt: toStrOrNull(json['updated_at']),
     );
   }
 }

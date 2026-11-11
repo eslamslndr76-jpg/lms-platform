@@ -134,6 +134,28 @@ export async function findBlockingOrder(userId: number, courseIds: number[]): Pr
   return { course_id: Number(row.course_id), status: String(row.status) };
 }
 
+/**
+ * Removes the given courses from the user's cart — used right after a booking
+ * is created (student checkout or admin manual order). Only the booked courses
+ * leave the cart; everything else stays. Never throws: the order already
+ * exists, so a cart failure is logged loudly and retried by `GET /api/cart`.
+ */
+export async function removeCoursesFromCart(userId: number, courseIds: number[]): Promise<number> {
+  if (courseIds.length === 0) return 0;
+  try {
+    const result = await sql(
+      `DELETE FROM cart_items
+       WHERE user_id=? AND course_id IN (${placeholders(courseIds.length)})`,
+      userId,
+      ...courseIds,
+    );
+    return Number(result.rowsAffected || 0);
+  } catch (e: any) {
+    console.error('[cart] clear-after-order failed:', e?.message || e);
+    return 0;
+  }
+}
+
 /** Course titles for an order, used in notifications. */
 export async function getOrderCourseTitles(orderId: number): Promise<string[]> {
   const result = await sql(

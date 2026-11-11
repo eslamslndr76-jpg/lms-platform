@@ -347,36 +347,37 @@ class _ProfileScreenState extends State<ProfileScreen> {
       context: context,
       title: 'تغيير كلمة المرور',
       subtitle: 'أدخل كلمة المرور الحالية ثم الجديدة (6 أحرف على الأقل).',
-      initialSize: 0.62,
-      body: (ctx, scrollController) => Form(
-        key: formKey,
-        child: ListView(
-          controller: scrollController,
-          padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-          children: [
-            TextFormField(
-              controller: currentPassCtrl,
-              obscureText: true,
-              textDirection: TextDirection.ltr,
-              decoration: const InputDecoration(
-                labelText: 'كلمة المرور الحالية',
-                prefixIcon: Icon(Icons.lock_outline),
+      body: (ctx, scrollController) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+        child: Form(
+          key: formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextFormField(
+                controller: currentPassCtrl,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: const InputDecoration(
+                  labelText: 'كلمة المرور الحالية',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+                validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
               ),
-              validator: (v) => (v == null || v.isEmpty) ? 'مطلوب' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: newPassCtrl,
-              obscureText: true,
-              textDirection: TextDirection.ltr,
-              decoration: const InputDecoration(
-                labelText: 'كلمة المرور الجديدة',
-                prefixIcon: Icon(Icons.lock_reset_outlined),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: newPassCtrl,
+                obscureText: true,
+                textDirection: TextDirection.ltr,
+                decoration: const InputDecoration(
+                  labelText: 'كلمة المرور الجديدة',
+                  prefixIcon: Icon(Icons.lock_reset_outlined),
+                ),
+                validator: (v) =>
+                    (v == null || v.length < 6) ? 'يجب أن لا تقل عن 6 أحرف' : null,
               ),
-              validator: (v) =>
-                  (v == null || v.length < 6) ? 'يجب أن لا تقل عن 6 أحرف' : null,
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: [

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../core/api/api_client.dart';
+import '../../core/utils/json_utils.dart';
 
 /// Public certificate verification: enter the serial id (or scan its QR) and
 /// see whether the certificate is valid. Mirrors the web `/verify` page.
@@ -41,12 +42,12 @@ class _VerifyCertificateScreenState extends State<VerifyCertificateScreen> {
     try {
       final res = await _api.get('/api/certificates/verify/${Uri.encodeComponent(serial)}');
       if (!mounted) return;
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        final data = res.data as Map<String, dynamic>;
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
         setState(() {
           _isLoading = false;
-          _isValid = data['valid'] as bool? ?? false;
-          _result = (data['certificate'] as Map?)?.cast<String, dynamic>() ?? data;
+          _isValid = toBool(data['valid']);
+          _result = toJsonMap(data['certificate']) ?? data;
         });
       } else if (res.statusCode == 404) {
         setState(() {

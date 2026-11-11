@@ -9,6 +9,7 @@ import '../../core/theme/branding_provider.dart';
 import '../../core/courses/courses_provider.dart';
 import '../../core/orders/orders_provider.dart';
 import '../../core/cart/cart_provider.dart';
+import '../../core/utils/json_utils.dart';
 import '../../shared/widgets/course_card.dart';
 import '../auth/login_screen.dart';
 import '../cart/cart_screen.dart';
@@ -608,6 +609,7 @@ Future<void> _showFilterSheet(BuildContext context) async {
     context: context,
     title: 'تصفية الكورسات',
     subtitle: 'اختر تصنيفاً لعرض الكورسات المطابقة فقط',
+    size: AppBottomSheetSize.large,
     initialSize: 0.6,
     body: (ctx, scrollController) {
       return Column(
@@ -851,16 +853,18 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
                   separatorBuilder: (_, __) => const SizedBox(height: 14),
                   itemBuilder: (context, index) {
                     final g = visibleGroups[index];
-        final groupId = (g['id'] as num?)?.toInt() ?? 0;
-        final title = g['title_ar'] as String? ?? g['course_name'] as String? ?? 'دورة تدريبية';
-        final groupName = g['name'] as String? ?? 'مجموعة';
-        final schedule = g['schedule_display'] as String? ?? g['schedule'] as String? ?? '';
-        final instructor = g['instructor_name'] as String? ?? g['instructor'] as String?;
-        final progress = g['lecture_progress'] is Map
-            ? Map<String, dynamic>.from(g['lecture_progress'] as Map)
-            : null;
-        final total = (progress?['total'] as num?)?.toInt() ?? 0;
-        final done = (progress?['done'] as num?)?.toInt() ?? 0;
+        final groupId = toInt(g['id']);
+        final title = toStrOrNull(g['title_ar']) ??
+            toStrOrNull(g['course_name']) ??
+            'دورة تدريبية';
+        final groupName = toStrOrNull(g['name']) ?? 'مجموعة';
+        final schedule =
+            toStrOrNull(g['schedule_display']) ?? toStrOrNull(g['schedule']) ?? '';
+        final instructor =
+            toStrOrNull(g['instructor_name']) ?? toStrOrNull(g['instructor']);
+        final progress = toJsonMap(g['lecture_progress']);
+        final total = progress == null ? 0 : toInt(progress['total']);
+        final done = progress == null ? 0 : toInt(progress['done']);
 
         return Card(
           elevation: 1,

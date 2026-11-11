@@ -1,5 +1,6 @@
 import ExcelJS from 'exceljs';
 import { sql } from '../db/helpers';
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
 
 /**
  * Branded Excel exporter.
@@ -60,9 +61,10 @@ const DEFAULT_BRANDING: BrandingInfo = {
   systemName: 'وحدة التدريب و التطوير',
   sloganAr: 'نحو تعليم أفضل',
   sloganEn: 'Towards Better Learning',
-  messageFooter: '',
-  logoHeader: '',
-  logoFooter: '',
+  messageFooter:
+    'هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
+  logoHeader: DEFAULT_LOGO_DATA_URL,
+  logoFooter: DEFAULT_LOGO_DATA_URL,
   primaryColor: '#2563eb',
   secondaryColor: '#7c3aed',
 };
@@ -113,6 +115,9 @@ export async function loadBranding(): Promise<BrandingInfo> {
         ...parsed,
         systemName: parsed.systemName || DEFAULT_BRANDING.systemName,
         sloganAr: parsed.sloganAr || DEFAULT_BRANDING.sloganAr,
+        // An empty stored value means "never uploaded": use the new default logo.
+        logoHeader: parsed.logoHeader || DEFAULT_BRANDING.logoHeader,
+        logoFooter: parsed.logoFooter || DEFAULT_BRANDING.logoFooter,
       };
     }
   } catch {

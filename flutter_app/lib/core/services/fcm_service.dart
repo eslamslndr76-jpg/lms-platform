@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../api/api_client.dart';
 import '../navigation/app_navigation.dart';
 import '../notifications/notifications_provider.dart';
+import '../utils/json_utils.dart';
 import 'notification_channels.dart';
 
 /// Top-level handler for background/terminated FCM messages (required by Firebase).
@@ -28,7 +29,7 @@ class FcmService {
   /// Call once in main() after Firebase.initializeApp()
   static Future<void> init() async {
     // Setup local notifications channel
-    const android = AndroidInitializationSettings('@mipmap/launcher_icon');
+    const android = AndroidInitializationSettings('ic_notification');
     const ios = DarwinInitializationSettings(
       requestAlertPermission: true,
       requestBadgePermission: true,
@@ -110,13 +111,10 @@ class FcmService {
   }
 
   static void _handleRemoteMessageNavigation(RemoteMessage message) {
-    final link = message.data['link'] as String? ?? '/notifications';
-    final notifIdStr = message.data['notificationId'] as String?;
-    final notifId = int.tryParse(notifIdStr ?? '');
-    final grpIdStr = message.data['groupId'] as String?;
-    final groupId = int.tryParse(grpIdStr ?? '');
-    final lecIdStr = message.data['lectureId'] as String?;
-    final lectureId = int.tryParse(lecIdStr ?? '');
+    final link = toStrOrNull(message.data['link']) ?? '/notifications';
+    final notifId = toIntOrNull(message.data['notificationId']);
+    final groupId = toIntOrNull(message.data['groupId']);
+    final lectureId = toIntOrNull(message.data['lectureId']);
 
     AppNavigation.handleLink(
       link,
@@ -128,13 +126,15 @@ class FcmService {
 
   static Future<void> _showFromRemoteMessage(RemoteMessage message) async {
     final notification = message.notification;
-    final title = notification?.title ?? message.data['title'] as String? ?? 'إشعار جديد';
-    final body = notification?.body ?? message.data['body'] as String? ?? '';
-    final link = message.data['link'] as String? ?? '';
-    final type = message.data['type'] as String? ?? '';
-    final notifId = message.data['notificationId'] as String? ?? '';
-    final groupId = message.data['groupId'] as String? ?? '';
-    final lectureId = message.data['lectureId'] as String? ?? '';
+    final title = notification?.title ??
+        toStrOrNull(message.data['title']) ??
+        'إشعار جديد';
+    final body = notification?.body ?? toStr(message.data['body']);
+    final link = toStr(message.data['link']);
+    final type = toStr(message.data['type']);
+    final notifId = toStr(message.data['notificationId']);
+    final groupId = toStr(message.data['groupId']);
+    final lectureId = toStr(message.data['lectureId']);
     final payload = '$link|$notifId|$groupId|$lectureId';
 
     final channelId = NotificationChannels.channelIdFor(type: type, link: link);

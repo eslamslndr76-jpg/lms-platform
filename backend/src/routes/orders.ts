@@ -8,6 +8,7 @@ import {
   attachOrderDetails,
   findBlockingOrder,
   getOrderCourseTitles,
+  removeCoursesFromCart,
 } from '../services/orderService';
 
 const router = Router();
@@ -104,6 +105,9 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     }
 
     if (receipt) await saveReceipt(orderId, String(receipt), paymentMethod);
+
+    // The server owns the cart: the booked courses leave it (nothing else does).
+    await removeCoursesFromCart(userId, courseIds);
 
     const titles = courses
       .filter((c) => courseIds.includes(Number(c.id)))

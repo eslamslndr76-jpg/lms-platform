@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class CertificateModel {
   final int id;
   final String serialId;
@@ -17,12 +19,12 @@ class CertificateModel {
 
   factory CertificateModel.fromJson(Map<String, dynamic> json) {
     return CertificateModel(
-      id: (json['id'] as num).toInt(),
-      serialId: json['serial_id'] as String? ?? '',
-      titleAr: json['title_ar'] as String? ?? 'شهادة إتمام دورة',
-      titleEn: json['title_en'] as String?,
-      issuedAt: json['issued_at'] as String? ?? '',
-      status: json['status'] as String? ?? 'active',
+      id: toInt(json['id']),
+      serialId: toStr(json['serial_id']),
+      titleAr: toStrOrNull(json['title_ar']) ?? 'شهادة إتمام دورة',
+      titleEn: toStrOrNull(json['title_en']),
+      issuedAt: toStr(json['issued_at']),
+      status: toStrOrNull(json['status']) ?? 'active',
     );
   }
 

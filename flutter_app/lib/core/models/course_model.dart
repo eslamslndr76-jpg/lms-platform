@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class CourseModel {
   final int id;
   final String titleAr;
@@ -35,59 +37,24 @@ class CourseModel {
     this.materialsUrl,
   });
 
-  static int _parseInt(dynamic val, [int defaultVal = 0]) {
-    if (val == null) return defaultVal;
-    if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val) ?? defaultVal;
-    return defaultVal;
-  }
-
-  static int? _parseNullableInt(dynamic val) {
-    if (val == null) return null;
-    if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val);
-    return null;
-  }
-
-  static double _parseDouble(dynamic val, [double defaultVal = 0.0]) {
-    if (val == null) return defaultVal;
-    if (val is num) return val.toDouble();
-    if (val is String) return double.tryParse(val) ?? defaultVal;
-    return defaultVal;
-  }
-
-  static bool _parseBool(dynamic val) {
-    if (val == null) return false;
-    if (val is bool) return val;
-    if (val is num) return val.toInt() == 1;
-    if (val is String) return val == '1' || val.toLowerCase() == 'true';
-    return false;
-  }
-
   factory CourseModel.fromJson(Map<String, dynamic> json) {
     return CourseModel(
-      id: _parseInt(json['id']),
-      titleAr: json['title_ar']?.toString() ?? '',
-      titleEn: json['title_en']?.toString(),
-      descriptionAr: json['description_ar']?.toString(),
-      descriptionEn: json['description_en']?.toString(),
-      image: (json['image'] ?? json['image_url'])?.toString(),
-      price: _parseDouble(json['price']),
-      instructor: json['instructor']?.toString(),
-      hours: _parseNullableInt(json['hours']),
-      categoryId: _parseNullableInt(json['category_id']),
-      categoryNameAr: json['category_name_ar']?.toString(),
-      featured: _parseBool(json['featured']),
-      groupMax: _parseNullableInt(json['group_max']),
-      groupCurrent: _parseNullableInt(json['group_current']),
-      materialsUrl: _parseText(json['materials_url']),
+      id: toInt(json['id']),
+      titleAr: toStr(json['title_ar']),
+      titleEn: toStrOrNull(json['title_en']),
+      descriptionAr: toStrOrNull(json['description_ar']),
+      descriptionEn: toStrOrNull(json['description_en']),
+      image: toStrOrNull(json['image'] ?? json['image_url']),
+      price: toDouble(json['price']),
+      instructor: toStrOrNull(json['instructor']),
+      hours: toIntOrNull(json['hours']),
+      categoryId: toIntOrNull(json['category_id']),
+      categoryNameAr: toStrOrNull(json['category_name_ar']),
+      featured: toBool(json['featured']),
+      groupMax: toIntOrNull(json['group_max']),
+      groupCurrent: toIntOrNull(json['group_current']),
+      materialsUrl: toStrOrNull(json['materials_url']),
     );
-  }
-
-  static String? _parseText(dynamic val) {
-    if (val == null) return null;
-    final s = val.toString().trim();
-    return s.isEmpty ? null : s;
   }
 
   /// Calculates fill percentage of current group (0.0 to 1.0)

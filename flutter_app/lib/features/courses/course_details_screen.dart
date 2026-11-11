@@ -3,9 +3,13 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/courses/courses_provider.dart';
 import '../../core/cart/cart_provider.dart';
+import '../../core/navigation/app_navigation.dart';
+import '../../core/orders/orders_provider.dart';
 import '../../core/models/course_model.dart';
 import '../../shared/widgets/app_network_image.dart';
 import '../cart/cart_screen.dart';
+import '../orders/checkout_screen.dart';
+import '../orders/orders_screen.dart';
 
 class CourseDetailsScreen extends StatefulWidget {
   final int courseId;
@@ -20,11 +24,42 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
   CourseModel? _course;
   bool _isLoading = true;
   bool _isAddingToCart = false;
+  bool _isBuying = false;
+
+  /// What the student already has for this course (paid / open booking / none).
+  CourseAccess? _access;
+  bool _accessLoaded = false;
+  String? _accessError;
 
   @override
   void initState() {
     super.initState();
     _loadCourse();
+    _loadAccess();
+  }
+
+  /// Paid or already-booked courses cannot be bought again, so the page shows
+  /// their state instead of the purchase buttons (same rule as the web).
+  Future<void> _loadAccess() async {
+    try {
+      final access = await context.read<OrdersProvider>().fetchCourseAccess(widget.courseId);
+      if (!mounted) return;
+      setState(() {
+        _accessLoaded = true;
+        if (access == null) {
+          _accessError = 'تعذر التحقق من حالة الكورس';
+        } else {
+          _accessError = null;
+          _access = access;
+        }
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _accessLoaded = true;
+        _accessError = 'تعذر التحقق من حالة الكورس';
+      });
+    }
   }
 
   Future<void> _loadCourse() async {
@@ -86,14 +121,174 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
           ),
         ),
       );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(cart.error ?? 'فشل إضافة الكورس إلى السلة'),
-          backgroundColor: Theme.of(context).colorScheme.error,
-        ),
+      return;
+    }
+
+    // 409: the server refused a paid course or one inside an open booking.
+    final refused = cart.actionErrorCode == 409;
+    final message = cart.actionError ?? 'فشل إضافة الكورس إلى السلة';
+    final paid = refused && message.contains('مدفوع');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Theme.of(context).colorScheme.error,
+        action: refused
+            ? SnackBarAction(
+                label: paid ? 'كورساتي' : 'طلباتي',
+                onPressed: paid ? _goToMyCourses : () => _openOrders(refresh: true),
+              )
+            : null,
+      ),
+    );
+    if (refused) await _loadAccess();
+  }
+
+  /// "اشترِ الآن": checkout for this course only, without touching the cart.
+  Future<void> _buyNow() async {
+    if (_course == null || _isBuying) return;
+    setState(() => _isBuying = true);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => CheckoutScreen(courseIds: [_course!.id]),
+      ),
+    );
+    if (!mounted) return;
+    setState(() => _isBuying = false);
+    await context.read<CartProvider>().fetchCart(silent: true);
+    if (!mounted) return;
+    await _loadAccess();
+  }
+
+  Future<void> _openOrders({bool refresh = false}) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OrdersScreen()),
+    );
+    if (!mounted) return;
+    if (refresh) await _loadAccess();
+  }
+
+  void _goToMyCourses() {
+    AppNavigation.switchTab(2);
+    Navigator.of(context).popUntil((route) => route.isFirst);
+  }
+
+  /// Bottom-bar actions: enrolled / open booking / buy + add to cart.
+  Widget _buildActions(ColorScheme cs, TextTheme tt) {
+    if (!_accessLoaded) {
+      return const SizedBox(
+        height: 48,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
       );
     }
+
+    final access = _access;
+
+    if (access != null && access.paid) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.check_circle_rounded, size: 20, color: Colors.green.shade700),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'أنت مسجل في هذا الكورس',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: _goToMyCourses,
+            icon: const Icon(Icons.school_rounded, size: 18),
+            label: const Text('كورساتي'),
+          ),
+        ],
+      );
+    }
+
+    if (access != null && access.hasOpenBooking) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.schedule_rounded, size: 20, color: cs.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'لديك حجز لهذا الكورس',
+                  style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: () => _openOrders(refresh: true),
+            icon: const Icon(Icons.payment_rounded, size: 18),
+            label: const Text('ادفع من طلباتي'),
+          ),
+        ],
+      );
+    }
+
+    return Consumer<CartProvider>(
+      builder: (context, cart, _) {
+        final inCart = cart.isInCart(_course!.id);
+        return Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: _isBuying ? null : _buyNow,
+                icon: _isBuying
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : const Icon(Icons.bolt_rounded, size: 18),
+                label: const Text('اشترِ الآن'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: (_isAddingToCart || inCart)
+                    ? () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CartScreen()),
+                        );
+                      }
+                    : _handleAddToCart,
+                icon: _isAddingToCart
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        inCart
+                            ? Icons.check_circle_rounded
+                            : Icons.shopping_cart_outlined,
+                        size: 18,
+                      ),
+                label: Text(
+                  inCart ? 'في السلة — إتمام الطلب' : 'أضف للسلة',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -328,60 +523,46 @@ class _CourseDetailsScreenState extends State<CourseDetailsScreen> {
                         ],
                       ),
                       child: SafeArea(
-                        child: Row(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            // Price
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
+                            Row(
                               children: [
-                                Text(
-                                  'رسوم الاشتراك',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: cs.onSurfaceVariant,
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'رسوم الاشتراك',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: cs.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    Text(
+                                      _course!.price > 0
+                                          ? '${_course!.price.toInt()} ج.م'
+                                          : 'مجاناً',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.w900,
+                                        color: cs.primary,
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                                Text(
-                                  _course!.price > 0 ? '${_course!.price.toInt()} ج.م' : 'مجاناً',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w900,
-                                    color: cs.primary,
+                                const Spacer(),
+                                if (_accessError != null)
+                                  TextButton.icon(
+                                    onPressed: _loadAccess,
+                                    icon: const Icon(Icons.refresh_rounded, size: 16),
+                                    label: const Text('إعادة المحاولة'),
                                   ),
-                                ),
                               ],
                             ),
-                            const SizedBox(width: 20),
-
-                            // Add to cart button
-                            Expanded(
-                              child: Consumer<CartProvider>(
-                                builder: (context, cart, _) {
-                                  final inCart = cart.isInCart(_course!.id);
-                                  return FilledButton.icon(
-                                    onPressed: (_isAddingToCart || inCart)
-                                        ? () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(builder: (_) => const CartScreen()),
-                                            );
-                                          }
-                                        : _handleAddToCart,
-                                    icon: _isAddingToCart
-                                        ? const SizedBox(
-                                            width: 18,
-                                            height: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : Icon(inCart ? Icons.check_circle_rounded : Icons.shopping_cart_outlined),
-                                    label: Text(inCart ? 'في السلة — إتمام الطلب' : 'إضافة إلى السلة'),
-                                  );
-                                },
-                              ),
-                            ),
+                            const SizedBox(height: 10),
+                            _buildActions(cs, tt),
                           ],
                         ),
                       ),

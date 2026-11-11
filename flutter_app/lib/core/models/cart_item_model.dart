@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class CartItemModel {
   final int id;
   final int courseId;
@@ -21,31 +23,17 @@ class CartItemModel {
     this.createdAt,
   });
 
-  static int _parseInt(dynamic val, [int defaultVal = 0]) {
-    if (val == null) return defaultVal;
-    if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val) ?? defaultVal;
-    return defaultVal;
-  }
-
-  static double _parseDouble(dynamic val, [double defaultVal = 0.0]) {
-    if (val == null) return defaultVal;
-    if (val is num) return val.toDouble();
-    if (val is String) return double.tryParse(val) ?? defaultVal;
-    return defaultVal;
-  }
-
   factory CartItemModel.fromJson(Map<String, dynamic> json) {
     return CartItemModel(
-      id: _parseInt(json['id']),
-      courseId: _parseInt(json['course_id']),
-      titleAr: json['title_ar']?.toString() ?? '',
-      titleEn: json['title_en']?.toString(),
-      price: _parseDouble(json['price']),
-      image: (json['image_url'] ?? json['image'])?.toString(),
-      instructor: json['instructor']?.toString(),
-      categoryNameAr: json['category_name_ar']?.toString(),
-      createdAt: json['created_at']?.toString(),
+      id: toInt(json['id']),
+      courseId: toInt(json['course_id']),
+      titleAr: toStr(json['title_ar']),
+      titleEn: toStrOrNull(json['title_en']),
+      price: toDouble(json['price']),
+      image: toStrOrNull(json['image_url'] ?? json['image']),
+      instructor: toStrOrNull(json['instructor']),
+      categoryNameAr: toStrOrNull(json['category_name_ar']),
+      createdAt: toStrOrNull(json['created_at']),
     );
   }
 }

@@ -4,6 +4,7 @@ import '../api/api_constants.dart';
 import '../models/category_model.dart';
 import '../models/course_model.dart';
 import '../storage/cache_service.dart';
+import '../utils/json_utils.dart';
 
 class CoursesProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -23,12 +24,12 @@ class CoursesProvider extends ChangeNotifier {
     try {
       final cachedCourses = await CacheService.load(CacheService.keyCourses);
       if (cachedCourses is List && cachedCourses.isNotEmpty) {
-        _courses = cachedCourses.map((c) => CourseModel.fromJson(c as Map<String, dynamic>)).toList();
+        _courses = toJsonList(cachedCourses).map(CourseModel.fromJson).toList();
       }
 
       final cachedCats = await CacheService.load(CacheService.keyCategories);
       if (cachedCats is List && cachedCats.isNotEmpty) {
-        _categories = cachedCats.map((cat) => CategoryModel.fromJson(cat as Map<String, dynamic>)).toList();
+        _categories = toJsonList(cachedCats).map(CategoryModel.fromJson).toList();
       }
 
       if (_courses.isNotEmpty) {
@@ -76,20 +77,12 @@ class CoursesProvider extends ChangeNotifier {
       ]);
 
       if (responses[0].statusCode == 200 && responses[0].data is List) {
-        final list = responses[0].data as List;
-        _courses = list
-            .whereType<Map>()
-            .map((item) => CourseModel.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
+        _courses = toJsonList(responses[0].data).map(CourseModel.fromJson).toList();
         CacheService.save(CacheService.keyCourses, responses[0].data);
       }
 
       if (responses[1].statusCode == 200 && responses[1].data is List) {
-        final list = responses[1].data as List;
-        _categories = list
-            .whereType<Map>()
-            .map((item) => CategoryModel.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
+        _categories = toJsonList(responses[1].data).map(CategoryModel.fromJson).toList();
         CacheService.save(CacheService.keyCategories, responses[1].data);
       }
 
@@ -124,8 +117,9 @@ class CoursesProvider extends ChangeNotifier {
   Future<CourseModel?> fetchCourseDetails(int id) async {
     try {
       final res = await _api.get('${ApiConstants.courses}/$id');
-      if (res.statusCode == 200 && res.data != null && res.data is Map) {
-        return CourseModel.fromJson(Map<String, dynamic>.from(res.data as Map));
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        return CourseModel.fromJson(data);
       }
     } catch (_) {}
     return null;

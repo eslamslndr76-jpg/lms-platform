@@ -5,6 +5,7 @@ import { requireRole, ADMIN, EMPLOYEE } from '../middleware/rbac';
 import { invalidateNotificationCache, getNotificationSettings } from '../config/notification';
 import { broadcastAppUpdate } from '../services/externalNotificationService';
 import { getBookingExpiryHours, setBookingExpiryHours } from '../services/orderService';
+import { DEFAULT_SETTINGS } from '../db/schema';
 
 const router = Router();
 
@@ -12,7 +13,7 @@ router.get('/branding', async (_req: Request, res: Response) => {
   try {
     const result = await sql("SELECT value FROM system_settings WHERE key='branding'");
     if (result.rows.length > 0) return res.json(JSON.parse(result.rows[0].value as string));
-    res.json(null);
+    res.json(DEFAULT_SETTINGS.branding);
   } catch {
     res.status(500).json({ error: 'Failed to fetch branding' });
   }

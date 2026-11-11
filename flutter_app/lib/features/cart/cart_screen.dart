@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/cart/cart_provider.dart';
+import '../../core/utils/json_utils.dart';
 import '../../shared/widgets/app_network_image.dart';
 import '../orders/checkout_screen.dart';
 
@@ -58,12 +59,15 @@ class _CartScreenState extends State<CartScreen> {
     setState(() => _isCheckingOut = true);
     final courseIds = cart.items.map((i) => i.courseId).toList();
 
-    if (!mounted) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => CheckoutScreen(courseIds: courseIds),
       ),
     );
+    // The server removes the booked courses from the cart when the booking is
+    // created — re-read it instead of guessing locally.
+    await cart.fetchCart(silent: true);
+    if (!mounted) return;
     setState(() => _isCheckingOut = false);
   }
 
@@ -268,10 +272,10 @@ class _CartScreenState extends State<CartScreen> {
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (context, i) {
               final s = cart.suggestions[i];
-              final id = (s['id'] as num?)?.toInt() ?? 0;
-              final title = s['title_ar']?.toString() ?? '';
-              final image = s['image_url']?.toString() ?? '';
-              final price = (s['price'] as num?)?.toDouble() ?? 0;
+              final id = toInt(s['id']);
+              final title = toStr(s['title_ar']);
+              final image = toStr(s['image_url']);
+              final price = toDouble(s['price']);
               return SizedBox(
                 width: 168,
                 child: Card(

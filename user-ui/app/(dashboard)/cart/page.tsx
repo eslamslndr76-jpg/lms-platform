@@ -41,7 +41,7 @@ export default function CartPage() {
 
   const removeItem = async (itemId: number) => { try { await api(`/api/cart/${itemId}`, { method: 'DELETE' }); show('تم حذف الكورس من السلة'); fetchCart(); fetchSuggestions(); } catch { show('فشل الحذف', 'error'); } };
   const clearCart = async () => { try { await api('/api/cart', { method: 'DELETE' }); show('تم تفريغ السلة'); fetchCart(); fetchSuggestions(); } catch { show('فشل تفريغ السلة', 'error'); } };
-  const addToCart = async (courseId: number) => { try { await api('/api/cart', { method: 'POST', body: JSON.stringify({ course_id: courseId }) }); show('أضيف للسلة'); fetchCart(); fetchSuggestions(); } catch { show('فشل الإضافة', 'error'); } };
+  const addToCart = async (courseId: number) => { try { await api('/api/cart', { method: 'POST', body: JSON.stringify({ course_id: courseId }) }); show('أضيف للسلة'); fetchCart(); fetchSuggestions(); } catch (e) { show(e instanceof Error ? e.message : 'فشل الإضافة', 'error'); } };
 
   if (authLoading || loading) return <PageSkeleton />;
 

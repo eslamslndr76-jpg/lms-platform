@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
+import '../utils/json_utils.dart';
 
 /// Branding model matching the backend /api/settings/branding response.
 /// Same shape as the web BrandingProvider.
@@ -37,14 +38,14 @@ class BrandingData {
 
   factory BrandingData.fromJson(Map<String, dynamic> json) {
     return BrandingData(
-      systemName: json['systemName'] as String? ?? defaults.systemName,
-      sloganAr: json['sloganAr'] as String? ?? defaults.sloganAr,
-      sloganEn: json['sloganEn'] as String? ?? defaults.sloganEn,
-      messageFooter: json['messageFooter'] as String? ?? defaults.messageFooter,
-      primaryColor: _parseHex(json['primaryColor'] as String?) ?? defaults.primaryColor,
+      systemName: toStrOrNull(json['systemName']) ?? defaults.systemName,
+      sloganAr: toStrOrNull(json['sloganAr']) ?? defaults.sloganAr,
+      sloganEn: toStrOrNull(json['sloganEn']) ?? defaults.sloganEn,
+      messageFooter: toStrOrNull(json['messageFooter']) ?? defaults.messageFooter,
+      primaryColor: _parseHex(toStrOrNull(json['primaryColor'])) ?? defaults.primaryColor,
       secondaryColor:
-          _parseHex(json['secondaryColor'] as String?) ?? defaults.secondaryColor,
-      logoHeader: json['logoHeader'] as String? ?? '',
+          _parseHex(toStrOrNull(json['secondaryColor'])) ?? defaults.secondaryColor,
+      logoHeader: toStr(json['logoHeader']),
     );
   }
 
@@ -69,8 +70,9 @@ class BrandingProvider extends ChangeNotifier {
   Future<void> load() async {
     try {
       final res = await ApiClient().get(ApiConstants.branding);
-      if (res.statusCode == 200 && res.data != null) {
-        _branding = BrandingData.fromJson(res.data as Map<String, dynamic>);
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        _branding = BrandingData.fromJson(data);
       }
     } catch (_) {
       // Fallback to defaults silently

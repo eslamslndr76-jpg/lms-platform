@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { execute } from './turso-http';
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
 
 async function count(sql: string) {
   const r = await execute(sql);
@@ -134,9 +135,12 @@ export async function seed() {
   const brandCount = await count("SELECT COUNT(*) as count FROM system_settings WHERE key='branding'");
   if (brandCount === 0) {
     const v = JSON.stringify({
-      systemName: 'نظام إدارة التعلم', logoHeader: '', logoFooter: '', favicon: '',
+      systemName: 'وحدة التدريب و التطوير',
+      logoHeader: DEFAULT_LOGO_DATA_URL, logoFooter: DEFAULT_LOGO_DATA_URL, favicon: '',
       primaryColor: '#2563eb', secondaryColor: '#7c3aed',
-      sloganAr: 'نحو تعليم أفضل', sloganEn: 'Towards Better Learning', messageFooter: '',
+      sloganAr: 'نحو تعليم أفضل', sloganEn: 'Towards Better Learning',
+      messageFooter:
+        'هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
     });
     await execSQL(`INSERT INTO system_settings (key,value) VALUES ('branding','${v.replace(/'/g, "''")}')`);
   }

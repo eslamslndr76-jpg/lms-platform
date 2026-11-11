@@ -5,6 +5,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_constants.dart';
 import '../models/instructor_model.dart';
+import '../utils/json_utils.dart';
 
 /// مزود منطقة المحاضر (المرحلة 12).
 /// نقاط النهاية: /api/instructor/groups, /api/instructor/groups/:id/evaluation{,/draft,/submit},
@@ -40,6 +41,12 @@ class InstructorProvider extends ChangeNotifier {
   bool get proposalsLoading => _proposalsLoading;
   String? get proposalsError => _proposalsError;
 
+  /// Reads the backend's Arabic error message without assuming its JSON type.
+  String _errorMessage(dynamic data, String fallback) {
+    final map = toJsonMap(data);
+    return toStrOrNull(map?['error']) ?? fallback;
+  }
+
   // ── Groups ────────────────────────────────────────────────────────────────
   Future<void> fetchGroups({bool silent = false}) async {
     if (!silent) {
@@ -50,10 +57,7 @@ class InstructorProvider extends ChangeNotifier {
     try {
       final res = await _api.get(ApiConstants.instructorGroups);
       if (res.statusCode == 200 && res.data is List) {
-        _groups = (res.data as List)
-            .whereType<Map<String, dynamic>>()
-            .map(InstructorGroup.fromJson)
-            .toList();
+        _groups = toJsonList(res.data).map(InstructorGroup.fromJson).toList();
         _groupsError = null;
       } else {
         _groupsError = 'فشل تحميل المجموعات';
@@ -78,17 +82,15 @@ class InstructorProvider extends ChangeNotifier {
       final res = await _api.get(
         ApiConstants.instructorGroupEvaluation.replaceAll(':id', groupId.toString()),
       );
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        _evaluation = InstructorEvaluation.fromJson(res.data as Map<String, dynamic>);
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        _evaluation = InstructorEvaluation.fromJson(data);
         _evalError = null;
         return _evaluation;
       }
       _evalError = 'فشل تحميل نموذج التقييم';
     } on DioException catch (e) {
-      final data = e.response?.data;
-      _evalError = (data is Map && data['error'] != null)
-          ? data['error'].toString()
-          : 'تعذر الاتصال بالخادم';
+      _evalError = _errorMessage(e.response?.data, 'تعذر الاتصال بالخادم');
     } catch (e) {
       _evalError = 'تعذر الاتصال بالخادم';
     } finally {
@@ -110,7 +112,7 @@ class InstructorProvider extends ChangeNotifier {
         return true;
       }
       if (res.data is Map) {
-        _evalError = (res.data as Map)['error']?.toString() ?? 'فشل حفظ المسودة';
+        _evalError = _errorMessage(res.data, 'فشل حفظ المسودة');
       }
     } catch (e) {
       _evalError = 'تعذر حفظ المسودة';
@@ -130,7 +132,7 @@ class InstructorProvider extends ChangeNotifier {
         return true;
       }
       if (res.data is Map) {
-        _evalError = (res.data as Map)['error']?.toString() ?? 'فشل الإرسال';
+        _evalError = _errorMessage(res.data, 'فشل الإرسال');
       }
     } catch (e) {
       _evalError = 'تعذر الإرسال';
@@ -189,8 +191,9 @@ class InstructorProvider extends ChangeNotifier {
         },
       );
       if (res.statusCode == 200 || res.statusCode == 201) {
-        if (res.data is Map<String, dynamic>) {
-          final p = InstructorProposal.fromJson(res.data as Map<String, dynamic>);
+        final created = toJsonMap(res.data);
+        if (created != null) {
+          final p = InstructorProposal.fromJson(created);
           _proposals.insert(0, p);
           notifyListeners();
           return p;
@@ -199,7 +202,7 @@ class InstructorProvider extends ChangeNotifier {
         return _proposals.firstOrNull;
       }
       if (res.data is Map) {
-        _proposalsError = (res.data as Map)['error']?.toString() ?? 'فشل إنشاء المقترح';
+        _proposalsError = _errorMessage(res.data, 'فشل إنشاء المقترح');
       }
     } catch (e) {
       _proposalsError = 'تعذر إنشاء المقترح';
@@ -213,8 +216,9 @@ class InstructorProvider extends ChangeNotifier {
       final res = await _api.get(
         ApiConstants.instructorProposalDetail.replaceAll(':id', proposalId.toString()),
       );
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        return InstructorProposal.fromJson(res.data as Map<String, dynamic>);
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        return InstructorProposal.fromJson(data);
       }
     } catch (_) {}
     return null;
@@ -244,15 +248,16 @@ class InstructorProvider extends ChangeNotifier {
         },
       );
       if (res.statusCode == 200 || res.statusCode == 201) {
-        if (res.data is Map<String, dynamic>) {
-          final p = InstructorProposal.fromJson(res.data as Map<String, dynamic>);
+        final updated = toJsonMap(res.data);
+        if (updated != null) {
+          final p = InstructorProposal.fromJson(updated);
           _proposals = _proposals.map((pr) => pr.id == proposalId ? p : pr).toList();
           notifyListeners();
         }
         return true;
       }
       if (res.data is Map) {
-        _proposalsError = (res.data as Map)['error']?.toString() ?? 'فشل التعديل';
+        _proposalsError = _errorMessage(res.data, 'فشل التعديل');
       }
     } catch (e) {
       _proposalsError = 'تعذر التعديل';
@@ -271,7 +276,7 @@ class InstructorProvider extends ChangeNotifier {
         return true;
       }
       if (res.data is Map) {
-        _proposalsError = (res.data as Map)['error']?.toString() ?? 'فشل التقديم';
+        _proposalsError = _errorMessage(res.data, 'فشل التقديم');
       }
     } catch (e) {
       _proposalsError = 'تعذر التقديم';

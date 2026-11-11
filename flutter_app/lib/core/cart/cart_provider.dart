@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
 import '../models/cart_item_model.dart';
+import '../utils/json_utils.dart';
 
 class CartProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -11,6 +13,8 @@ class CartProvider extends ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   List<Map<String, dynamic>> _suggestions = [];
+  String? _actionError;
+  int? _actionErrorCode;
 
   List<CartItemModel> get items => _items;
   double get total => _total;
@@ -18,6 +22,15 @@ class CartProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   List<Map<String, dynamic>> get suggestions => _suggestions;
+
+  /// Arabic message of the last add-to-cart failure (e.g. the 409 server text).
+  String? get actionError => _actionError;
+
+  /// HTTP status of the last add-to-cart failure (409 = paid / open booking).
+  int? get actionErrorCode => _actionErrorCode;
+
+  static String? _serverMessage(dynamic data) =>
+      toStrOrNull(toJsonMap(data)?['error']);
 
   bool isInCart(int courseId) {
     return _items.any((item) => item.courseId == courseId);
@@ -33,15 +46,12 @@ class CartProvider extends ChangeNotifier {
 
     try {
       final res = await _api.get(ApiConstants.cart);
-      if (res.statusCode == 200 && res.data != null && res.data is Map) {
-        final data = Map<String, dynamic>.from(res.data as Map);
-        final rawList = data['items'] as List? ?? [];
-        _items = rawList
-            .whereType<Map>()
-            .map((i) => CartItemModel.fromJson(Map<String, dynamic>.from(i)))
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        _items = toJsonList(data['items'])
+            .map(CartItemModel.fromJson)
             .toList();
-        final rawTotal = data['total'];
-        _total = rawTotal is num ? rawTotal.toDouble() : double.tryParse(rawTotal?.toString() ?? '') ?? 0.0;
+        _total = toDouble(data['total']);
         _error = null;
       }
     } catch (_) {
@@ -53,7 +63,11 @@ class CartProvider extends ChangeNotifier {
   }
 
   // ── Add Item to Cart ──────────────────────────────────────────────────────
+  /// Returns false with [actionError] set when the server rejects the course
+  /// (409: already paid or inside an open booking).
   Future<bool> addToCart(int courseId) async {
+    _actionError = null;
+    _actionErrorCode = null;
     try {
       final res = await _api.post(
         ApiConstants.cart,
@@ -63,7 +77,16 @@ class CartProvider extends ChangeNotifier {
         await fetchCart(silent: true);
         return true;
       }
-    } catch (_) {}
+      _actionError = _serverMessage(res.data) ?? 'فشل إضافة الكورس إلى السلة';
+      _actionErrorCode = res.statusCode;
+    } on DioException catch (e) {
+      _actionErrorCode = e.response?.statusCode;
+      _actionError = _serverMessage(e.response?.data) ??
+          'تعذر إضافة الكورس إلى السلة، تحقق من اتصالك';
+    } catch (_) {
+      _actionError = 'فشل إضافة الكورس إلى السلة';
+    }
+    notifyListeners();
     return false;
   }
 
@@ -100,11 +123,8 @@ class CartProvider extends ChangeNotifier {
   Future<void> fetchSuggestions() async {
     try {
       final res = await _api.get('${ApiConstants.cart}/suggestions');
-      if (res.statusCode == 200 && res.data is List) {
-        _suggestions = (res.data as List)
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e))
-            .toList();
+      if (res.statusCode == 200) {
+        _suggestions = toJsonList(res.data);
         notifyListeners();
       }
     } catch (_) {

@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 
 import 'core/services/local_notification_service.dart';
 import 'core/services/app_update_service.dart';
+import 'core/utils/json_utils.dart';
 
 /// Top-level callback required by Workmanager (must be a top-level function).
 @pragma('vm:entry-point')
@@ -46,30 +47,30 @@ Future<void> _checkAndNotify() async {
 
     if (res.statusCode != 200) return;
 
-    final List<dynamic> list = jsonDecode(res.body) as List<dynamic>;
+    final decoded = jsonDecode(res.body);
+    final list = decoded is List ? decoded : const [];
     if (list.isEmpty) return;
 
     await LocalNotificationService.init();
 
     final newOnes = list
-        .whereType<Map<String, dynamic>>()
-        .where((n) => (n['id'] as int? ?? 0) > lastSeenId)
+        .whereType<Map>()
+        .map((n) => n.cast<String, dynamic>())
+        .where((n) => toInt(n['id']) > lastSeenId)
         .toList();
     if (newOnes.isEmpty) return;
 
     for (final n in newOnes.take(3)) {
       await LocalNotificationService.show(
-        id: n['id'] as int,
-        title: n['title'] as String? ?? 'إشعار جديد',
-        body: n['message'] as String? ?? '',
-        payload: n['link'] as String?,
-        type: n['type'] as String?,
+        id: toInt(n['id']),
+        title: toStrOrNull(n['title']) ?? 'إشعار جديد',
+        body: toStr(n['message']),
+        payload: toStrOrNull(n['link']),
+        type: toStrOrNull(n['type']),
       );
     }
 
-    final maxId = newOnes
-        .map((n) => n['id'] as int? ?? 0)
-        .reduce((a, b) => a > b ? a : b);
+    final maxId = newOnes.map((n) => toInt(n['id'])).reduce((a, b) => a > b ? a : b);
     await prefs.setInt('last_notif_id', maxId);
   } catch (_) {
     // Silent failure — background task
@@ -103,12 +104,12 @@ Future<void> _checkAndNotifyUpdate() async {
         .timeout(const Duration(seconds: 10));
     if (res.statusCode != 200) return;
 
-    final data = jsonDecode(res.body) as Map<String, dynamic>;
-    final latestBuild = (data['buildNumber'] as num?)?.toInt() ?? 0;
+    final data = toJsonMap(jsonDecode(res.body));
+    final latestBuild = data == null ? 0 : toInt(data['buildNumber']);
 
     if (latestBuild > buildNumber) {
       // Avoid spamming for the same version
-      final latestVersion = (data['latestVersion'] as String? ?? '');
+      final latestVersion = data == null ? '' : toStr(data['latestVersion']);
       if (latestVersion == storedVersion) return;
 
       await LocalNotificationService.init();

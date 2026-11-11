@@ -32,13 +32,9 @@ export default function AdminLoginPage() {
     <div className="min-h-screen flex items-center justify-center p-4" style={{ backgroundColor: 'var(--bg)' }}>
       <div className="rounded-3xl shadow-xl p-8 w-full max-w-sm animate-scale-in" style={{ backgroundColor: 'var(--card)' }}>
         <div className="flex justify-between items-center mb-6">
-          {logoHeader ? (
-            <div className="rounded-xl p-0.5 shadow-sm border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-              <img src={logoHeader} alt={systemName} className="h-12" />
-            </div>
-          ) : (
-            <h1 className="text-2xl font-bold" style={{ color: 'var(--primary)' }}>{systemName}</h1>
-          )}
+          <div className="rounded-xl p-0.5 shadow-sm border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+            <img src={logoHeader || '/branding/logo.png'} alt={systemName} className="h-12" />
+          </div>
           <button onClick={toggleDark} className="p-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
             {dark ? '☀️' : '🌙'}
           </button>

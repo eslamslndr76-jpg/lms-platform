@@ -6,6 +6,7 @@ import '../../core/api/api_constants.dart';
 import '../../core/services/app_update_service.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/security/app_lock_service.dart';
+import '../../core/utils/json_utils.dart';
 
 /// App settings screen. Items are added across phases:
 /// - Update check (phase 8)
@@ -129,16 +130,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final res = await _api.get(ApiConstants.telegramStatus);
       if (!mounted) return;
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        final data = res.data as Map<String, dynamic>;
-        final email = (data['email'] as Map?)?.cast<String, dynamic>() ?? {};
-        final telegram = (data['telegram'] as Map?)?.cast<String, dynamic>() ?? {};
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        final email = toJsonMap(data['email']) ?? const {};
+        final telegram = toJsonMap(data['telegram']) ?? const {};
         setState(() {
-          _emailNotifications = email['notifications'] as bool? ?? true;
-          _telegramNotifications = telegram['notifications'] as bool? ?? true;
-          _telegramEnabled = telegram['enabled'] as bool? ?? false;
-          _telegramConnected = telegram['connected'] as bool? ?? false;
-          _telegramBot = telegram['botUsername'] as String?;
+          _emailNotifications = toBool(email['notifications'], fallback: true);
+          _telegramNotifications = toBool(telegram['notifications'], fallback: true);
+          _telegramEnabled = toBool(telegram['enabled']);
+          _telegramConnected = toBool(telegram['connected']);
+          _telegramBot = toStrOrNull(telegram['botUsername']);
           _prefsLoading = false;
         });
       } else {
@@ -180,8 +181,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final res = await _api.get(ApiConstants.telegramLink);
       if (!mounted) return;
-      if (res.statusCode == 200 && res.data is Map<String, dynamic>) {
-        final link = (res.data as Map<String, dynamic>)['link'] as String?;
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        final link = toStrOrNull(data['link']);
         if (link != null) {
           final uri = Uri.parse(link);
           if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {

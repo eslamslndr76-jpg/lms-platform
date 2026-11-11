@@ -16,7 +16,7 @@ interface Branding {
 }
 
 const defaultBranding: Branding = {
-  systemName: 'نظام إدارة التعلم - وحدة التدريب و التطوير',
+  systemName: 'وحدة التدريب و التطوير',
   logoHeader: '',
   logoFooter: '',
   favicon: '',

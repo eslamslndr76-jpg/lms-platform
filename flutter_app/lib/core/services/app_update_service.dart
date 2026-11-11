@@ -7,6 +7,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../api/api_client.dart';
+import '../utils/json_utils.dart';
 
 class AppUpdateInfo {
   final String latestVersion;
@@ -29,14 +30,14 @@ class AppUpdateInfo {
 
   factory AppUpdateInfo.fromJson(Map<String, dynamic> json) {
     return AppUpdateInfo(
-      latestVersion: json['latestVersion'] as String? ?? '1.0.1',
-      buildNumber: (json['buildNumber'] as num?)?.toInt() ?? 2,
-      forceUpdate: json['forceUpdate'] as bool? ?? false,
-      title: json['title'] as String? ?? 'تحديث جديد متوفر 🚀',
-      message: json['message'] as String? ??
+      latestVersion: toStrOrNull(json['latestVersion']) ?? '1.0.1',
+      buildNumber: toInt(json['buildNumber'], 2),
+      forceUpdate: toBool(json['forceUpdate']),
+      title: toStrOrNull(json['title']) ?? 'تحديث جديد متوفر 🚀',
+      message: toStrOrNull(json['message']) ??
           'يتوفر إصدار جديد من تطبيق وحدة التدريب. اضغط للتثبيت الآن.',
-      downloadUrl: json['downloadUrl'] as String? ?? AppUpdateService.officialDownloadPage,
-      apkDirectUrl: json['apkDirectUrl'] as String? ?? AppUpdateService.officialApkUrl,
+      downloadUrl: toStrOrNull(json['downloadUrl']) ?? AppUpdateService.officialDownloadPage,
+      apkDirectUrl: toStrOrNull(json['apkDirectUrl']) ?? AppUpdateService.officialApkUrl,
     );
   }
 }
@@ -77,8 +78,9 @@ class AppUpdateService {
     if (_checked && !force) return _cachedUpdate;
     try {
       final res = await ApiClient().get('/api/settings/app-version');
-      if (res.statusCode == 200 && res.data != null) {
-        final info = AppUpdateInfo.fromJson(res.data as Map<String, dynamic>);
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        final info = AppUpdateInfo.fromJson(data);
         final currentBuild = await currentBuildNumber;
         if (info.buildNumber > currentBuild) {
           _cachedUpdate = info;
@@ -97,8 +99,9 @@ class AppUpdateService {
   /// Throws if the check fails, so callers can surface a retry UI.
   static Future<AppUpdateInfo?> checkNow() async {
     final res = await ApiClient().get('/api/settings/app-version');
-    if (res.statusCode == 200 && res.data != null) {
-      final info = AppUpdateInfo.fromJson(res.data as Map<String, dynamic>);
+    final data = toJsonMap(res.data);
+    if (res.statusCode == 200 && data != null) {
+      final info = AppUpdateInfo.fromJson(data);
       final currentBuild = await currentBuildNumber;
       _cachedUpdate = info.buildNumber > currentBuild ? info : null;
       _checked = true;
@@ -136,7 +139,7 @@ class AppUpdateService {
           showProgress: true,
           maxProgress: 100,
           progress: percent,
-          icon: '@mipmap/launcher_icon',
+          icon: 'ic_notification',
         ),
       ),
     );
@@ -359,7 +362,7 @@ class _DownloadProgressDialogState extends State<_DownloadProgressDialog> {
             'تحديثات التطبيق',
             importance: Importance.high,
             priority: Priority.high,
-            icon: '@mipmap/launcher_icon',
+            icon: 'ic_notification',
             autoCancel: true,
           ),
         ),

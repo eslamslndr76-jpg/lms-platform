@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/api/api_client.dart';
 import '../../core/services/calendar_service.dart';
 import '../attendance/qr_scanner_screen.dart';
+import '../../core/utils/json_utils.dart';
 
 class GroupDetailsScreen extends StatefulWidget {
   final int groupId;
@@ -26,21 +27,6 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
   Map<String, dynamic>? _group;
   List<Map<String, dynamic>> _lectures = [];
 
-  static bool _parseBool(dynamic val) {
-    if (val == null) return false;
-    if (val is bool) return val;
-    if (val is num) return val.toInt() == 1;
-    if (val is String) return val == '1' || val.toLowerCase() == 'true';
-    return false;
-  }
-
-  static int? _parseInt(dynamic val) {
-    if (val == null) return null;
-    if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val);
-    return null;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -60,7 +46,7 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
         for (final item in list) {
           if (item is Map) {
             final map = Map<String, dynamic>.from(item);
-            if ((map['id'] as num?)?.toInt() == widget.groupId) {
+            if (toInt(map['id']) == widget.groupId) {
               _group = map;
               break;
             }
@@ -121,23 +107,23 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
       );
     }
 
-    final groupName = _group?['name'] as String? ?? 'المجموعة التدريبية';
-    final courseTitle = _group?['title_ar'] as String? ??
-        _group?['course_name'] as String? ??
+    final groupName = toStrOrNull(_group?['name']) ?? 'المجموعة التدريبية';
+    final courseTitle = toStrOrNull(_group?['title_ar']) ??
+        toStrOrNull(_group?['course_name']) ??
         'تفاصيل الدورة';
-    final schedule = _group?['schedule_display'] as String? ??
-        _group?['schedule'] as String? ??
+    final schedule = toStrOrNull(_group?['schedule_display']) ??
+        toStrOrNull(_group?['schedule']) ??
         '';
-    final instructor = _group?['instructor_name'] as String? ??
-        _group?['instructor'] as String?;
-    final location = _group?['location'] as String? ?? _group?['place_name'] as String?;
+    final instructor = toStrOrNull(_group?['instructor_name']) ??
+        toStrOrNull(_group?['instructor']);
+    final location =
+        toStrOrNull(_group?['location']) ?? toStrOrNull(_group?['place_name']);
 
-    final progress = _group?['lecture_progress'] is Map
-        ? Map<String, dynamic>.from(_group!['lecture_progress'] as Map)
-        : null;
-    final totalLec = _parseInt(progress?['total']) ?? _lectures.length;
-    final doneLec = _parseInt(progress?['done']) ??
-        _lectures.where((l) => _parseBool(l['is_completed'])).length;
+    final progress = toJsonMap(_group?['lecture_progress']);
+    final totalLec = (progress == null ? null : toIntOrNull(progress['total'])) ??
+        _lectures.length;
+    final doneLec = (progress == null ? null : toIntOrNull(progress['done'])) ??
+        _lectures.where((l) => toBool(l['is_completed'])).length;
 
     return Scaffold(
       appBar: AppBar(
@@ -289,18 +275,19 @@ class _GroupDetailsScreenState extends State<GroupDetailsScreen> {
               ..._lectures.asMap().entries.map((entry) {
                 final idx = entry.key + 1;
                 final lec = entry.value;
-                final lecId = _parseInt(lec['id']) ?? 0;
-                final topic = lec['topic']?.toString() ?? 'محاضرة $idx';
-                final date = lec['date']?.toString() ?? '';
-                final dayName = lec['day_of_week_name']?.toString() ?? '';
-                final timeFrom = lec['time_from']?.toString() ?? '';
-                final timeTo = lec['time_to']?.toString() ?? '';
-                final lecLoc = lec['location']?.toString() ?? '';
-                final zoomLink = lec['zoom_link']?.toString();
-                final isAttActive = _parseBool(lec['attendance_active']);
-                final isCompleted = _parseBool(lec['is_completed']);
-                final attendedBool = _parseBool(lec['attended']);
-                final myAtt = lec['my_attendance']?.toString() ?? (attendedBool ? 'attended' : null);
+                final lecId = toInt(lec['id']);
+                final topic = toStrOrNull(lec['topic']) ?? 'محاضرة $idx';
+                final date = toStr(lec['date']);
+                final dayName = toStr(lec['day_of_week_name']);
+                final timeFrom = toStr(lec['time_from']);
+                final timeTo = toStr(lec['time_to']);
+                final lecLoc = toStr(lec['location']);
+                final zoomLink = toStrOrNull(lec['zoom_link']);
+                final isAttActive = toBool(lec['attendance_active']);
+                final isCompleted = toBool(lec['is_completed']);
+                final attendedBool = toBool(lec['attended']);
+                final myAtt = toStrOrNull(lec['my_attendance']) ??
+                    (attendedBool ? 'attended' : null);
 
                 final isHighlighted = widget.highlightLectureId == lecId;
                 final lectureStart = CalendarService.parseLectureStart(date, timeFrom);

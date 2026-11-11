@@ -1,6 +1,8 @@
 // Models for the post-course survey (`/api/surveys/my/:groupId`).
 // Item lists and scale come from the backend — never hard-coded here.
 
+import '../utils/json_utils.dart';
+
 class SurveyScaleOption {
   final int value;
   final String label;
@@ -8,8 +10,8 @@ class SurveyScaleOption {
 
   factory SurveyScaleOption.fromJson(Map<String, dynamic> json) =>
       SurveyScaleOption(
-        value: (json['value'] as num?)?.toInt() ?? 0,
-        label: json['label'] as String? ?? '',
+        value: toInt(json['value']),
+        label: toStr(json['label']),
       );
 }
 
@@ -19,8 +21,8 @@ class SurveyItem {
   const SurveyItem({required this.key, required this.label});
 
   factory SurveyItem.fromJson(Map<String, dynamic> json) => SurveyItem(
-        key: json['key'] as String? ?? '',
-        label: json['label'] as String? ?? '',
+        key: toStr(json['key']),
+        label: toStr(json['label']),
       );
 }
 
@@ -35,12 +37,9 @@ class SurveySection {
   });
 
   factory SurveySection.fromJson(Map<String, dynamic> json) => SurveySection(
-        key: json['key'] as String? ?? '',
-        title: json['title'] as String? ?? '',
-        items: ((json['items'] as List?) ?? [])
-            .whereType<Map<String, dynamic>>()
-            .map(SurveyItem.fromJson)
-            .toList(),
+        key: toStr(json['key']),
+        title: toStr(json['title']),
+        items: toJsonList(json['items']).map(SurveyItem.fromJson).toList(),
       );
 }
 
@@ -61,12 +60,12 @@ class SurveyResponse {
   });
 
   factory SurveyResponse.fromJson(Map<String, dynamic> json) => SurveyResponse(
-        status: json['status'] as String? ?? 'draft',
-        isAnonymous: json['is_anonymous'] as bool? ?? false,
-        answers: (json['answers'] as Map?)?.cast<String, dynamic>() ?? {},
-        currentStep: (json['current_step'] as num?)?.toInt() ?? 0,
-        updatedAt: json['updated_at'] as String?,
-        submittedAt: json['submitted_at'] as String?,
+        status: toStrOrNull(json['status']) ?? 'draft',
+        isAnonymous: toBool(json['is_anonymous']),
+        answers: toJsonMap(json['answers']) ?? const {},
+        currentStep: toInt(json['current_step']),
+        updatedAt: toStrOrNull(json['updated_at']),
+        submittedAt: toStrOrNull(json['submitted_at']),
       );
 }
 
@@ -91,14 +90,14 @@ class SurveyGroupInfo {
   });
 
   factory SurveyGroupInfo.fromJson(Map<String, dynamic> json) => SurveyGroupInfo(
-        id: (json['id'] as num?)?.toInt() ?? 0,
-        name: json['name'] as String? ?? '',
-        courseTitle: json['course_title'] as String? ?? '',
-        courseMode: json['course_mode'] as String? ?? 'online',
-        instructorName: json['instructor_name'] as String?,
-        placeName: json['place_name'] as String?,
-        startDate: json['start_date'] as String?,
-        endDate: json['end_date'] as String?,
+        id: toInt(json['id']),
+        name: toStr(json['name']),
+        courseTitle: toStr(json['course_title']),
+        courseMode: toStrOrNull(json['course_mode']) ?? 'online',
+        instructorName: toStrOrNull(json['instructor_name']),
+        placeName: toStrOrNull(json['place_name']),
+        startDate: toStrOrNull(json['start_date']),
+        endDate: toStrOrNull(json['end_date']),
       );
 }
 
@@ -134,32 +133,26 @@ class Survey {
   });
 
   factory Survey.fromJson(Map<String, dynamic> json) {
-    final group = (json['group'] as Map?)?.cast<String, dynamic>() ?? {};
-    final student = (json['student'] as Map?)?.cast<String, dynamic>() ?? {};
+    final group = toJsonMap(json['group']) ?? const {};
+    final student = toJsonMap(json['student']) ?? const {};
+    final response = toJsonMap(json['response']);
     return Survey(
-      available: json['available'] as bool? ?? false,
-      status: json['status'] as String? ?? 'pending',
-      canEdit: json['can_edit'] as bool? ?? false,
-      isClosed: json['is_closed'] as bool? ?? false,
-      closesAt: json['closes_at'] as String?,
-      daysLeft: (json['days_left'] as num?)?.toInt() ?? 0,
+      available: toBool(json['available']),
+      status: toStrOrNull(json['status']) ?? 'pending',
+      canEdit: toBool(json['can_edit']),
+      isClosed: toBool(json['is_closed']),
+      closesAt: toStrOrNull(json['closes_at']),
+      daysLeft: toInt(json['days_left']),
       group: SurveyGroupInfo.fromJson(group),
-      studentName: student['name'] as String? ?? '',
-      sections: ((json['sections'] as List?) ?? [])
-          .whereType<Map<String, dynamic>>()
-          .map(SurveySection.fromJson)
-          .toList(),
+      studentName: toStr(student['name']),
+      sections:
+          toJsonList(json['sections']).map(SurveySection.fromJson).toList(),
       helped: SurveyItem.fromJson(
-          (json['helped'] as Map?)?.cast<String, dynamic>() ?? {'key': 'helped_develop'}),
-      notesLabel: json['notes_label'] as String? ?? 'الاقتراحات والملاحظات',
-      scale: ((json['scale'] as List?) ?? [])
-          .whereType<Map<String, dynamic>>()
-          .map(SurveyScaleOption.fromJson)
-          .toList(),
-      response: json['response'] == null
-          ? null
-          : SurveyResponse.fromJson(
-              (json['response'] as Map).cast<String, dynamic>()),
+          toJsonMap(json['helped']) ?? const {'key': 'helped_develop'}),
+      notesLabel: toStrOrNull(json['notes_label']) ?? 'الاقتراحات والملاحظات',
+      scale:
+          toJsonList(json['scale']).map(SurveyScaleOption.fromJson).toList(),
+      response: response == null ? null : SurveyResponse.fromJson(response),
     );
   }
 
@@ -193,15 +186,15 @@ class SurveySummary {
   });
 
   factory SurveySummary.fromJson(Map<String, dynamic> json) => SurveySummary(
-        groupId: (json['group_id'] as num?)?.toInt() ?? 0,
-        groupName: json['group_name'] as String? ?? '',
-        courseTitle: json['course_title'] as String? ?? '',
-        courseMode: json['course_mode'] as String? ?? 'online',
-        completedAt: json['completed_at'] as String?,
-        closesAt: json['closes_at'] as String?,
-        daysLeft: (json['days_left'] as num?)?.toInt() ?? 0,
-        status: json['status'] as String? ?? 'pending',
-        answeredAt: json['answered_at'] as String?,
+        groupId: toInt(json['group_id']),
+        groupName: toStr(json['group_name']),
+        courseTitle: toStr(json['course_title']),
+        courseMode: toStrOrNull(json['course_mode']) ?? 'online',
+        completedAt: toStrOrNull(json['completed_at']),
+        closesAt: toStrOrNull(json['closes_at']),
+        daysLeft: toInt(json['days_left']),
+        status: toStrOrNull(json['status']) ?? 'pending',
+        answeredAt: toStrOrNull(json['answered_at']),
       );
 
   bool get canAnswer => status == 'pending' || status == 'draft';

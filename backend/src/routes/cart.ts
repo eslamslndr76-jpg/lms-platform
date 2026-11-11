@@ -2,11 +2,29 @@ import { Router, Request, Response } from 'express';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
 import { requireRole, STUDENT } from '../middleware/rbac';
+import { OPEN_ORDER_STATUSES, findBlockingOrder } from '../services/orderService';
 
 const router = Router();
 
+const OPEN_STATUS_PLACEHOLDERS = OPEN_ORDER_STATUSES.map(() => '?').join(',');
+
 router.get('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
+    const userId = req.user!.userId;
+
+    // A paid or currently-booked course never stays in the cart (stale carts).
+    await sql(
+      `DELETE FROM cart_items
+       WHERE user_id = ?
+         AND course_id IN (
+           SELECT oi.course_id
+           FROM order_items oi
+           JOIN orders o ON oi.order_id = o.id
+           WHERE o.user_id = ? AND o.status IN (${OPEN_STATUS_PLACEHOLDERS})
+         )`,
+      userId, userId, ...OPEN_ORDER_STATUSES,
+    );
+
     const result = await sql(
       `SELECT ci.id, ci.course_id, ci.created_at,
               c.title_ar, c.title_en, c.price, c.image_url, c.instructor,
@@ -16,7 +34,7 @@ router.get('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: 
        LEFT JOIN categories cat ON c.category_id = cat.id
        WHERE ci.user_id = ?
        ORDER BY ci.created_at DESC`,
-      req.user!.userId,
+      userId,
     );
     const items = result.rows.map((r: any) => r);
     const total = items.reduce((sum: number, i: any) => sum + Number(i.price), 0);
@@ -28,12 +46,30 @@ router.get('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: 
 
 router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res: Response) => {
   try {
-    const { course_id } = req.body;
-    if (!course_id) return res.status(400).json({ error: 'course_id required' });
+    const courseId = Number(req.body?.course_id);
+    if (!Number.isInteger(courseId) || courseId <= 0) {
+      return res.status(400).json({ error: 'course_id required' });
+    }
+
+    const courseRow = await sql('SELECT id, title_ar FROM courses WHERE id=?', courseId);
+    if (courseRow.rows.length === 0) return res.status(404).json({ error: 'الكورس غير موجود' });
+    const courseTitle = String((courseRow.rows[0] as any).title_ar || courseId);
+
+    // Same guard as POST /api/orders: a paid course or one inside an open
+    // booking cannot enter the cart (cancelled/expired bookings are allowed).
+    const blocking = await findBlockingOrder(req.user!.userId, [courseId]);
+    if (blocking) {
+      const reason = blocking.status === 'paid' ? 'مدفوع بالفعل' : 'داخل طلب مفتوح';
+      return res.status(409).json({
+        error: `الكورس "${courseTitle}" ${reason} ولا يمكن إضافته للسلة.`,
+        course_id: blocking.course_id,
+        status: blocking.status,
+      });
+    }
 
     const existing = await sql(
       'SELECT id FROM cart_items WHERE user_id=? AND course_id=?',
-      req.user!.userId, course_id,
+      req.user!.userId, courseId,
     );
     if (existing.rows.length > 0) {
       return res.status(400).json({ error: 'هذا الكورس موجود بالفعل في السلة' });
@@ -41,7 +77,7 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
 
     const result = await sql(
       'INSERT INTO cart_items (user_id, course_id) VALUES (?,?)',
-      req.user!.userId, course_id,
+      req.user!.userId, courseId,
     );
     res.status(201).json({ id: Number(result.lastInsertRowid), message: 'Added to cart' });
   } catch {

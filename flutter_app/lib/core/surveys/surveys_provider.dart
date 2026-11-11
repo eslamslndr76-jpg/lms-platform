@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
 import '../models/survey_model.dart';
+import '../utils/json_utils.dart';
 
 /// Handles the post-course survey: list of completed groups, one survey
 /// definition + saved draft, auto-saving drafts and final submission.
@@ -26,10 +27,7 @@ class SurveysProvider extends ChangeNotifier {
     try {
       final res = await _api.get(ApiConstants.mySurveys);
       if (res.statusCode == 200 && res.data is List) {
-        _surveys = (res.data as List)
-            .whereType<Map<String, dynamic>>()
-            .map(SurveySummary.fromJson)
-            .toList();
+        _surveys = toJsonList(res.data).map(SurveySummary.fromJson).toList();
         _error = null;
       } else if (!silent) {
         _error = 'تعذر تحميل الاستبيانات (${res.statusCode})';
@@ -48,10 +46,11 @@ class SurveysProvider extends ChangeNotifier {
   /// Full survey definition + saved draft for one group.
   Future<Survey> fetchSurvey(int groupId) async {
     final res = await _api.get('${ApiConstants.mySurveys}/$groupId');
-    if (res.statusCode != 200 || res.data is! Map<String, dynamic>) {
+    final data = toJsonMap(res.data);
+    if (res.statusCode != 200 || data == null) {
       throw _apiError(res, 'تعذر تحميل الاستبيان');
     }
-    return Survey.fromJson(res.data as Map<String, dynamic>);
+    return Survey.fromJson(data);
   }
 
   /// Auto-save (never overwrites a submitted response).

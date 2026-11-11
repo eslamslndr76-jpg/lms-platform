@@ -62,22 +62,20 @@ export default function DashboardSidebar() {
       >
         {/* Branding */}
         <div className="px-5 pt-5 pb-3 shrink-0 flex items-center gap-3">
-          {logoHeader && !collapsed ? (
-            <Link href="/dashboard" className="rounded-md3-sm overflow-hidden transition-transform duration-200 hover:scale-105 shrink-0" onClick={() => setMobileOpen(false)}>
-              <img src={logoHeader} alt={systemName} className="h-11" />
-            </Link>
-          ) : (
-            <Link href="/dashboard" className="flex items-center justify-center w-11 h-11 rounded-md3-sm shrink-0" onClick={() => setMobileOpen(false)}>
-              {logoHeader ? (
-                <img src={logoHeader} alt={systemName} className="h-11" />
-              ) : (
-                <span className="text-lg font-bold" style={{ color: 'var(--md-sys-color-primary)' }}>
-                  {collapsed ? systemName?.charAt(0) : systemName}
-                </span>
-              )}
-            </Link>
-          )}
-          {!collapsed && logoHeader && (
+          <Link
+            href="/dashboard"
+            className={`overflow-hidden shrink-0 transition-transform duration-200 hover:scale-105 rounded-md3-sm ${
+              collapsed ? 'flex items-center justify-center w-11 h-11' : ''
+            }`}
+            onClick={() => setMobileOpen(false)}
+          >
+            <img
+              src={logoHeader || (collapsed ? '/branding/icon-192.png' : '/branding/logo.png')}
+              alt={systemName}
+              className={collapsed ? 'h-11 w-11 object-contain' : 'h-11'}
+            />
+          </Link>
+          {!collapsed && (
             <span
               className="text-lg font-bold tracking-tight leading-tight truncate opacity-0 animate-[fadeIn_200ms_ease_forwards]"
               style={{ color: 'var(--md-sys-color-primary)' }}

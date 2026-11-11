@@ -5,7 +5,7 @@ import { authMiddleware } from '../../middleware/auth';
 import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../../middleware/rbac';
 import * as groupService from '../../services/groupService';
 import { sendNotification } from '../../services/externalNotificationService';
-import { attachOrderDetails, getOrderCourseTitles } from '../../services/orderService';
+import { attachOrderDetails, getOrderCourseTitles, removeCoursesFromCart } from '../../services/orderService';
 
 const router = Router();
 
@@ -313,6 +313,9 @@ router.post('/', authMiddleware, requireRole(ADMIN), async (req: Request, res: R
         orderId, courseId, priceById.get(courseId) || 0,
       );
     }
+
+    // The booked courses leave the student's cart (admin manual orders too).
+    await removeCoursesFromCart(Number(user_id), courseIds);
 
     let assignedAny = false;
     for (const courseId of courseIds) {

@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { initializeDatabase } from './db/connection';
 import { sql } from './db/helpers';
+import { DEFAULT_SETTINGS } from './db/schema';
 import authRouter from './routes/auth';
 import settingsRouter from './routes/settings';
 import coursesRouter from './routes/courses';
@@ -90,7 +91,7 @@ app.get('/api/branding', async (_req, res) => {
   try {
     const result = await sql("SELECT value FROM system_settings WHERE key='branding'");
     if (result.rows.length > 0) return res.json(JSON.parse(result.rows[0].value as string));
-    res.json(null);
+    res.json(DEFAULT_SETTINGS.branding);
   } catch {
     res.status(500).json({ error: 'Failed to fetch branding' });
   }

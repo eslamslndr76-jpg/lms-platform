@@ -2,6 +2,14 @@ import { Router, Request, Response } from 'express';
 import crypto from 'crypto';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
+
+/** Certificate logo markup: the configured logo, or the new default brand logo. */
+function logoHtmlFor(logoHeader: unknown): string {
+  const src =
+    typeof logoHeader === 'string' && logoHeader.trim() ? logoHeader.trim() : DEFAULT_LOGO_DATA_URL;
+  return `<img class="logo" src="${src}" alt="Logo" />`;
+}
 
 const router = Router();
 
@@ -783,9 +791,7 @@ router.get('/verify/:serial/html', async (req: Request, res: Response) => {
 
     // Fill template
     let html = CERTIFICATE_TEMPLATE;
-    const logoHtml = branding.logoHeader
-      ? `<img class="logo" src="${branding.logoHeader}" alt="Logo" />`
-      : '';
+    const logoHtml = logoHtmlFor(branding.logoHeader);
     const replacements: Record<string, string> = {
       studentName: studentName || '',
       courseNameAr: course.course_name_ar || '',
@@ -934,9 +940,7 @@ router.get('/:id/html', authMiddleware, async (req: Request, res: Response) => {
     // 10. Fill HTML template
     let html = CERTIFICATE_TEMPLATE;
 
-    const logoHtml = branding.logoHeader
-      ? `<img class="logo" src="${branding.logoHeader}" alt="Logo" />`
-      : '';
+    const logoHtml = logoHtmlFor(branding.logoHeader);
 
     const replacements: Record<string, string> = {
       studentName: cert.student_name || '',
@@ -1051,7 +1055,7 @@ router.get('/:id/download', authMiddleware, async (req: Request, res: Response) 
 
     let html = CERTIFICATE_TEMPLATE;
 
-    const logoHtml = branding.logoHeader ? `<img class="logo" src="${branding.logoHeader}" alt="Logo" />` : '';
+    const logoHtml = logoHtmlFor(branding.logoHeader);
     const replacements: Record<string, string> = {
       studentName: cert.student_name || '', courseNameAr: cert.course_name_ar || '',
       courseNameEn: cert.course_name_en || '', instructorName: cert.instructor_name || 'غير محدد',

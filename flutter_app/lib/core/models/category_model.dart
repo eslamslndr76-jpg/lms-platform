@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class CategoryModel {
   final int id;
   final String nameAr;
@@ -11,19 +13,12 @@ class CategoryModel {
     this.description,
   });
 
-  static int _parseInt(dynamic val, [int defaultVal = 0]) {
-    if (val == null) return defaultVal;
-    if (val is num) return val.toInt();
-    if (val is String) return int.tryParse(val) ?? defaultVal;
-    return defaultVal;
-  }
-
   factory CategoryModel.fromJson(Map<String, dynamic> json) {
     return CategoryModel(
-      id: _parseInt(json['id']),
-      nameAr: json['name_ar']?.toString() ?? '',
-      nameEn: json['name_en']?.toString() ?? '',
-      description: json['description']?.toString(),
+      id: toInt(json['id']),
+      nameAr: toStr(json['name_ar']),
+      nameEn: toStr(json['name_en']),
+      description: toStrOrNull(json['description']),
     );
   }
 }

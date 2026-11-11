@@ -1,8 +1,51 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
 import '../models/order_model.dart';
 import '../storage/cache_service.dart';
+import '../utils/json_utils.dart';
+
+/// A freshly created booking. `amount` comes from the server response.
+class CreatedOrder {
+  final int id;
+  final double amount;
+  final String status;
+
+  const CreatedOrder({required this.id, required this.amount, required this.status});
+}
+
+/// The server refused a booking because a course is already paid or inside an
+/// open booking (HTTP 409). The message is the backend's Arabic text.
+class OrderConflictException implements Exception {
+  final String message;
+  final int? courseId;
+  final String? status;
+
+  const OrderConflictException(this.message, {this.courseId, this.status});
+
+  bool get isPaid => status == 'paid';
+
+  @override
+  String toString() => message;
+}
+
+/// What the current student can do with one course.
+class CourseAccess {
+  final bool paid;
+  final bool hasCertificate;
+  final String? serialId;
+  final OrderModel? openOrder;
+
+  const CourseAccess({
+    required this.paid,
+    this.hasCertificate = false,
+    this.serialId,
+    this.openOrder,
+  });
+
+  bool get hasOpenBooking => openOrder != null;
+}
 
 class OrdersProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -19,10 +62,7 @@ class OrdersProvider extends ChangeNotifier {
     try {
       final cached = await CacheService.load(CacheService.keyMyOrders);
       if (cached is List && cached.isNotEmpty) {
-        _myOrders = cached
-            .whereType<Map>()
-            .map((o) => OrderModel.fromJson(Map<String, dynamic>.from(o)))
-            .toList();
+        _myOrders = toJsonList(cached).map(OrderModel.fromJson).toList();
         notifyListeners();
       }
     } catch (_) {}
@@ -45,11 +85,7 @@ class OrdersProvider extends ChangeNotifier {
     try {
       final res = await _api.get(ApiConstants.myOrders);
       if (res.statusCode == 200 && res.data is List) {
-        final list = res.data as List;
-        _myOrders = list
-            .whereType<Map>()
-            .map((item) => OrderModel.fromJson(Map<String, dynamic>.from(item)))
-            .toList();
+        _myOrders = toJsonList(res.data).map(OrderModel.fromJson).toList();
         CacheService.save(CacheService.keyMyOrders, res.data);
         _error = null;
       }
@@ -67,17 +103,20 @@ class OrdersProvider extends ChangeNotifier {
   Future<OrderModel?> fetchOrder(int orderId) async {
     try {
       final res = await _api.get('${ApiConstants.myOrders}/$orderId');
-      if (res.statusCode == 200 && res.data != null && res.data is Map) {
-        return OrderModel.fromJson(Map<String, dynamic>.from(res.data as Map));
+      final data = toJsonMap(res.data);
+      if (res.statusCode == 200 && data != null) {
+        return OrderModel.fromJson(data);
       }
     } catch (_) {}
     return null;
   }
 
   // ── Create order (one or more courses) ─────────────────────────────────────
-  /// Creates a booking with one or more courses. Returns the new order id on success.
-  /// The total `amount` must come from the server/course prices, never computed client-side.
-  Future<int?> createOrder({
+  /// Creates a booking with one or more courses. Returns the new order on
+  /// success. `amount` must come from the server, never computed client-side.
+  /// Throws [OrderConflictException] when a course is already paid or inside an
+  /// open booking (the server answers 409).
+  Future<CreatedOrder?> createOrder({
     required List<int> courseIds,
     String? paymentMethod,
     String? noteStudent,
@@ -97,24 +136,63 @@ class OrdersProvider extends ChangeNotifier {
           if (receiptUrl != null) 'receipt_url': receiptUrl,
         },
       );
-      if (res.statusCode == 200 || res.statusCode == 201) {
-        final data = res.data;
-        if (data is Map && data['id'] != null) {
-          final id = (data['id'] as num).toInt();
-          await fetchMyOrders(silent: true);
-          return id;
-        }
-        await fetchMyOrders(silent: true);
-        return null;
-      } else if (res.statusCode == 409 && res.data is Map) {
-        // Surface the server conflict message (paid course / open order)
-        final err = res.data as Map;
-        throw Exception(err['error'] ?? 'لا يمكن إنشاء الحجز حالياً');
+      final data = toJsonMap(res.data);
+      final id = data == null ? null : toIntOrNull(data['id']);
+      await fetchMyOrders(silent: true);
+      if (id == null) return null;
+      return CreatedOrder(
+        id: id,
+        amount: data == null ? 0 : toDouble(data['amount']),
+        status: data == null ? 'pending' : toStr(data['status'], 'pending'),
+      );
+    } on DioException catch (e) {
+      final data = toJsonMap(e.response?.data);
+      final status = e.response?.statusCode;
+      final message = toStrOrNull(data?['error']);
+      if (status == 409) {
+        throw OrderConflictException(
+          message ?? 'هذا الكورس مدفوع بالفعل أو داخل طلب مفتوح',
+          courseId: data == null ? null : toIntOrNull(data['course_id']),
+          status: data == null ? null : toStrOrNull(data['status']),
+        );
       }
-    } catch (e) {
-      rethrow;
+      throw Exception(message ?? 'تعذر الاتصال بالخادم، حاول مرة أخرى');
     }
-    return null;
+  }
+
+  /// Course state for the student: paid (enrolled), an open booking, or none.
+  /// Returns null when the state could not be read from the server.
+  Future<CourseAccess?> fetchCourseAccess(int courseId) async {
+    try {
+      final checkRes = await _api.get('${ApiConstants.myOrders}/check/$courseId');
+      final check = toJsonMap(checkRes.data);
+      if (check == null) return null;
+      final paid = toBool(check['hasPaidOrder']);
+      OrderModel? openOrder;
+      if (!paid) {
+        final res = await _api.get(ApiConstants.myOrders);
+        if (res.statusCode == 200) {
+          for (final order in toJsonList(res.data).map(OrderModel.fromJson)) {
+            if (!order.isOpen) continue;
+            final hasCourse = order.items.any((i) => i.courseId == courseId) ||
+                order.courseId == courseId;
+            if (hasCourse) {
+              openOrder = order;
+              break;
+            }
+          }
+        }
+      }
+      return CourseAccess(
+        paid: paid,
+        hasCertificate: toBool(check['hasCertificate']),
+        serialId: toStrOrNull(check['serialId']),
+        openOrder: openOrder,
+      );
+    } catch (e) {
+      debugPrint('[ORDERS] course access error: $e');
+      return null;
+    }
   }
 
   // ── Pay order (choose payment method / send receipt) ───────────────────────
@@ -140,12 +218,9 @@ class OrdersProvider extends ChangeNotifier {
         await fetchMyOrders(silent: true);
         return true;
       }
-      if (res.statusCode == 409 || res.statusCode == 413 && res.data is Map) {
-        final err = res.data as Map;
-        throw Exception(err['error'] ?? 'فشل الدفع، حاول مرة أخرى');
-      }
-    } catch (e) {
-      rethrow;
+    } on DioException catch (e) {
+      final err = toJsonMap(e.response?.data);
+      throw Exception(toStrOrNull(err?['error']) ?? 'فشل الدفع، حاول مرة أخرى');
     }
     return false;
   }
@@ -180,14 +255,10 @@ class OrdersProvider extends ChangeNotifier {
   Future<List<Map<String, dynamic>>?> checkoutRequirements() async {
     try {
       final res = await _api.get(ApiConstants.checkoutRequirements);
-      if (res.statusCode == 200 && res.data is Map) {
-        final data = Map<String, dynamic>.from(res.data as Map);
-        final raw = data['missing_fields'];
-        if (raw is List) {
-          return raw
-              .whereType<Map>()
-              .map((i) => Map<String, dynamic>.from(i))
-              .toList();
+      if (res.statusCode == 200) {
+        final data = toJsonMap(res.data);
+        if (data != null && data['missing_fields'] is List) {
+          return toJsonList(data['missing_fields']);
         }
       }
     } catch (_) {}
@@ -198,11 +269,8 @@ class OrdersProvider extends ChangeNotifier {
   Future<List<Map<String, dynamic>>?> paymentMethods() async {
     try {
       final res = await _api.get(ApiConstants.paymentMethods);
-      if (res.statusCode == 200 && res.data is List) {
-        return (res.data as List)
-            .whereType<Map>()
-            .map((i) => Map<String, dynamic>.from(i))
-            .toList();
+      if (res.statusCode == 200) {
+        return toJsonList(res.data);
       }
     } catch (_) {}
     return null;

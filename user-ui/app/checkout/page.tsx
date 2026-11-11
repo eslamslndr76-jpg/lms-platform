@@ -185,8 +185,24 @@ function CheckoutContent() {
         }),
       });
       setOrder({ id: Number(created.id), amount: Number(created.amount) || cartTotal });
-      // The cart is emptied at booking, not at payment.
-      if (!isDirect) await api('/api/cart', { method: 'DELETE' }).catch(() => undefined);
+      // The server empties the booked courses from the cart at booking time.
+      // Re-read it so the cart state and badges come from the API, not the browser.
+      try {
+        const cart: any = await api('/api/cart');
+        if (!isDirect) {
+          setItems((cart.items || []).map((i: any) => ({
+            course_id: Number(i.course_id),
+            title_ar: i.title_ar,
+            title_en: i.title_en,
+            price: Number(i.price),
+            image_url: i.image_url,
+          })));
+        }
+        setCartTotal(Number(cart.total || 0));
+      } catch {
+        // Non-critical: the header/nav badges reload from the API on focus.
+      }
+      window.dispatchEvent(new Event('cart:updated'));
       setPhase('payment');
     } catch (e: any) {
       show(e?.message || 'فشل تأكيد الحجز', 'error');

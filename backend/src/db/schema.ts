@@ -1,3 +1,5 @@
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
+
 export const SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS roles (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -310,15 +312,16 @@ CREATE TABLE IF NOT EXISTS course_proposals (
 
 export const DEFAULT_SETTINGS = {
   branding: {
-    systemName: 'LMS نظام إدارة التعلم',
-    logoHeader: '',
-    logoFooter: '',
+    systemName: 'وحدة التدريب و التطوير',
+    logoHeader: DEFAULT_LOGO_DATA_URL,
+    logoFooter: DEFAULT_LOGO_DATA_URL,
     favicon: '',
     primaryColor: '#2563eb',
     secondaryColor: '#7c3aed',
     sloganAr: 'نحو تعليم أفضل',
     sloganEn: 'Towards Better Learning',
-    messageFooter: '',
+    messageFooter:
+      'هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
   },
   aiKeys: [],
 };

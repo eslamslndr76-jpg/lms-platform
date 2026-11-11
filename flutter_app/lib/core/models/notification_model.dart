@@ -1,3 +1,5 @@
+import '../utils/json_utils.dart';
+
 class NotificationModel {
   final int id;
   final int userId;
@@ -21,14 +23,15 @@ class NotificationModel {
 
   factory NotificationModel.fromJson(Map<String, dynamic> json) {
     return NotificationModel(
-      id: (json['id'] as num).toInt(),
-      userId: (json['user_id'] as num?)?.toInt() ?? 0,
-      title: json['title'] as String? ?? '',
-      message: json['message'] as String?,
-      type: json['type'] as String? ?? 'info',
-      link: json['link'] as String?,
-      isRead: (json['is_read'] as num?)?.toInt() == 1,
-      createdAt: json['created_at'] as String?,
+      id: toInt(json['id']),
+      userId: toInt(json['user_id']),
+      title: toStr(json['title']),
+      message: toStrOrNull(json['message']),
+      type: toStrOrNull(json['type']) ?? 'info',
+      link: toStrOrNull(json['link']),
+      // The API may return 1/0 or "1"/"0" — never compare to a raw num.
+      isRead: toBool(json['is_read']),
+      createdAt: toStrOrNull(json['created_at']),
     );
   }
 

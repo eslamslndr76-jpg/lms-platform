@@ -12,6 +12,8 @@ import {
   WidthType,
 } from 'docx';
 import type { GroupReport } from './reportService';
+import { sql } from '../db/helpers';
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
 
 /**
  * Word renderer for the group report (edit-plan.md §8).
@@ -303,6 +305,26 @@ function surveyTables(report: GroupReport): (Paragraph | Table)[] {
   ];
 }
 
+/** Branding logo as a buffer: the configured one, or the new default logo. */
+async function brandingLogo(): Promise<Buffer | null> {
+  try {
+    let source = DEFAULT_LOGO_DATA_URL;
+    const result = await sql("SELECT value FROM system_settings WHERE key='branding'");
+    if (result.rows.length > 0) {
+      const parsed = JSON.parse(String((result.rows[0] as any).value));
+      if (typeof parsed.logoHeader === 'string' && parsed.logoHeader.trim()) {
+        source = parsed.logoHeader.trim();
+      }
+    }
+    const match = /^data:image\/(png|jpe?g|gif);base64,(.+)$/i.exec(source);
+    if (!match) return null;
+    const buffer = Buffer.from(match[2], 'base64');
+    return buffer.length > 0 ? buffer : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function buildGroupReportWord(
   report: GroupReport,
   images: UploadedImage[] = [],
@@ -331,6 +353,25 @@ export async function buildGroupReportWord(
     ]),
     rtl('', { spacing: 160 }),
   ];
+
+  // Brand logo on top of the report (keeps its aspect ratio, centred).
+  const logo = await brandingLogo();
+  const logoType = logo ? imageType(logo, 'image/png') : null;
+  if (logo && logoType) {
+    children.unshift(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { after: 120 },
+        children: [
+          new ImageRun({
+            type: logoType,
+            data: logo,
+            transformation: scaledTransform(logo, 150, 100),
+          }),
+        ],
+      }),
+    );
+  }
 
   // أولاً: معلومات عامة
   children.push(

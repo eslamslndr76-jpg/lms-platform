@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../api/api_client.dart';
 import '../api/api_constants.dart';
+import '../utils/json_utils.dart';
 
 class AttendanceResult {
   final bool success;
@@ -47,10 +48,11 @@ class AttendanceProvider extends ChangeNotifier {
         },
       );
 
-      final data = res.data as Map<String, dynamic>;
-      final success = data['success'] as bool? ?? (res.statusCode == 200);
-      final message = data['message'] as String? ?? (success ? 'تم تسجيل حضورك بنجاح!' : 'فشل تسجيل الحضور');
-      final alreadyMarked = data['alreadyMarked'] as bool? ?? false;
+      final data = toJsonMap(res.data) ?? const <String, dynamic>{};
+      final success = toBool(data['success'], fallback: res.statusCode == 200);
+      final message = toStrOrNull(data['message']) ??
+          (success ? 'تم تسجيل حضورك بنجاح!' : 'فشل تسجيل الحضور');
+      final alreadyMarked = toBool(data['alreadyMarked']);
 
       // Provide gentle haptic feedback on success
       if (success) {
@@ -94,12 +96,12 @@ class AttendanceProvider extends ChangeNotifier {
       if (clean.startsWith('{') && clean.endsWith('}')) {
         final decoded = jsonDecode(clean);
         if (decoded is Map<String, dynamic>) {
-          final l = decoded['l'] ?? decoded['lectureId'];
-          final c = decoded['c'] ?? decoded['code'];
+          final l = toIntOrNull(decoded['l'] ?? decoded['lectureId']);
+          final c = toStrOrNull(decoded['c'] ?? decoded['code']);
           if (l != null && c != null) {
             return {
-              'lectureId': (l as num).toInt(),
-              'code': c.toString().toUpperCase(),
+              'lectureId': l,
+              'code': c.toUpperCase(),
             };
           }
         }

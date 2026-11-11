@@ -9,17 +9,13 @@
 - Write complete working code (no TODOs/placeholders). Async UI needs loading/error states. Backend routes use try/catch with descriptive HTTP status codes.
 - `GROUP_WORKFLOW.md` is a human guide (group states, notifications). Read it only when touching group-state or notification logic.
 
-## Two agents, two plans (read ONLY your own)
-| Agent | Owns | Plan (read the master file + the current phase file only) |
-|---|---|---|
-| Platform agent | `backend/`, `admin-ui/`, `user-ui/` | `platform_plan.md` + `platform_plan/phase-N-*.md` |
-| App agent | `flutter_app/` | `application_plan.md` + `flutter_app/plan/phase-N-*.md` |
+## The agent and the current plan
+One agent works on the whole project: `backend/`, `admin-ui/`, `user-ui/` and `flutter_app/`.
 
-- Never edit the other agent's folders. Never read the other agent's plan files.
-- Contract between them: `api-contract.md` (root). The platform agent WRITES it (phase 5 of the platform plan). The app agent only READS it.
-- If the app agent needs a backend/web change: append a request under "طلبات التطبيق للمنصة" in `api-contract.md` and stop only the affected part.
+- The current work plan is `fixes_plan.md` + `fixes_plan/phase-N-*.md`. Read the master file and ONLY the current phase file. Each phase file states its area (platform = `backend/` `admin-ui/` `user-ui/`, app = `flutter_app/`).
+- `api-contract.md` (root) is the live description of the API the app consumes. Keep it accurate whenever you change an endpoint the app uses.
 - Reference documents for forms (survey, instructor evaluation, report, proposal) live in `docs/forms-refs/*.md`. Read them only when a phase says so.
-- When a phase is finished the agent writes the completion line in the phase file and updates the status table in its master plan (format is defined in each master plan).
+- When a phase is finished write the completion line in the phase file and update the status table in `fixes_plan.md`.
 
 ## Layout
 npm workspace with three pillars (+ the standalone Flutter project):
@@ -63,13 +59,13 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - `execute()` in `turso-http.ts`: `file:` URLs → `@libsql/client` local SQLite; `libsql://` → HTTPS fetch to Turso pipeline API.
 
 ## Flutter Mobile App (APK) — rules shared by both agents
-- **Location:** `flutter_app/` (on the owner's machine: `d:\مركز تدريب\flutter_app\`). Standalone Flutter project.
+- **Location:** `flutter_app/` (on the owner's machine: `D:\training_center\flutter_app\`). Standalone Flutter project.
 - **Auth:** JWT in `flutter_secure_storage`. Same `/api/auth/login`, same token format. JWT payload shape is `{ userId, roleId, role }` and must not change.
 - **API base URL:** from `ApiConstants` (`http://10.0.2.2:3001` on the emulator, the real server in production).
 - **Native features the app uses:** Camera/QR scan, Push Notifications (Firebase FCM), local notifications + WorkManager, app links (QR and notification deep links), in-app APK update. Bluetooth is NOT used.
 - **Shared resources with web:** all `/api/*` endpoints, same DB, same JWT secret, same branding API (`/api/settings/branding` is the path the app reads).
 
-### Rules for the platform agent (do NOT break the app)
+### Rules when changing backend/web (do NOT break the installed app)
 - API changes are additive by default: new endpoints, new optional fields. No renames or removals of fields the app consumes, unless the platform plan explicitly says so (the orders redesign in phase 2 does, and keeps a legacy shim).
 - New DB column: append the idempotent `ALTER TABLE` as usual.
 - New role or permission: update `middleware/rbac.ts` only.
@@ -77,7 +73,7 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - Every endpoint the app will consume is documented in `api-contract.md`.
 
 ### API changes for the app (append here when adding endpoints; details live in `api-contract.md`)
-<!-- Format: METHOD /api/path — description — added by platform agent on DATE -->
+<!-- Format: METHOD /api/path — description — added on DATE -->
 - GET /api/groups/:id/report — fresh group report data (staff only; used by the admin report tab) — 2026-11-08
 - POST /api/groups/:id/report/word — Word report, optional `images` multipart field (max 8, JPG/PNG, not stored) — 2026-11-08
 - GET/PUT /api/settings/report — report default texts (coordinator, certificate, notes, recommendations, activity type) — 2026-11-08
@@ -98,6 +94,7 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - GET /api/notifications?limit=&offset= — optional `offset` for pagination (short page = end of list) — 2026-11-10
 - POST /api/settings/app-version/broadcast — re-broadcast the app-update notification to all app users (students + instructors); also fires automatically on saving a newer buildNumber — 2026-11-10
 - New notification types: `order_expired`, `order_course_removed` (link `/orders`) — 2026-11-10
+- Cart is server-owned: `POST /api/orders` (and admin manual orders) removes only the booked courses from the cart; `POST /api/cart` returns 409 for a paid/booked course; `GET /api/cart` self-cleans those rows — 2026-11-11
 
 ## Language & branding
 - Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").

@@ -33,13 +33,9 @@ export default function Sidebar() {
       <aside className={`fixed top-0 right-0 h-full w-64 z-40 shadow-xl transform transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen overflow-y-auto`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
         <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
           <div className="flex items-center gap-2 min-w-0">
-            {logoHeader ? (
-              <div className="rounded-xl p-0.5 shadow-sm border shrink-0" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-                <img src={logoHeader} alt={systemName} className="h-10 sm:h-12" />
-              </div>
-            ) : (
-              <h1 className="font-bold text-lg truncate" style={{ color: 'var(--primary)' }}>{systemName}</h1>
-            )}
+            <div className="rounded-xl p-0.5 shadow-sm border shrink-0" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+              <img src={logoHeader || '/branding/logo.png'} alt={systemName} className="h-10 sm:h-12" />
+            </div>
           </div>
           <button onClick={() => setOpen(false)} className="lg:hidden p-1.5 rounded-xl text-lg hover:bg-[var(--bg)]" style={{ color: 'var(--text)' }}>
             ✕

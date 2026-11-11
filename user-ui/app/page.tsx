@@ -320,7 +320,6 @@ export default function HomePage() {
           <div className="flex flex-wrap items-center justify-center gap-5 md:gap-6">
             {[
               { src: '/partners/لوجو  hims.png', alt: 'HIMS' },
-              { src: '/partners/لوجو X2.png', alt: 'X2' },
               { src: '/partners/unit-logo.png', alt: 'وحدة التدريب و التطوير' },
               { src: '/partners/لوجو وزارة التعليم العالي.png', alt: 'وزارة التعليم العالي' },
               { src: '/partners/لوجو اكادمية البحث العلمى و التكنولوجيا .png', alt: 'أكاديمية البحث العلمي والتكنولوجيا' },

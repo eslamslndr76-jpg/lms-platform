@@ -4,8 +4,8 @@ import { AdminProviders } from './providers';
 import './globals.css';
 
 export const metadata = {
-  title: 'لوحة التحكم - نظام إدارة التدريب',
-  description: 'Admin Dashboard',
+  title: 'لوحة التحكم - وحدة التدريب و التطوير',
+  description: 'لوحة تحكم منصة وحدة التدريب و التطوير',
 };
 
 export default function AdminLayout({ children }: { children: ReactNode }) {

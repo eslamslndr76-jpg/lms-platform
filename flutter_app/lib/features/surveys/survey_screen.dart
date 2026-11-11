@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/surveys/surveys_provider.dart';
 import '../../core/models/survey_model.dart';
+import '../../core/utils/json_utils.dart';
 
 /// Post-course survey screen: every item defined by the API, step by step,
 /// with auto-saved drafts and a single final submission.
@@ -366,7 +367,7 @@ class _SectionStep extends StatelessWidget {
         return _ScaleQuestion(
           label: item.label,
           index: index,
-          selected: answers[item.key] as int?,
+          selected: toIntOrNull(answers[item.key]),
           onSelect: (v) => onAnswer(item.key, v),
         );
       },
@@ -508,7 +509,7 @@ class _ReviewStep extends StatelessWidget {
                   Expanded(child: Text(item.label, style: tt.bodySmall)),
                   const SizedBox(width: 8),
                   Text(
-                    _labelFor(answers[item.key] as int?),
+                    _labelFor(toIntOrNull(answers[item.key])),
                     style: tt.bodySmall?.copyWith(fontWeight: FontWeight.w800, color: cs.primary),
                   ),
                 ],

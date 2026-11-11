@@ -181,7 +181,7 @@ export default function MyCoursesPage() {
           if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted' && document.hidden) {
             new Notification('تم فتح باب الحضور!', {
               body: `${first.topic || 'محاضرة'} - ${first.groupName} — افتح الصفحة للتسجيل`,
-              icon: '/favicon.ico',
+              icon: '/branding/icon-192.png',
             });
           }
         }
