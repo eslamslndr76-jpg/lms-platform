@@ -14,7 +14,8 @@ import '../../core/utils/json_utils.dart';
 import 'orders_screen.dart';
 
 /// إتمام الشراء — بنفس خطوات المنصة:
-/// مراجعة الطلب ← بياناتك (عند النقص فقط) ← تأكيد الحجز ← الدفع.
+/// مراجعة الطلب ← بياناتك (عند النقص فقط) ← المراجعة النهائية ← الدفع.
+/// الحجز لا يُنشأ ولا تُرسل إشعاراته إلا في الخطوة الأخيرة (الدفع).
 /// شاشة النجاح ليست خطوة في المؤشر.
 ///
 /// - الأسعار والإجمالي من السيرفر دائماً.
@@ -265,14 +266,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       case _CheckoutStep.missing:
         _saveMissingData();
       case _CheckoutStep.confirm:
-        _createOrder();
+        _goToPay();
       case _CheckoutStep.pay:
         _submitPayment();
     }
   }
 
   void _goBack() {
-    if (_step == _CheckoutStep.pay) {
+    if (_step == _CheckoutStep.pay && _orderId != null) {
       _leaveToOrders();
       return;
     }
@@ -354,68 +355,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  // ── Step: confirm (create the booking) ─────────────────────────────────────
-  Future<void> _createOrder() async {
-    // The order is created once: coming back here must never book twice.
-    if (_orderId != null) {
-      setState(() => _step = _CheckoutStep.pay);
-      await _loadPaymentMethods();
-      return;
-    }
-
+  // ── Step: final review (nothing is booked yet) ─────────────────────────────
+  Future<void> _goToPay() async {
     setState(() {
-      _busy = true;
       _stepError = null;
       _conflictMessage = null;
+      _step = _CheckoutStep.pay;
     });
-
-    final orders = context.read<OrdersProvider>();
-    final cart = context.read<CartProvider>();
-    final note = _noteCtrl.text.trim();
-
-    try {
-      final created = await orders.createOrder(
-        courseIds: widget.courseIds,
-        noteStudent: note.isEmpty ? null : note,
-      );
-      if (!mounted) return;
-
-      // The server removed the booked courses from the cart — re-read it.
-      await cart.fetchCart(silent: true);
-      if (!mounted) return;
-
-      if (created == null) {
-        setState(() {
-          _busy = false;
-          _stepError = 'فشل إنشاء الحجز، حاول مرة أخرى';
-        });
-        return;
-      }
-
-      setState(() {
-        _busy = false;
-        _orderId = created.id;
-        _orderAmount = created.amount;
-        _total = created.amount;
-        _step = _CheckoutStep.pay;
-      });
-      await _loadPaymentMethods();
-    } on OrderConflictException catch (e) {
-      if (!mounted) return;
-      await cart.fetchCart(silent: true);
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _conflictPaid = e.isPaid;
-        _conflictMessage = e.message;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _busy = false;
-        _stepError = _errorText(e);
-      });
-    }
+    await _loadPaymentMethods();
   }
 
   // ── Step: pay ──────────────────────────────────────────────────────────────
@@ -450,11 +397,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Future<void> _submitPayment() async {
-    final orderId = _orderId;
-    if (orderId == null) {
-      setState(() => _stepError = 'معرف الطلب غير موجود');
-      return;
-    }
     final method = toStrOrNull(_selectedMethod?['key']);
     if (method == null) {
       setState(() => _stepError = 'يرجى اختيار طريقة الدفع');
@@ -474,22 +416,69 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     setState(() {
       _busy = true;
       _stepError = null;
+      _conflictMessage = null;
     });
 
+    final orders = context.read<OrdersProvider>();
+    final cart = context.read<CartProvider>();
+    final note = _noteCtrl.text.trim();
+
     try {
-      await context.read<OrdersProvider>().payOrder(
-            orderId: orderId,
-            method: method,
-            senderPhone: _isDigital ? _senderPhoneCtrl.text.trim() : null,
-            receiptUrl: _isDigital ? _receiptBase64 : null,
-          );
+      final orderId = _orderId;
+      if (orderId == null && !_isExistingOrder) {
+        // Last step: the booking is created together with the payment choice,
+        // so nothing is booked (and no notification is sent) before this point.
+        final created = await orders.createOrder(
+          courseIds: widget.courseIds,
+          paymentMethod: method,
+          noteStudent: note.isEmpty ? null : note,
+          senderPhone: _isDigital ? _senderPhoneCtrl.text.trim() : null,
+          receiptUrl: _isDigital ? _receiptBase64 : null,
+        );
+        if (!mounted) return;
+        if (created == null) {
+          setState(() {
+            _busy = false;
+            _stepError = 'فشل تأكيد الحجز، حاول مرة أخرى';
+          });
+          return;
+        }
+        await cart.fetchCart(silent: true);
+        if (!mounted) return;
+        setState(() {
+          _busy = false;
+          _orderId = created.id;
+          _orderAmount = created.amount;
+          _total = created.amount;
+          _paidDigital = _isDigital;
+          _done = true;
+        });
+        return;
+      }
+
+      await orders.payOrder(
+        orderId: orderId!,
+        method: method,
+        senderPhone: _isDigital ? _senderPhoneCtrl.text.trim() : null,
+        receiptUrl: _isDigital ? _receiptBase64 : null,
+      );
       if (!mounted) return;
-      await context.read<CartProvider>().fetchCart(silent: true);
+      await cart.fetchCart(silent: true);
       if (!mounted) return;
       setState(() {
         _busy = false;
         _paidDigital = _isDigital;
         _done = true;
+      });
+    } on OrderConflictException catch (e) {
+      if (!mounted) return;
+      await cart.fetchCart(silent: true);
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _conflictPaid = e.isPaid;
+        _conflictMessage = e.message;
+        _step = _CheckoutStep.confirm;
       });
     } catch (e) {
       if (!mounted) return;
@@ -623,7 +612,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
     final canProceed = _canProceed();
     final isFirst = _step == _steps.first;
-    final backLabel = _step == _CheckoutStep.pay ? 'طلباتي' : 'العودة';
+    final backLabel = _step == _CheckoutStep.pay && _orderId != null ? 'طلباتي' : 'العودة';
 
     return SafeArea(
       top: false,
@@ -680,8 +669,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       case _CheckoutStep.missing:
         return 'حفظ ومتابعة';
       case _CheckoutStep.confirm:
-        return 'تأكيد الحجز';
+        return 'متابعة للدفع';
       case _CheckoutStep.pay:
+        if (_orderId == null && !_isExistingOrder) {
+          return _isDigital ? 'تأكيد الحجز وإرسال الإيصال' : 'تأكيد الحجز';
+        }
         return _isDigital ? 'إرسال الإيصال للمراجعة' : 'تأكيد اختيار الدفع';
     }
   }
@@ -697,7 +689,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           return value.isNotEmpty;
         });
       case _CheckoutStep.confirm:
-        return _orderId != null || _reviewItems.isNotEmpty;
+        return _reviewItems.isNotEmpty;
       case _CheckoutStep.pay:
         if (_methodsLoading || _selectedMethod == null) return false;
         if (!_isDigital) return true;
@@ -719,7 +711,7 @@ class _StepIndicator extends StatelessWidget {
   static const Map<_CheckoutStep, String> _labels = {
     _CheckoutStep.review: 'مراجعة الطلب',
     _CheckoutStep.missing: 'بياناتك',
-    _CheckoutStep.confirm: 'تأكيد الحجز',
+    _CheckoutStep.confirm: 'المراجعة النهائية',
     _CheckoutStep.pay: 'الدفع',
   };
 
@@ -964,10 +956,10 @@ class _ConfirmBody extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text('تأكيد الحجز', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
+        Text('المراجعة النهائية', style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
         const SizedBox(height: 6),
         Text(
-          'بعد الضغط على "تأكيد الحجز" سيتم إنشاء طلبك وحجز دورتك. يمكنك الدفع فوراً أو لاحقاً من "طلباتي".',
+          'راجع طلبك وأضف ملاحظاتك. لن يُسجَّل الحجز ولا تُفرَّغ السلة إلا بعد إتمام خطوة الدفع.',
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
         const SizedBox(height: 16),
@@ -1023,7 +1015,7 @@ class _ConfirmBody extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(
-          'تُفرَّغ كورسات هذا الحجز من السلة بعد التأكيد.',
+          'لن يُخصم أو يُحجز شيء قبل تأكيد خطوة الدفع.',
           style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
         ),
         _errorBox(cs, error),
@@ -1166,7 +1158,11 @@ class _PayBody extends StatelessWidget {
         const SizedBox(height: 12),
 
         // Booking number + amount due
-        _InfoRow(label: 'رقم الحجز', value: orderId == null ? '—' : '#$orderId', ltr: true),
+        _InfoRow(
+          label: 'رقم الحجز',
+          value: orderId == null ? 'يصدر بعد التأكيد' : '#$orderId',
+          ltr: orderId != null,
+        ),
         const SizedBox(height: 8),
         _InfoRow(
           label: 'المبلغ المطلوب',
@@ -1459,7 +1455,7 @@ class _SuccessView extends StatelessWidget {
             ),
             const SizedBox(height: 18),
             Text(
-              digital ? 'تم إرسال الإيصال' : 'تم تأكيد اختيار الدفع',
+              'تم تأكيد حجزك',
               style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900),
             ),
             const SizedBox(height: 10),

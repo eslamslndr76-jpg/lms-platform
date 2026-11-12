@@ -35,6 +35,31 @@ function isTooLarge(receipt: unknown): boolean {
   return typeof receipt === 'string' && receipt.length > MAX_RECEIPT_CHARS;
 }
 
+/** Payment kind from the admin-configured methods; unknown keys behave like the pay route. */
+async function resolvePaymentKind(key: string): Promise<'cash' | 'digital'> {
+  const result = await sql('SELECT kind FROM payment_methods WHERE key=?', key);
+  if (result.rows.length > 0) {
+    return String((result.rows[0] as any).kind) === 'digital' ? 'digital' : 'cash';
+  }
+  return key === 'cash' ? 'cash' : 'digital';
+}
+
+/** One confirmation notification, sent only once the booking step is finished. */
+async function notifyBookingConfirmed(
+  userId: number,
+  orderId: number,
+  total: number,
+  titles: string[],
+  kind: 'cash' | 'digital',
+) {
+  await sendNotification(userId, 'order_created', {
+    courseTitle: titles.join('، '),
+    amount: total,
+    orderId,
+    kind,
+  }).catch((e) => console.error('[Notify] order_created failed:', e.message));
+}
+
 /** Single receipt row per order: update the existing one or insert a new one. */
 async function saveReceipt(orderId: number, fileUrl: string, paymentMethod: string) {
   const existing = await sql('SELECT id FROM receipts WHERE order_id=? ORDER BY id DESC LIMIT 1', orderId);
@@ -60,7 +85,7 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     if (courseIds.length === 0) return res.status(400).json({ error: 'يجب اختيار كورس واحد على الأقل' });
     if (courseIds.length > MAX_ITEMS) return res.status(400).json({ error: `لا يمكن حجز أكثر من ${MAX_ITEMS} كورس في طلب واحد` });
 
-    const receipt = req.body?.receipt_url;
+    const receipt = req.body?.receipt ?? req.body?.receipt_url;
     if (isTooLarge(receipt)) return res.status(413).json({ error: 'حجم الإيصال أكبر من 2MB، اضغط الصورة وحاول مرة أخرى' });
 
     const placeholders = courseIds.map(() => '?').join(',');
@@ -88,12 +113,23 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
     const total = courseIds.reduce((sum, id) => sum + (priceById.get(id) || 0), 0);
     const paymentMethod = String(req.body?.payment_method || 'cash');
     const notesStudent = req.body?.note_student ?? req.body?.notes_student ?? null;
-    const senderPhone = req.body?.sender_phone || null;
+    const senderPhone = String(req.body?.sender_phone ?? '').trim() || null;
+
+    // The checkout sends the payment choice with the booking, so the order is
+    // created already confirmed and only one notification is sent (last step).
+    // Older clients still POST without payment data, then PATCH /:id/pay.
+    const confirmedHere = Boolean(receipt || req.body?.payment_method);
+    const kind = await resolvePaymentKind(paymentMethod);
+    if (confirmedHere && kind === 'digital') {
+      if (!receipt) return res.status(400).json({ error: 'الدفع الرقمي يتطلب إرفاق إيصال التحويل' });
+      if (!senderPhone) return res.status(400).json({ error: 'أدخل رقم الهاتف المحوِّل منه' });
+    }
+    const status = confirmedHere && kind === 'digital' ? 'review' : 'pending';
 
     const result = await sql(
       `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student, sender_phone)
-       VALUES (?,?,?,'pending',?,?,?)`,
-      userId, courseIds[0], total, paymentMethod, notesStudent, senderPhone,
+       VALUES (?,?,?,?,?,?,?)`,
+      userId, courseIds[0], total, status, paymentMethod, notesStudent, senderPhone,
     );
     const orderId = Number(result.lastInsertRowid);
 
@@ -114,13 +150,18 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
       .map((c) => c.title_ar)
       .filter(Boolean);
 
-    await sendNotification(userId, 'order_created', {
-      courseTitle: titles.join('، '),
-      amount: total,
-      orderId,
-    }).catch((e) => console.error('[Notify] order_created failed:', e.message));
+    if (confirmedHere) await notifyBookingConfirmed(userId, orderId, total, titles, kind);
 
-    res.status(201).json({ id: orderId, status: 'pending', amount: total, items: courseIds.map((id) => ({ course_id: id })) });
+    const message = kind === 'digital'
+      ? 'تم تأكيد حجزك وإرسال الإيصال للمراجعة'
+      : 'تم تأكيد حجزك، أكمل الدفع في خزنة المعهد';
+    res.status(201).json({
+      id: orderId,
+      status,
+      amount: total,
+      message,
+      items: courseIds.map((id) => ({ course_id: id })),
+    });
   } catch (err: any) {
     console.error('Order creation error:', err?.message || err);
     res.status(500).json({ error: 'فشل إنشاء الطلب، حاول مرة أخرى' });
@@ -135,7 +176,7 @@ router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => 
     const orderId = Number(req.params.id);
     if (!Number.isInteger(orderId) || orderId <= 0) return res.status(400).json({ error: 'رقم غير صالح' });
 
-    const orderResult = await sql('SELECT id, user_id, status, payment_method FROM orders WHERE id=?', orderId);
+    const orderResult = await sql('SELECT id, user_id, status, amount, payment_method FROM orders WHERE id=?', orderId);
     if (orderResult.rows.length === 0) return res.status(404).json({ error: 'الطلب غير موجود' });
     const order = orderResult.rows[0] as any;
     if (Number(order.user_id) !== req.user!.userId) return res.status(403).json({ error: 'غير مصرح لك بهذا الطلب' });
@@ -144,8 +185,7 @@ router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => 
     }
 
     const paymentMethod = String(req.body?.payment_method || order.payment_method || 'cash');
-    const methodResult = await sql('SELECT key, kind FROM payment_methods WHERE key=?', paymentMethod);
-    const kind = methodResult.rows.length > 0 ? String((methodResult.rows[0] as any).kind) : paymentMethod === 'cash' ? 'cash' : 'digital';
+    const kind = await resolvePaymentKind(paymentMethod);
 
     const receipt = req.body?.receipt ?? req.body?.receipt_url;
     if (isTooLarge(receipt)) return res.status(413).json({ error: 'حجم الإيصال أكبر من 2MB، اضغط الصورة وحاول مرة أخرى' });
@@ -174,6 +214,11 @@ router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => 
     params.push(orderId);
     await sql(`UPDATE orders SET ${sets.join(', ')} WHERE id=?`, ...params);
 
+    // This is the last checkout step for clients that book first and pay after,
+    // so the single "booking confirmed" notification is sent from here.
+    const titles = await getOrderCourseTitles(orderId);
+    await notifyBookingConfirmed(req.user!.userId, orderId, Number(order.amount) || 0, titles, kind);
+
     res.json({ id: orderId, status: newStatus, message: kind === 'digital' ? 'تم إرسال الإيصال للمراجعة' : 'تم اختيار الدفع كاش، أكمل الدفع في الخزنة' });
   } catch (err: any) {
     console.error('Order pay error:', err?.message || err);
@@ -190,13 +235,20 @@ router.patch('/:id/receipt', authMiddleware, async (req: Request, res: Response)
     if (!receipt_url) return res.status(400).json({ error: 'receipt_url required' });
     if (isTooLarge(receipt_url)) return res.status(413).json({ error: 'حجم الإيصال أكبر من 2MB، اضغط الصورة وحاول مرة أخرى' });
 
-    const order = await sql('SELECT user_id, payment_method FROM orders WHERE id=?', req.params.id);
+    const order = await sql('SELECT user_id, status, amount, payment_method FROM orders WHERE id=?', req.params.id);
     if (order.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
     const row = order.rows[0] as any;
     if (Number(row.user_id) !== req.user!.userId) return res.status(403).json({ error: 'Unauthorized' });
 
     await saveReceipt(Number(req.params.id), String(receipt_url), String(row.payment_method || 'cash'));
     await sql("UPDATE orders SET status='review' WHERE id=?", req.params.id);
+
+    // Older builds upload the receipt here instead of calling /pay, so this is
+    // their last checkout step. Skip when /pay already confirmed the booking.
+    if (String(row.status) === 'pending') {
+      const titles = await getOrderCourseTitles(Number(req.params.id));
+      await notifyBookingConfirmed(req.user!.userId, Number(req.params.id), Number(row.amount) || 0, titles, 'digital');
+    }
     res.json({ message: 'Receipt uploaded' });
   } catch (err: any) {
     console.error('Receipt upload error:', err?.message || err);

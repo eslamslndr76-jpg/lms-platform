@@ -18,12 +18,11 @@ interface CheckoutItem {
   image_url?: string;
 }
 
-type Phase = 'review' | 'data' | 'booking' | 'payment' | 'done';
+type Phase = 'review' | 'data' | 'payment' | 'done';
 
 const PHASE_LABELS: Record<string, string> = {
   review: 'مراجعة الطلب',
   data: 'بياناتك',
-  booking: 'تأكيد الحجز',
   payment: 'الدفع',
 };
 
@@ -80,7 +79,6 @@ function CheckoutContent() {
   const [form, setForm] = useState<Record<string, string>>({});
   const [note, setNote] = useState('');
   const [savingData, setSavingData] = useState(false);
-  const [booking, setBooking] = useState(false);
   const [order, setOrder] = useState<{ id: number; amount: number } | null>(null);
 
   const load = useCallback(async () => {
@@ -130,7 +128,7 @@ function CheckoutContent() {
   const steps = useMemo(() => {
     const list: Phase[] = ['review'];
     if (missing.length > 0) list.push('data');
-    list.push('booking', 'payment');
+    list.push('payment');
     return list;
   }, [missing.length]);
 
@@ -165,7 +163,7 @@ function CheckoutContent() {
       const still: string[] = (requirements?.missing_fields || []).map((f: any) => String(f.key));
       setMissing(still);
       if (still.length > 0) { show('ما زالت هناك بيانات ناقصة', 'error'); return; }
-      setPhase('booking');
+      setPhase('payment');
     } catch (e: any) {
       show(e?.message || 'فشل حفظ البيانات', 'error');
     } finally {
@@ -173,42 +171,13 @@ function CheckoutContent() {
     }
   };
 
-  const confirmBooking = async () => {
-    if (items.length === 0) { show('لا توجد كورسات في الطلب', 'error'); return; }
-    setBooking(true);
-    try {
-      const created: any = await api('/api/orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          items: items.map(i => ({ course_id: i.course_id })),
-          note_student: note.trim() || undefined,
-        }),
-      });
-      setOrder({ id: Number(created.id), amount: Number(created.amount) || cartTotal });
-      // The server empties the booked courses from the cart at booking time.
-      // Re-read it so the cart state and badges come from the API, not the browser.
-      try {
-        const cart: any = await api('/api/cart');
-        if (!isDirect) {
-          setItems((cart.items || []).map((i: any) => ({
-            course_id: Number(i.course_id),
-            title_ar: i.title_ar,
-            title_en: i.title_en,
-            price: Number(i.price),
-            image_url: i.image_url,
-          })));
-        }
-        setCartTotal(Number(cart.total || 0));
-      } catch {
-        // Non-critical: the header/nav badges reload from the API on focus.
-      }
-      window.dispatchEvent(new Event('cart:updated'));
-      setPhase('payment');
-    } catch (e: any) {
-      show(e?.message || 'فشل تأكيد الحجز', 'error');
-    } finally {
-      setBooking(false);
-    }
+  const bookingFinished = (status: string, id: number, amount: number) => {
+    setOrder({ id, amount });
+    setCartTotal(amount);
+    // The server removes booked courses from the cart with the booking.
+    if (!isDirect) setItems([]);
+    window.dispatchEvent(new Event('cart:updated'));
+    setPhase('done');
   };
 
   if (authLoading || loading) {
@@ -368,11 +337,16 @@ function CheckoutContent() {
           </div>
         )}
 
-        {/* ---------- CONFIRM BOOKING ---------- */}
-        {phase === 'booking' && (
+        {/* ---------- PAYMENT (last step: creates + confirms the booking) ---------- */}
+        {phase === 'payment' && (
           <div className="rounded-md3-md p-5 space-y-4"
             style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
-            <h2 className="text-base font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تأكيد الحجز</h2>
+            <div>
+              <h2 className="text-base font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>الدفع وتأكيد الحجز</h2>
+              <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                لن يُسجَّل الحجز إلا بعد إتمام هذه الخطوة. تُثبَّت الأسعار عند التأكيد.
+              </p>
+            </div>
             <div className="p-3 rounded-md3-sm space-y-1" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
               {items.map(item => (
                 <div key={item.course_id} className="flex items-center justify-between gap-2 text-sm">
@@ -399,29 +373,14 @@ function CheckoutContent() {
                   color: 'var(--md-sys-color-on-surface)',
                 }} />
             </div>
-            <p className="text-[11px] leading-relaxed" style={{ color: 'var(--md-sys-color-outline)' }}>
-              بالحجز تُثبَّت الأسعار ويُخصَّص مقعدك، ويكتمل الأمر بالدفع. تُفرَّغ السلة بعد تأكيد الحجز.
-            </p>
-            <button type="button" onClick={confirmBooking} disabled={booking}
-              className="w-full h-12 rounded-full text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ backgroundColor: primaryColor, color: 'var(--md-sys-color-on-primary)' }}>
-              {booking && <span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.35)', borderTopColor: 'var(--md-sys-color-on-primary)' }} />}
-              {booking ? 'جاري تأكيد الحجز...' : 'تأكيد الحجز'}
-            </button>
-          </div>
-        )}
-
-        {/* ---------- PAYMENT ---------- */}
-        {phase === 'payment' && order && (
-          <div className="rounded-md3-md p-5 space-y-4"
-            style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
-            <div>
-              <h2 className="text-base font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>تم الحجز ✅</h2>
-              <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-                رقم حجزك #{order.id}. أكمل الدفع الآن أو لاحقاً من صفحة طلباتي.
-              </p>
-            </div>
-            <PaymentStep orderId={order.id} amount={order.amount} onDone={() => setPhase('done')} />
+            <PaymentStep
+              amount={total}
+              booking={{
+                items: items.map(i => ({ course_id: i.course_id })),
+                note: note.trim() || undefined,
+              }}
+              onDone={bookingFinished}
+            />
           </div>
         )}
 
@@ -430,7 +389,7 @@ function CheckoutContent() {
           <div className="rounded-md3-md p-6 text-center space-y-4"
             style={{ backgroundColor: 'var(--md-sys-color-surface)', border: '1px solid var(--md-sys-color-outline-variant)' }}>
             <span className="material-symbols-outlined text-[56px] block" style={{ color: primaryColor }}>check_circle</span>
-            <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تم استلام طلبك</h2>
+            <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تم تأكيد حجزك</h2>
             <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               رقم الحجز <span dir="ltr" className="font-bold">#{order.id}</span> — ستتابع حالته من صفحة طلباتي.
             </p>

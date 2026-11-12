@@ -87,24 +87,34 @@ router.post('/register', async (req: Request, res: Response) => {
 
 router.post('/login', async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email/phone and password required' });
+    const rawIdentifier = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!rawIdentifier || !password) {
+      return res.status(400).json({ error: 'أدخل البريد الإلكتروني أو رقم الهاتف وكلمة المرور' });
     }
+
+    // Same identifier may be an email (case/space insensitive) or an Egyptian
+    // phone written in any form (+2010…, 1010…, 010…).
+    const emailLookup = rawIdentifier.toLowerCase();
+    const phoneLookup = normalizePhone(rawIdentifier) || rawIdentifier;
     const result = await sql(
-      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.password, u.role_id, r.name as role_name,
+      `SELECT u.id, u.name, u.email, u.phone, u.avatar, u.password, u.role_id, u.is_active,
+              r.name as role_name,
               r.permissions as role_permissions, u.permissions as user_permissions
        FROM users u JOIN roles r ON u.role_id = r.id
-       WHERE (u.email=? OR u.phone=?) AND u.is_active=1`,
-      email, email,
+       WHERE LOWER(u.email)=? OR u.phone=?`,
+      emailLookup, phoneLookup,
     );
     if (result.rows.length === 0) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'لا يوجد حساب بهذا البريد الإلكتروني أو رقم الهاتف' });
     }
     const user = result.rows[0];
+    if (Number(user.is_active) !== 1) {
+      return res.status(403).json({ error: 'هذا الحساب موقوف. تواصل مع الإدارة لتفعيله.' });
+    }
     const valid = await bcrypt.compare(password, user.password as string);
     if (!valid) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+      return res.status(401).json({ error: 'كلمة المرور غير صحيحة' });
     }
     await sql('UPDATE users SET last_login=CURRENT_TIMESTAMP WHERE id=?', user.id).catch(() => undefined);
     const token = generateToken({

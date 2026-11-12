@@ -64,7 +64,9 @@ function buildMessage(type: NotificationType, data: any): string {
       return `✅ تم إعادة تعيين كلمة المرور بنجاح!\n\nيمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.${sep}\n${brand}`;
 
     case 'order_created':
-      return `📋 تم تسجيل حجزك\n\nالكورسات: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الحجز: #${data.orderId || '—'}\n\n⏳ أكمل الدفع من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
+      return `✅ تم تأكيد حجزك\n\nالكورسات: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الحجز: #${data.orderId || '—'}\n\n${data.kind === 'digital'
+        ? '🧾 تم استلام إيصال التحويل وهو قيد المراجعة.'
+        : '💳 أكمل الدفع في خزنة المعهد خلال مدة الحجز.'}\nتابع طلبك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
 
     case 'order_paid':
       return `✅ تم تأكيد الدفع!\n\nالكورسات: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}تم تسجيلك في مجموعات هذه الكورسات. تابع طلباتك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
@@ -334,7 +336,7 @@ function getSubjectForType(type: NotificationType, data: any): string {
   switch (type) {
     case 'account_created': return '🎉 مرحباً بك في وحدة التدريب و التطوير';
     case 'password_reset_done': return '✅ تم إعادة تعيين كلمة المرور';
-    case 'order_created': return '📋 طلب تسجيل جديد';
+    case 'order_created': return '✅ تم تأكيد حجزك';
     case 'order_paid': return '✅ تم تأكيد الدفع';
     case 'order_cancelled': return '❌ تم إلغاء طلب التسجيل';
     case 'order_expired': return '⏰ انتهت مدة الحجز';

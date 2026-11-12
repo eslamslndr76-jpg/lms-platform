@@ -16,16 +16,27 @@ export interface PaymentMethod {
   sort_order: number;
 }
 
+export interface BookingDraft {
+  items: { course_id: number }[];
+  note?: string;
+}
+
 /**
  * One place for "how do I pay this booking": methods come from the admin
  * settings, digital payments need the sender phone and a compressed receipt,
- * cash just explains the treasury step. Calls PATCH /api/orders/:id/pay.
+ * cash just explains the treasury step.
+ *
+ * - With `orderId`: pays an existing booking (PATCH /api/orders/:id/pay).
+ * - With `booking`: the checkout's last step — the booking is created and
+ *   confirmed in one request (POST /api/orders), so nothing is booked earlier.
  */
-export default function PaymentStep({ orderId, amount, onDone }: {
-  orderId: number;
+export default function PaymentStep({ orderId, amount, booking, onDone }: {
+  orderId?: number;
   amount: number;
-  onDone?: (status: string) => void;
+  booking?: BookingDraft;
+  onDone?: (status: string, orderId: number, amount: number) => void;
 }) {
+  const receiptInputId = `receipt-${orderId ?? 'new'}`;
   const { show } = useToast();
   const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
@@ -82,18 +93,35 @@ export default function PaymentStep({ orderId, amount, onDone }: {
     }
     setSubmitting(true);
     try {
-      const res: any = await api(`/api/orders/${orderId}/pay`, {
-        method: 'PATCH',
-        body: JSON.stringify({
-          payment_method: selected.key,
-          sender_phone: senderPhone.trim() || undefined,
-          receipt: isDigital ? receipt : undefined,
-        }),
-      });
-      show(res?.message || 'تم تحديث الدفع', 'success');
-      onDone?.(res?.status || (isDigital ? 'review' : 'pending'));
+      const payload = {
+        payment_method: selected.key,
+        sender_phone: senderPhone.trim() || undefined,
+        receipt: isDigital ? receipt : undefined,
+        note_student: booking?.note,
+      };
+      let res: any;
+      if (orderId) {
+        res = await api(`/api/orders/${orderId}/pay`, {
+          method: 'PATCH',
+          body: JSON.stringify(payload),
+        });
+      } else if (booking) {
+        res = await api('/api/orders', {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, items: booking.items }),
+        });
+      } else {
+        setError('تعذر تحديد الطلب، أعد تحميل الصفحة');
+        return;
+      }
+      show(res?.message || 'تم تأكيد الحجز', 'success');
+      onDone?.(
+        res?.status || (isDigital ? 'review' : 'pending'),
+        Number(res?.id) || Number(orderId) || 0,
+        Number(res?.amount) || amount,
+      );
     } catch (e: any) {
-      setError(e?.message || 'فشل تحديث الدفع، حاول مرة أخرى');
+      setError(e?.message || 'فشل تأكيد الحجز، حاول مرة أخرى');
     } finally {
       setSubmitting(false);
     }
@@ -113,7 +141,9 @@ export default function PaymentStep({ orderId, amount, onDone }: {
     <div className="space-y-4">
       <div className="p-3 rounded-md3-sm flex items-center justify-between" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
         <span className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>رقم الحجز</span>
-        <span className="text-sm font-bold" dir="ltr" style={{ color: 'var(--md-sys-color-on-surface)' }}>#{orderId}</span>
+        <span className="text-sm font-bold" dir="ltr" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+          {orderId ? `#${orderId}` : 'يصدر بعد التأكيد'}
+        </span>
       </div>
       <div className="p-3 rounded-md3-sm flex items-center justify-between" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
         <span className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>المبلغ المطلوب</span>
@@ -133,7 +163,7 @@ export default function PaymentStep({ orderId, amount, onDone }: {
               }}>
               <input
                 type="radio"
-                name={`pay-method-${orderId}`}
+                name={`pay-method-${orderId ?? 'new'}`}
                 checked={methodKey === method.key}
                 onChange={() => { setMethodKey(method.key); setError(''); }}
                 className="appearance-none w-4 h-4 rounded-full border-2 cursor-pointer"
@@ -206,9 +236,9 @@ export default function PaymentStep({ orderId, amount, onDone }: {
             <label className="text-xs font-medium" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               صورة إيصال التحويل <span style={{ color: 'var(--md-sys-color-error)' }}>*</span>
             </label>
-            <input id={`receipt-${orderId}`} type="file" accept="image/*" className="hidden"
+            <input id={receiptInputId} type="file" accept="image/*" className="hidden"
               onChange={e => pickFile(e.target.files?.[0] || null)} />
-            <button type="button" onClick={() => document.getElementById(`receipt-${orderId}`)?.click()}
+            <button type="button" onClick={() => document.getElementById(receiptInputId)?.click()}
               className="flex items-center justify-center gap-2 w-full px-4 py-3 text-sm font-medium"
               style={{
                 backgroundColor: receipt ? 'var(--md-sys-color-surface-container-high)' : 'var(--md-sys-color-surface-container-low)',
@@ -233,7 +263,9 @@ export default function PaymentStep({ orderId, amount, onDone }: {
         className="w-full py-3.5 rounded-full text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
         style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
         {submitting && <span className="w-4 h-4 border-2 rounded-full animate-spin" style={{ borderColor: 'rgba(255,255,255,0.35)', borderTopColor: 'var(--md-sys-color-on-primary)' }} />}
-        {submitting ? 'جاري الإرسال...' : isDigital ? 'إرسال الإيصال للمراجعة' : 'تأكيد اختيار الدفع'}
+        {submitting ? 'جاري الإرسال...' : orderId
+          ? (isDigital ? 'إرسال الإيصال للمراجعة' : 'تأكيد اختيار الدفع')
+          : (isDigital ? 'تأكيد الحجز وإرسال الإيصال' : 'تأكيد الحجز')}
       </button>
     </div>
   );
