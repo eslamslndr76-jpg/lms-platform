@@ -95,6 +95,7 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - POST /api/settings/app-version/broadcast — re-broadcast the app-update notification to all app users (students + instructors); also fires automatically on saving a newer buildNumber — 2026-11-10
 - New notification types: `order_expired`, `order_course_removed` (link `/orders`) — 2026-11-10
 - Cart is server-owned: `POST /api/orders` (and admin manual orders) removes only the booked courses from the cart; `POST /api/cart` returns 409 for a paid/booked course; `GET /api/cart` self-cleans those rows — 2026-11-11
+- Single payment route (treasury cash): `GET /api/payment-methods` returns only `kind='cash'`; `POST /api/orders` always creates `pending` + `cash` (client `payment_method`/`receipt` ignored); receipt uploaded later via `PATCH /api/orders/:id/receipt` (→ `review`, notification `order_receipt_uploaded`); `PATCH /api/orders/:id/pay` kept as legacy cash-only confirmation — 2026-11-14
 
 ## Language & branding
 - Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").

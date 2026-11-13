@@ -6,17 +6,16 @@ const router = Router();
 
 /**
  * GET /api/payment-methods
- * Payment methods the student can choose from. Only active methods are
- * returned, and a digital method without an account number is hidden until the
- * admin fills it in (a student cannot transfer to an empty number).
+ * Only one payment route is offered: paying at the institute treasury (cash).
+ * The admin still edits its label/instructions from the settings screen; any
+ * digital method is kept in the DB for history but is never offered here.
  */
 router.get('/', authMiddleware, async (_req: Request, res: Response) => {
   try {
     const result = await sql(
       `SELECT id, key, label, kind, account_number, account_name, instructions, sort_order
        FROM payment_methods
-       WHERE is_active=1
-         AND (kind='cash' OR TRIM(COALESCE(account_number,''))<>'')
+       WHERE is_active=1 AND kind='cash'
        ORDER BY sort_order ASC, id ASC`,
     );
     res.json(

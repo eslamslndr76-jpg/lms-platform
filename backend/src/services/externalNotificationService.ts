@@ -14,6 +14,7 @@ export type NotificationType =
   | 'account_created'
   | 'password_reset_done'
   | 'order_created'
+  | 'order_receipt_uploaded'
   | 'order_paid'
   | 'order_cancelled'
   | 'order_expired'
@@ -64,9 +65,10 @@ function buildMessage(type: NotificationType, data: any): string {
       return `✅ تم إعادة تعيين كلمة المرور بنجاح!\n\nيمكنك الآن تسجيل الدخول بكلمة المرور الجديدة.${sep}\n${brand}`;
 
     case 'order_created':
-      return `✅ تم تأكيد حجزك\n\nالكورسات: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الحجز: #${data.orderId || '—'}\n\n${data.kind === 'digital'
-        ? '🧾 تم استلام إيصال التحويل وهو قيد المراجعة.'
-        : '💳 أكمل الدفع في خزنة المعهد خلال مدة الحجز.'}\nتابع طلبك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
+      return `✅ تم تأكيد حجزك\n\nالكورسات: ${data.courseTitle}\nالمبلغ: ${data.amount ? data.amount + ' ج.م' : '—'}\nرقم الحجز: #${data.orderId || '—'}\n\n💳 ادفع في خزنة المعهد خلال مدة الحجز، ثم ارفع صورة الإيصال من صفحة طلباتي لتأكيد الدفع.\n${FRONTEND_URL}/orders${sep}\n${brand}`;
+
+    case 'order_receipt_uploaded':
+      return `🧾 تم استلام إيصال الدفع\n\nالكورسات: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}رقم الحجز: #${data.orderId || '—'}\n\nالإيصال الآن قيد مراجعة الإدارة، وسيصلك إشعار عند الموافقة.\nتابع طلبك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
 
     case 'order_paid':
       return `✅ تم تأكيد الدفع!\n\nالكورسات: ${data.courseTitle}\n${data.amount ? 'المبلغ: ' + data.amount + ' ج.م\n' : ''}تم تسجيلك في مجموعات هذه الكورسات. تابع طلباتك من:\n${FRONTEND_URL}/orders${sep}\n${brand}`;
@@ -284,6 +286,7 @@ function getLinkForType(type: NotificationType, data: any): string {
     case 'certificate_revoked':
       return '/account?tab=certificates';
     case 'order_created':
+    case 'order_receipt_uploaded':
     case 'order_paid':
     case 'order_cancelled':
     case 'order_expired':
@@ -337,6 +340,7 @@ function getSubjectForType(type: NotificationType, data: any): string {
     case 'account_created': return '🎉 مرحباً بك في وحدة التدريب و التطوير';
     case 'password_reset_done': return '✅ تم إعادة تعيين كلمة المرور';
     case 'order_created': return '✅ تم تأكيد حجزك';
+    case 'order_receipt_uploaded': return '🧾 تم استلام إيصال الدفع';
     case 'order_paid': return '✅ تم تأكيد الدفع';
     case 'order_cancelled': return '❌ تم إلغاء طلب التسجيل';
     case 'order_expired': return '⏰ انتهت مدة الحجز';

@@ -1,9 +1,5 @@
-import 'dart:convert';
-import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/api/api_client.dart';
 import '../../core/api/api_constants.dart';
@@ -19,8 +15,8 @@ import 'orders_screen.dart';
 /// شاشة النجاح ليست خطوة في المؤشر.
 ///
 /// - الأسعار والإجمالي من السيرفر دائماً.
-/// - الكاش: تعليمات الخزنة ورقم الحجز فقط، بلا رقم محوِّل ولا إيصال.
-/// - الدفع الرقمي وحده يطلب رقم المحوِّل وصورة الإيصال.
+/// - طريقة الدفع واحدة: خزنة المعهد. يُصدر رقم الحجز، يدفع الطالب في الخزنة
+///   ثم يرفع صورة الإيصال من "طلباتي" ليعتمدها الأدمن.
 /// - بعد الحجز تختفي كورسات الحجز من السلة (السيرفر هو المصدر)، والتطبيق يعيد قراءتها.
 class CheckoutScreen extends StatefulWidget {
   /// معرفات الكورسات المراد حجزها (من السلة أو "اشترِ الآن").
@@ -60,7 +56,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _stepError;
   bool _busy = false;
   bool _done = false;
-  bool _paidDigital = false;
 
   // Review
   List<Map<String, dynamic>> _reviewItems = [];
@@ -77,22 +72,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   int? _orderId;
   double _orderAmount = 0;
 
-  // Pay
-  List<Map<String, dynamic>> _paymentMethods = [];
-  Map<String, dynamic>? _selectedMethod;
+  // Pay — treasury only: just the admin-written instructions.
+  String? _cashInstructions;
   bool _methodsLoading = false;
-  String? _methodsError;
-  final _senderPhoneCtrl = TextEditingController();
-  File? _receiptFile;
-  String _receiptBase64 = '';
 
   // 409 while booking (paid course / open booking) — replaces the confirm step.
   String? _conflictMessage;
   bool _conflictPaid = false;
 
   bool get _isExistingOrder => widget.existingOrderId != null;
-
-  bool get _isDigital => _isDigitalMethod(_selectedMethod);
 
   bool get _orderCreatedHere => _orderId != null && !_isExistingOrder;
 
@@ -103,9 +91,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     steps.add(_CheckoutStep.pay);
     return steps;
   }
-
-  static bool _isDigitalMethod(Map<String, dynamic>? method) =>
-      toStr(method?['kind']) == 'digital';
 
   /// Arabic message for a failed call — never a raw Dio error.
   String _errorText(Object error, [String fallback = 'تعذر إتمام العملية، حاول مرة أخرى']) {
@@ -125,7 +110,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
-    _senderPhoneCtrl.dispose();
     _noteCtrl.dispose();
     for (final c in _missingCtrls.values) {
       c.dispose();
@@ -164,7 +148,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         _step = _CheckoutStep.pay;
         _initializing = false;
       });
-      await _loadPaymentMethods();
+      await _loadPaymentInfo();
       return;
     }
 
@@ -230,28 +214,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
   }
 
-  Future<void> _loadPaymentMethods() async {
-    setState(() {
-      _methodsLoading = true;
-      _methodsError = null;
-    });
+  /// Treasury instructions written by the admin (cash method only).
+  Future<void> _loadPaymentInfo() async {
+    setState(() => _methodsLoading = true);
     final methods = await context.read<OrdersProvider>().paymentMethods();
     if (!mounted) return;
     setState(() {
       _methodsLoading = false;
-      if (methods == null) {
-        _paymentMethods = [];
-        _selectedMethod = null;
-        _methodsError = 'تعذر تحميل طرق الدفع، تحقق من اتصالك وحاول مرة أخرى';
-        return;
-      }
-      _paymentMethods = methods;
-      final previousKey = toStrOrNull(_selectedMethod?['key']);
-      final keep = methods.where((m) => toStr(m['key']) == previousKey).firstOrNull;
-      _selectedMethod = keep ?? methods.firstOrNull;
-      if (methods.isEmpty) {
-        _methodsError = 'لا توجد طرق دفع متاحة حالياً، تواصل مع الإدارة.';
-      }
+      final cash = methods?.where((m) => toStr(m['kind']) == 'cash').firstOrNull;
+      _cashInstructions = toStrOrNull(cash?['instructions']);
     });
   }
 
@@ -362,57 +333,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       _conflictMessage = null;
       _step = _CheckoutStep.pay;
     });
-    await _loadPaymentMethods();
+    await _loadPaymentInfo();
   }
 
-  // ── Step: pay ──────────────────────────────────────────────────────────────
-  void _selectMethod(Map<String, dynamic> method) {
-    setState(() {
-      _selectedMethod = method;
-      _stepError = null;
-      if (!_isDigitalMethod(method)) {
-        // Cash: nothing digital travels with it.
-        _senderPhoneCtrl.clear();
-        _receiptFile = null;
-        _receiptBase64 = '';
-      }
-    });
-  }
-
-  Future<void> _pickReceipt(ImageSource source) async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(
-      source: source,
-      maxWidth: 800,
-      imageQuality: 70,
-    );
-    if (picked == null || !mounted) return;
-    final file = File(picked.path);
-    final bytes = await file.readAsBytes();
-    if (!mounted) return;
-    setState(() {
-      _receiptFile = file;
-      _receiptBase64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
-    });
-  }
-
+  // ── Step: pay (treasury only) ──────────────────────────────────────────────
   Future<void> _submitPayment() async {
-    final method = toStrOrNull(_selectedMethod?['key']);
-    if (method == null) {
-      setState(() => _stepError = 'يرجى اختيار طريقة الدفع');
-      return;
-    }
-    if (_isDigital) {
-      if (_receiptBase64.isEmpty) {
-        setState(() => _stepError = 'يرجى إرفاق صورة الإيصال');
-        return;
-      }
-      if (_senderPhoneCtrl.text.trim().isEmpty) {
-        setState(() => _stepError = 'يرجى إدخال رقم هاتف المحوِّل');
-        return;
-      }
-    }
-
     setState(() {
       _busy = true;
       _stepError = null;
@@ -426,14 +351,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     try {
       final orderId = _orderId;
       if (orderId == null && !_isExistingOrder) {
-        // Last step: the booking is created together with the payment choice,
-        // so nothing is booked (and no notification is sent) before this point.
+        // Last step: the booking is created here (no receipt is uploaded yet —
+        // the student pays in the treasury and uploads it from "طلباتي").
         final created = await orders.createOrder(
           courseIds: widget.courseIds,
-          paymentMethod: method,
+          paymentMethod: 'cash',
           noteStudent: note.isEmpty ? null : note,
-          senderPhone: _isDigital ? _senderPhoneCtrl.text.trim() : null,
-          receiptUrl: _isDigital ? _receiptBase64 : null,
         );
         if (!mounted) return;
         if (created == null) {
@@ -450,7 +373,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _orderId = created.id;
           _orderAmount = created.amount;
           _total = created.amount;
-          _paidDigital = _isDigital;
           _done = true;
         });
         return;
@@ -458,16 +380,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
       await orders.payOrder(
         orderId: orderId!,
-        method: method,
-        senderPhone: _isDigital ? _senderPhoneCtrl.text.trim() : null,
-        receiptUrl: _isDigital ? _receiptBase64 : null,
+        method: 'cash',
       );
       if (!mounted) return;
       await cart.fetchCart(silent: true);
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _paidDigital = _isDigital;
         _done = true;
       });
     } on OrderConflictException catch (e) {
@@ -528,7 +447,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     if (_done) {
       return _SuccessView(
         orderId: _orderId,
-        digital: _paidDigital,
         onOrders: _goToOrders,
       );
     }
@@ -571,19 +489,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         );
       case _CheckoutStep.pay:
         return _PayBody(
-          methods: _paymentMethods,
-          selected: _selectedMethod,
-          onSelect: _selectMethod,
+          instructions: _cashInstructions,
           loading: _methodsLoading,
-          loadError: _methodsError,
-          onReload: _loadPaymentMethods,
+          onReload: _loadPaymentInfo,
           orderId: _orderId,
           amount: _orderAmount,
-          senderPhoneCtrl: _senderPhoneCtrl,
-          receiptFile: _receiptFile,
-          onPick: _pickReceipt,
           error: _stepError,
-          isDigital: _isDigital,
         );
     }
   }
@@ -671,10 +582,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       case _CheckoutStep.confirm:
         return 'متابعة للدفع';
       case _CheckoutStep.pay:
-        if (_orderId == null && !_isExistingOrder) {
-          return _isDigital ? 'تأكيد الحجز وإرسال الإيصال' : 'تأكيد الحجز';
-        }
-        return _isDigital ? 'إرسال الإيصال للمراجعة' : 'تأكيد اختيار الدفع';
+        if (_orderId == null && !_isExistingOrder) return 'تأكيد الحجز';
+        return 'تأكيد الدفع في الخزنة';
     }
   }
 
@@ -691,9 +600,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       case _CheckoutStep.confirm:
         return _reviewItems.isNotEmpty;
       case _CheckoutStep.pay:
-        if (_methodsLoading || _selectedMethod == null) return false;
-        if (!_isDigital) return true;
-        return _receiptBase64.isNotEmpty && _senderPhoneCtrl.text.trim().isNotEmpty;
+        return !_methodsLoading;
     }
   }
 }
@@ -1082,34 +989,20 @@ class _ConflictBody extends StatelessWidget {
 }
 
 class _PayBody extends StatelessWidget {
-  final List<Map<String, dynamic>> methods;
-  final Map<String, dynamic>? selected;
-  final void Function(Map<String, dynamic>) onSelect;
+  final String? instructions;
   final bool loading;
-  final String? loadError;
   final VoidCallback onReload;
   final int? orderId;
   final double amount;
-  final TextEditingController senderPhoneCtrl;
-  final File? receiptFile;
-  final void Function(ImageSource) onPick;
   final String? error;
-  final bool isDigital;
 
   const _PayBody({
-    required this.methods,
-    required this.selected,
-    required this.onSelect,
+    required this.instructions,
     required this.loading,
-    required this.loadError,
     required this.onReload,
     required this.orderId,
     required this.amount,
-    required this.senderPhoneCtrl,
-    required this.receiptFile,
-    required this.onPick,
-    required this.error,
-    required this.isDigital,
+    this.error,
   });
 
   @override
@@ -1121,35 +1014,8 @@ class _PayBody extends StatelessWidget {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (loadError != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(28),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.payment_outlined, size: 52, color: cs.error),
-              const SizedBox(height: 14),
-              Text(
-                loadError!,
-                textAlign: TextAlign.center,
-                style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
-              ),
-              const SizedBox(height: 18),
-              FilledButton.icon(
-                onPressed: onReload,
-                icon: const Icon(Icons.refresh_rounded),
-                label: const Text('إعادة المحاولة'),
-              ),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final instructions = toStrOrNull(selected?['instructions']);
-    final accountNumber = toStrOrNull(selected?['account_number']);
-    final accountName = toStrOrNull(selected?['account_name']);
+    final note = instructions ??
+        'توجّه إلى خزنة المعهد واذكر رقم الحجز. استلم إيصال الدفع، ثم ارفع صورته من صفحة "طلباتي" لتتم مراجعته والموافقة عليه.';
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -1172,186 +1038,47 @@ class _PayBody extends StatelessWidget {
         ),
 
         const SizedBox(height: 16),
-        Text(
-          'اختر طريقة الدفع المناسبة.',
-          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-        ),
-        const SizedBox(height: 8),
-
-        ...methods.map((method) {
-          final key = toStr(method['key']);
-          final selectedKey = toStr(selected?['key']);
-          final active = key == selectedKey;
-          return Card(
-            margin: const EdgeInsets.only(bottom: 8),
-            color: active ? cs.primaryContainer.withValues(alpha: 0.35) : null,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: BorderSide(
-                color: active ? cs.primary : cs.outlineVariant,
-                width: active ? 1.4 : 1,
-              ),
-            ),
-            child: RadioListTile<String>(
-              value: key,
-              groupValue: selectedKey,
-              onChanged: (_) => onSelect(method),
-              title: Text(
-                toStrOrNull(method['label']) ?? 'طريقة دفع',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
-              subtitle: Text(
-                toStr(method['kind']) == 'cash'
-                    ? 'الدفع في الخزنة'
-                    : 'دفع رقمي (إيصال مطلوب)',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant),
-              ),
-            ),
-          );
-        }),
-
-        // ── Cash: treasury instructions only ──
-        if (selected != null && !isDigital) ...[
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: cs.surfaceContainerLow,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cs.outlineVariant),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(Icons.account_balance_rounded, size: 18, color: cs.primary),
-                    const SizedBox(width: 6),
-                    Text(
-                      'الدفع في خزنة المعهد',
-                      style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  instructions ??
-                      'توجّه إلى خزنة المعهد واذكر رقم الحجز أعلاه. سيتم تأكيد الطلب بعد استلام المبلغ.',
-                  style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
-                ),
-              ],
-            ),
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: cs.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: cs.outlineVariant),
           ),
-        ],
-
-        // ── Digital: transfer data + phone + receipt ──
-        if (selected != null && isDigital) ...[
-          const SizedBox(height: 8),
-          if (accountNumber != null || instructions != null)
-            Container(
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: cs.surfaceContainerLow,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: cs.outlineVariant),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  if (accountNumber != null) ...[
-                    Row(
-                      children: [
-                        Text(
-                          'حوّل على:',
-                          style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            accountNumber,
-                            textDirection: TextDirection.ltr,
-                            style: const TextStyle(fontWeight: FontWeight.w800),
-                          ),
-                        ),
-                        IconButton(
-                          tooltip: 'نسخ الرقم',
-                          visualDensity: VisualDensity.compact,
-                          icon: const Icon(Icons.copy_rounded, size: 18),
-                          onPressed: () async {
-                            await Clipboard.setData(ClipboardData(text: accountNumber));
-                            if (!context.mounted) return;
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('تم نسخ رقم الحساب')),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    if (accountName != null)
-                      Text(
-                        accountName,
-                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                      ),
-                  ],
-                  if (instructions != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      instructions,
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
-                    ),
-                  ],
+                  Icon(Icons.account_balance_rounded, size: 18, color: cs.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'الدفع في خزنة المعهد',
+                    style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
+                  ),
                 ],
               ),
-            ),
-          const SizedBox(height: 14),
-          TextFormField(
-            controller: senderPhoneCtrl,
-            keyboardType: TextInputType.phone,
-            textDirection: TextDirection.ltr,
-            decoration: const InputDecoration(
-              labelText: 'رقم هاتف المحوِّل منه',
-              hintText: '01XXXXXXXXX',
-              prefixIcon: Icon(Icons.phone_android_outlined),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'صورة إيصال التحويل',
-            style: tt.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => onPick(ImageSource.gallery),
-                  icon: const Icon(Icons.image_outlined),
-                  label: const Text('من المعرض'),
-                ),
+              const SizedBox(height: 6),
+              Text(
+                note,
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: () => onPick(ImageSource.camera),
-                  icon: const Icon(Icons.camera_alt_outlined),
-                  label: const Text('الكاميرا'),
-                ),
+              const SizedBox(height: 10),
+              Text(
+                '1. أكّد الحجز ليصدر رقم الحجز.\n2. ادفع في الخزنة واذكر الرقم.\n3. ارفع صورة الإيصال من "طلباتي".',
+                style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.6),
               ),
             ],
           ),
-          if (receiptFile != null) ...[
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(10),
-              child: Image.file(
-                receiptFile!,
-                height: 150,
-                width: double.infinity,
-                fit: BoxFit.contain,
-              ),
-            ),
-          ],
+        ),
+
+        if (orderId != null) ...[
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: onReload,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            label: const Text('تحديث'),
+          ),
         ],
 
         _errorBox(cs, error),
@@ -1428,12 +1155,10 @@ Widget _errorBox(ColorScheme cs, String? error) {
 
 class _SuccessView extends StatelessWidget {
   final int? orderId;
-  final bool digital;
   final VoidCallback onOrders;
 
   const _SuccessView({
     required this.orderId,
-    required this.digital,
     required this.onOrders,
   });
 
@@ -1466,9 +1191,7 @@ class _SuccessView extends StatelessWidget {
               ),
             const SizedBox(height: 6),
             Text(
-              digital
-                  ? 'إيصالك قيد المراجعة من قبل الإدارة، وسيصلك إشعار بعد التأكيد.'
-                  : 'احتفظ برقم الحجز وادفع في خزنة المعهد. ستجد الطلب في "طلباتي".',
+              'احتفظ برقم الحجز وادفع في خزنة المعهد، ثم ارفع صورة الإيصال من "طلباتي" ليتم اعتماده.',
               textAlign: TextAlign.center,
               style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant),
             ),

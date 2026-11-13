@@ -23,25 +23,27 @@
 
 ## 2. طرق الدفع
 
-`GET /api/payment-methods` — (مستخدم مسجّل) الطرق النشطة فقط، والطريقة الرقمية بلا رقم حساب تُخفى.
+طريقة واحدة فقط لكل الطلاب: **الدفع في خزنة المعهد**.
+
+`GET /api/payment-methods` — (مستخدم مسجّل) يعيد الطريقة النشطة من نوع `cash` فقط؛ أي طريقة رقمية تبقى في قاعدة البيانات للسجلات ولا تُعرض.
 
 ```json
-[{ "id": 3, "key": "instapay", "label": "إنستا باي", "kind": "digital",
-   "account_number": "01000000000", "account_name": "وحدة التدريب",
-   "instructions": "حوّل ثم أرفق صورة التحويل", "sort_order": 1 }]
+[{ "id": 1, "key": "cash", "label": "الدفع في خزنة المعهد", "kind": "cash",
+   "account_number": "", "account_name": "", "instructions": "توجّه للخزنة واذكر رقم الحجز", "sort_order": 0 }]
 ```
 
-`kind`: `cash` (الدفع في الخزنة) أو `digital` (يتطلب إيصالاً).
+- `kind` دائماً `cash` في هذا المسار. `instructions` يُكتب من لوحة الأدمن ويُعرض للطالب.
+- **الرحلة:** الطالب يحجز → يُصدر رقم الحجز → يدفع في الخزنة → يستلم إيصالاً → يرفع صورة الإيصال من «طلباتي» → تعتمدها الإدارة (`paid` وانتظامه في المجموعات).
 
 ## 3. الطلبات
 
 | المسار | الدور | الوظيفة |
 |---|---|---|
 | `POST /api/orders` | student | إنشاء حجز |
-| `PATCH /api/orders/:id/pay` | صاحب الطلب | اختيار طريقة الدفع / إرسال الإيصال |
+| `PATCH /api/orders/:id/pay` | صاحب الطلب | توافق قديم: تأكيد الحجز (خزنة فقط) — لا يقبل دفعاً رقمياً |
 | `PATCH /api/orders/:id/cancel` | صاحب الطلب | إلغاء حجزه غير المدفوع (pending أو review) |
 | `DELETE /api/orders/:id/items/:courseId` | صاحب الطلب | حذف كورس من حجز غير مدفوع (يُعاد حساب الإجمالي؛ آخر كورس يلغي الطلب) |
-| `PATCH /api/orders/:id/receipt` | صاحب الطلب | رفع إيصال (توافق مع النسخ القديمة) |
+| `PATCH /api/orders/:id/receipt` | صاحب الطلب | رفع صورة إيصال الخزنة → `review` (يُرفض على طلب مدفوع/ملغي بـ 409) |
 | `GET /api/orders/my` | مستخدم | كل طلباتي |
 | `GET /api/orders/my/:id` | صاحب الطلب | تفصيل طلب + مجموعاتي |
 | `GET /api/orders/my/check/:courseId` | مستخدم | هل اشترى الكورس / هل له شهادة |
@@ -53,28 +55,33 @@
 
 ```json
 { "items": [{ "course_id": 12 }, { "course_id": 15 }],
-  "payment_method": "instapay", "note_student": "ملاحظة", "sender_phone": "01...0000",
-  "receipt_url": "data:image/jpeg;base64,..." }
+  "payment_method": "cash", "note_student": "ملاحظة" }
 ```
 
 - يُقبل أيضاً `items:[12,15]` أو الحقل القديم `course_id`.
-- الحد: 20 كورساً في الطلب. الرد: `201 { id, status, amount, message, items:[{course_id}] }`.
-- **الحجز يُؤكَّد في الخطوة الأخيرة فقط:** عند إرسال `payment_method` مع الطلب (وهو ما تفعله المنصة والتطبيق: الدفع = آخر خطوة) يُنشأ الطلب بحالته النهائية مباشرة: `digital` → `review` **بشرط** وجود `receipt` و`sender_phone` وإلا 400، و`cash` → `pending`، ويُرسل إشعار `order_created` («تم تأكيد حجزك») **مرة واحدة**.
-- العملاء القديمة (التطبيق المثبَّت قبل 1.0.6) تنشئ الطلب بلا بيانات دفع ثم تنادي `/pay`؛ في هذه الحالة **لا يُرسل أي إشعار عند الإنشاء**، ويُرسل إشعار التأكيد من `/pay` (أو من `PATCH /api/orders/:id/receipt` القديم).
+- الحد: 20 كورساً في الطلب. الرد: `201 { id, status, amount, message, items:[{course_id}] }`، الحالة دائماً `pending` و`payment_method` دائماً `cash`.
+- **طريقة الدفع موحّدة على السيرفر:** أي `payment_method` أو `receipt_url` يرسله عميل قديم يُتجاهل؛ لا تُنشأ إلا حجوزات خزنة.
+- **الحجز يُؤكَّد في الخطوة الأخيرة فقط:** عند إرسال `payment_method` مع الطلب (وهو ما تفعله المنصة والتطبيق: الدفع = آخر خطوة) يُرسل إشعار `order_created` («تم تأكيد حجزك») **مرة واحدة**.
+- العملاء القديمة (التطبيق المثبَّت قبل 1.0.6) تنشئ الطلب بلا بيانات دفع ثم تنادي `/pay`؛ في هذه الحالة **لا يُرسل أي إشعار عند الإنشاء**، ويُرسل إشعار التأكيد من `/pay`.
 - 409 إذا كان أحد الكورسات مدفوعاً أو داخل طلب مفتوح: `{ error, course_id, status }`.
 - **السلة على السيرفر:** عند نجاح الحجز (من المنصة أو التطبيق أو طلب يدوي من الأدمن) تُحذف **كورسات الطلب فقط** من سلة صاحبه ويبقى باقي السلة كما هو؛ "اشترِ الآن" كذلك. فشل الحجز لا يغيّر السلة، والإلغاء أو انتهاء الحجز لا يعيد الكورس للسلة.
 - `POST /api/cart` يرفض بـ 409 الكورس **المدفوع** أو **داخل طلب مفتوح** بنفس رسالتي الطلبات (`مدفوع بالفعل` / `داخل طلب مفتوح`) ويرجع `{ error, course_id, status }`؛ الكورس الذي أُلغي طلبه أو انتهى يمكن إضافته.
 - `GET /api/cart` يحذف قبل الإرجاع أي كورس مدفوع أو داخل طلب مفتوح (تنظيف السلال القديمة) ويعيد نفس الشكل `{ items, total, count }`.
 
-**الدفع** — `PATCH /api/orders/:id/pay`
+**رفع إيصال الخزنة** — `PATCH /api/orders/:id/receipt`
 
 ```json
-{ "payment_method": "instapay", "sender_phone": "01000000000",
-  "receipt": "data:image/jpeg;base64,...", "note_student": "اختياري" }
+{ "receipt_url": "data:image/jpeg;base64,..." }
 ```
 
-- `digital`: الإيصال و`sender_phone` إلزاميان → الحالة `review`.
-- `cash`: بلا إيصال → تبقى `pending`.
+- صاحب الطلب فقط، ولا يُقبل على طلب `paid` أو `cancelled` (409).
+- الحالة تصبح `review`، و`payment_method='cash'`، ويُرسل إشعار `order_receipt_uploaded` («تم استلام إيصال الدفع»).
+- الرد: `{ message, status: "review" }`. 400 إيصال ناقص، 413 حجم أكبر من 2MB.
+
+**الدفع (توافق قديم)** — `PATCH /api/orders/:id/pay`
+
+- الطريقة الوحيدة `cash`: الحالة تبقى `pending` إذا لم يكن هناك إيصال، أو `review` إذا أرسل العميل القديم إيصالاً معه (يُحفظ ليظهر للأدمن).
+- يُرسل إشعار `order_created` مرة واحدة إن لم يكن قد أُرسل (الطلبات القديمة التي تنشئ ثم تدفع).
 - الرد: `{ id, status, message }`. 409 لطلب مدفوع/ملغي، 413 لحجم إيصال كبير.
 
 **حالات الطلب**
@@ -99,7 +106,7 @@
 
 ## 4. الإيصال
 
-- الصيغة: **data URL** لصورة JPEG مضغوطة (`data:image/jpeg;base64,...`) — لا يوجد endpoint رفع ملف لهذا الغرض.
+- الصيغة: **data URL** لصورة JPEG مضغوطة (`data:image/jpeg;base64,...`) — لا يوجد endpoint رفع ملف لهذا الغرض. يُرفع الإيصال من «طلباتي» بعد الدفع في الخزنة عبر `PATCH /api/orders/:id/receipt`.
 - الحد الأقصى: 2,097,152 حرفاً (~2MB) → 413 `حجم الإيصال أكبر من 2MB، اضغط الصورة وحاول مرة أخرى`.
 - الإيصال يُحفظ صفاً واحداً لكل طلب (يُستبدل عند التحديث) ويُدقّق من الأدمن.
 - للعميل: `compressAndEncode` (800px، JPEG 0.7) قبل الإرسال.
@@ -114,7 +121,7 @@
 | `attendance_opened` | `/attendance/<lectureId>` | صفحة الحضور (مسح/إدخال الكود) |
 | `attendance_confirmed` | `/my-courses` | كورساتي |
 | `certificate_issued`, `certificate_restored`, `certificate_revoked` | `/account?tab=certificates` | الحساب ← الشهادات |
-| `order_created`, `order_paid`, `order_cancelled` | `/orders` | طلباتي |
+| `order_created`, `order_receipt_uploaded`, `order_paid`, `order_cancelled` | `/orders` | طلباتي |
 | `order_expired` (انتهت مدة الحجز) | `/orders` | طلباتي |
 | `order_course_removed` (حذف كورس من الطلب) | `/orders` | طلباتي |
 | `survey_opened`, `survey_reminder` | `/survey/<groupId>` | الاستبيان |

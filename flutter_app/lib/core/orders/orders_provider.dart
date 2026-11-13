@@ -225,6 +225,31 @@ class OrdersProvider extends ChangeNotifier {
     return false;
   }
 
+  // ── Treasury receipt upload ────────────────────────────────────────────────
+  /// Uploads the cash receipt photo taken at the treasury. The order moves to
+  /// `review` until an admin approves it from the dashboard.
+  Future<bool> uploadReceipt({
+    required int orderId,
+    required String receiptUrl,
+  }) async {
+    try {
+      final res = await _api.patch(
+        '${ApiConstants.orders}/$orderId/receipt',
+        data: {'receipt_url': receiptUrl},
+      );
+      if (res.statusCode == 200 || res.statusCode == 201) {
+        await fetchMyOrders(silent: true);
+        return true;
+      }
+    } on DioException catch (e) {
+      final err = toJsonMap(e.response?.data);
+      throw Exception(
+        toStrOrNull(err?['error']) ?? 'فشل رفع الإيصال، حاول مرة أخرى',
+      );
+    }
+    return false;
+  }
+
   // ── Cancel own unpaid booking ──────────────────────────────────────────────
   Future<bool> cancelOrder(int orderId) async {
     try {

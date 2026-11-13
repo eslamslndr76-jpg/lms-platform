@@ -1,11 +1,14 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/order_model.dart';
 import '../../core/orders/orders_provider.dart';
-import 'checkout_screen.dart';
 
 /// "طلباتي" — the student's bookings with their items and states.
-/// Read-mostly here; payment/cancellation land in phase 11 and reuse this screen.
+/// The only payment route is the treasury: the student books, pays there, then
+/// uploads the receipt photo from here for admin approval.
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -137,6 +140,16 @@ class _OrderCardState extends State<_OrderCard> {
     );
   }
 
+  Future<void> _openReceipt() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _ReceiptSheet(orderId: order.id),
+    );
+    if (mounted) await context.read<OrdersProvider>().fetchMyOrders(silent: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final (label, color) = _statusStyle;
@@ -265,21 +278,13 @@ class _OrderCardState extends State<_OrderCard> {
             if (order.isOpen) ...[
               const SizedBox(height: 12),
               OutlinedButton.icon(
-                onPressed: () async {
-                  final paid = await Navigator.of(context).push<bool>(
-                    MaterialPageRoute(
-                      builder: (_) => CheckoutScreen(
-                        courseIds: [],
-                        existingOrderId: order.id,
-                      ),
-                    ),
-                  );
-                  if (paid == true && context.mounted) {
-                    context.read<OrdersProvider>().fetchMyOrders();
-                  }
-                },
-                icon: const Icon(Icons.payment_rounded, size: 18),
-                label: const Text('الدفع الآن'),
+                onPressed: _busy ? null : _openReceipt,
+                icon: const Icon(Icons.upload_file_rounded, size: 18),
+                label: Text(
+                  order.status == 'review'
+                      ? 'تحديث صورة الإيصال'
+                      : 'رفع إيصال الدفع',
+                ),
               ),
               const SizedBox(height: 8),
               TextButton.icon(
@@ -365,6 +370,169 @@ class _ErrorView extends StatelessWidget {
               onPressed: onRetry,
               icon: const Icon(Icons.refresh_rounded),
               label: const Text('إعادة المحاولة'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Treasury receipt: pick the photo of the paper receipt, then upload it.
+/// The order moves to `review` until an admin approves it (then `paid`).
+class _ReceiptSheet extends StatefulWidget {
+  final int orderId;
+  const _ReceiptSheet({required this.orderId});
+
+  @override
+  State<_ReceiptSheet> createState() => _ReceiptSheetState();
+}
+
+class _ReceiptSheetState extends State<_ReceiptSheet> {
+  final _picker = ImagePicker();
+  File? _file;
+  String _base64 = '';
+  bool _busy = false;
+  String? _error;
+
+  Future<void> _pick(ImageSource source) async {
+    try {
+      final picked = await _picker.pickImage(
+        source: source,
+        maxWidth: 800,
+        imageQuality: 70,
+      );
+      if (picked == null || !mounted) return;
+      final file = File(picked.path);
+      final bytes = await file.readAsBytes();
+      if (!mounted) return;
+      setState(() {
+        _file = file;
+        _base64 = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+        _error = null;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'تعذر قراءة الصورة، جرّب صورة أخرى');
+    }
+  }
+
+  Future<void> _upload() async {
+    if (_base64.isEmpty) {
+      setState(() => _error = 'أرفق صورة إيصال الدفع أولاً');
+      return;
+    }
+    final provider = context.read<OrdersProvider>();
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final ok = await provider.uploadReceipt(
+        orderId: widget.orderId,
+        receiptUrl: _base64,
+      );
+      if (!mounted) return;
+      if (!ok) {
+        setState(() {
+          _busy = false;
+          _error = 'فشل رفع الإيصال، حاول مرة أخرى';
+        });
+        return;
+      }
+      navigator.pop();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('تم رفع الإيصال، وسيتم اعتماده بعد المراجعة')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      final message = e is Exception
+          ? e.toString().replaceFirst('Exception: ', '')
+          : 'فشل رفع الإيصال، حاول مرة أخرى';
+      setState(() {
+        _busy = false;
+        _error = message;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final tt = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 16,
+        right: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'رفع إيصال الدفع',
+              style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w900),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'ادفع في خزنة المعهد واحصل على الإيصال، ثم ارفع صورته هنا ليتم اعتماد الطلب من الإدارة.',
+              style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _pick(ImageSource.gallery),
+                    icon: const Icon(Icons.image_outlined, size: 18),
+                    label: const Text('من المعرض'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _busy ? null : () => _pick(ImageSource.camera),
+                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
+                    label: const Text('الكاميرا'),
+                  ),
+                ),
+              ],
+            ),
+            if (_file != null) ...[
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(
+                  _file!,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.contain,
+                ),
+              ),
+            ],
+            if (_error != null) ...[
+              const SizedBox(height: 10),
+              Text(_error!, style: tt.bodySmall?.copyWith(color: cs.error)),
+            ],
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _busy || _base64.isEmpty ? null : _upload,
+                icon: _busy
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_upload_rounded, size: 18),
+                label: Text(_busy ? 'جاري الرفع...' : 'رفع الإيصال'),
+              ),
             ),
           ],
         ),

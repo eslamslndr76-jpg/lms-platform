@@ -35,28 +35,17 @@ function isTooLarge(receipt: unknown): boolean {
   return typeof receipt === 'string' && receipt.length > MAX_RECEIPT_CHARS;
 }
 
-/** Payment kind from the admin-configured methods; unknown keys behave like the pay route. */
-async function resolvePaymentKind(key: string): Promise<'cash' | 'digital'> {
-  const result = await sql('SELECT kind FROM payment_methods WHERE key=?', key);
-  if (result.rows.length > 0) {
-    return String((result.rows[0] as any).kind) === 'digital' ? 'digital' : 'cash';
-  }
-  return key === 'cash' ? 'cash' : 'digital';
-}
-
 /** One confirmation notification, sent only once the booking step is finished. */
 async function notifyBookingConfirmed(
   userId: number,
   orderId: number,
   total: number,
   titles: string[],
-  kind: 'cash' | 'digital',
 ) {
   await sendNotification(userId, 'order_created', {
     courseTitle: titles.join('، '),
     amount: total,
     orderId,
-    kind,
   }).catch((e) => console.error('[Notify] order_created failed:', e.message));
 }
 
@@ -111,25 +100,21 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
 
     const priceById = new Map<number, number>(courses.map((c) => [Number(c.id), Number(c.price)]));
     const total = courseIds.reduce((sum, id) => sum + (priceById.get(id) || 0), 0);
-    const paymentMethod = String(req.body?.payment_method || 'cash');
+    // One payment route only: the student pays at the treasury and uploads the
+    // receipt later from "طلباتي". Anything digital sent by older builds is
+    // ignored here instead of creating a different kind of booking.
+    const paymentMethod = 'cash';
     const notesStudent = req.body?.note_student ?? req.body?.notes_student ?? null;
-    const senderPhone = String(req.body?.sender_phone ?? '').trim() || null;
 
-    // The checkout sends the payment choice with the booking, so the order is
-    // created already confirmed and only one notification is sent (last step).
-    // Older clients still POST without payment data, then PATCH /:id/pay.
-    const confirmedHere = Boolean(receipt || req.body?.payment_method);
-    const kind = await resolvePaymentKind(paymentMethod);
-    if (confirmedHere && kind === 'digital') {
-      if (!receipt) return res.status(400).json({ error: 'الدفع الرقمي يتطلب إرفاق إيصال التحويل' });
-      if (!senderPhone) return res.status(400).json({ error: 'أدخل رقم الهاتف المحوِّل منه' });
-    }
-    const status = confirmedHere && kind === 'digital' ? 'review' : 'pending';
+    // The checkout confirms the booking on its last step, which is why the
+    // confirmation notification is only sent when the request carries the
+    // payment choice (older builds book first, then call /:id/pay).
+    const confirmedHere = Boolean(req.body?.payment_method);
 
     const result = await sql(
-      `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student, sender_phone)
-       VALUES (?,?,?,?,?,?,?)`,
-      userId, courseIds[0], total, status, paymentMethod, notesStudent, senderPhone,
+      `INSERT INTO orders (user_id, course_id, amount, status, payment_method, notes_student)
+       VALUES (?,?,?,'pending',?,?)`,
+      userId, courseIds[0], total, paymentMethod, notesStudent,
     );
     const orderId = Number(result.lastInsertRowid);
 
@@ -140,8 +125,6 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
       );
     }
 
-    if (receipt) await saveReceipt(orderId, String(receipt), paymentMethod);
-
     // The server owns the cart: the booked courses leave it (nothing else does).
     await removeCoursesFromCart(userId, courseIds);
 
@@ -150,16 +133,13 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
       .map((c) => c.title_ar)
       .filter(Boolean);
 
-    if (confirmedHere) await notifyBookingConfirmed(userId, orderId, total, titles, kind);
+    if (confirmedHere) await notifyBookingConfirmed(userId, orderId, total, titles);
 
-    const message = kind === 'digital'
-      ? 'تم تأكيد حجزك وإرسال الإيصال للمراجعة'
-      : 'تم تأكيد حجزك، أكمل الدفع في خزنة المعهد';
     res.status(201).json({
       id: orderId,
-      status,
+      status: 'pending',
       amount: total,
-      message,
+      message: 'تم تأكيد حجزك. ادفع في خزنة المعهد ثم ارفع صورة الإيصال من صفحة طلباتي.',
       items: courseIds.map((id) => ({ course_id: id })),
     });
   } catch (err: any) {
@@ -169,7 +149,8 @@ router.post('/', authMiddleware, requireRole(STUDENT), async (req: Request, res:
 });
 
 // ─────────────────────────────────────────────────────────────
-// Pay an order: digital → review (receipt required), cash → stays pending
+// Legacy pay endpoint (installed builds): the only route is the treasury, so
+// the choice just confirms the booking. Receipts are uploaded from "طلباتي".
 // ─────────────────────────────────────────────────────────────
 router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => {
   try {
@@ -184,26 +165,16 @@ router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => 
       return res.status(409).json({ error: 'لا يمكن تعديل دفعة طلب مدفوع أو ملغي' });
     }
 
-    const paymentMethod = String(req.body?.payment_method || order.payment_method || 'cash');
-    const kind = await resolvePaymentKind(paymentMethod);
-
+    const paymentMethod = 'cash';
     const receipt = req.body?.receipt ?? req.body?.receipt_url;
     if (isTooLarge(receipt)) return res.status(413).json({ error: 'حجم الإيصال أكبر من 2MB، اضغط الصورة وحاول مرة أخرى' });
     const senderPhone = String(req.body?.sender_phone ?? '').trim();
 
-    if (kind === 'digital') {
-      const existingReceipt = await sql('SELECT id FROM receipts WHERE order_id=? LIMIT 1', orderId);
-      if (!receipt && existingReceipt.rows.length === 0) {
-        return res.status(400).json({ error: 'الدفع الرقمي يتطلب إرفاق إيصال التحويل' });
-      }
-      if (!senderPhone) {
-        return res.status(400).json({ error: 'أدخل رقم الهاتف المحوِّل منه' });
-      }
-    }
-
+    // Older builds may still send a receipt with the payment; keep it so the
+    // admin sees it, but the booking itself is always a treasury payment.
     if (receipt) await saveReceipt(orderId, String(receipt), paymentMethod);
 
-    const newStatus = kind === 'digital' ? 'review' : 'pending';
+    const newStatus = receipt ? 'review' : 'pending';
     const notesStudent = req.body?.note_student ?? req.body?.notes_student;
     const sets = ['status=?', 'payment_method=?', 'sender_phone=?'];
     const params: unknown[] = [newStatus, paymentMethod, senderPhone || null];
@@ -217,9 +188,13 @@ router.patch('/:id/pay', authMiddleware, async (req: Request, res: Response) => 
     // This is the last checkout step for clients that book first and pay after,
     // so the single "booking confirmed" notification is sent from here.
     const titles = await getOrderCourseTitles(orderId);
-    await notifyBookingConfirmed(req.user!.userId, orderId, Number(order.amount) || 0, titles, kind);
+    await notifyBookingConfirmed(req.user!.userId, orderId, Number(order.amount) || 0, titles);
 
-    res.json({ id: orderId, status: newStatus, message: kind === 'digital' ? 'تم إرسال الإيصال للمراجعة' : 'تم اختيار الدفع كاش، أكمل الدفع في الخزنة' });
+    res.json({
+      id: orderId,
+      status: newStatus,
+      message: 'تم تأكيد حجزك. ادفع في خزنة المعهد ثم ارفع صورة الإيصال من صفحة طلباتي.',
+    });
   } catch (err: any) {
     console.error('Order pay error:', err?.message || err);
     res.status(500).json({ error: 'فشل تحديث الدفع، حاول مرة أخرى' });
@@ -239,17 +214,23 @@ router.patch('/:id/receipt', authMiddleware, async (req: Request, res: Response)
     if (order.rows.length === 0) return res.status(404).json({ error: 'Order not found' });
     const row = order.rows[0] as any;
     if (Number(row.user_id) !== req.user!.userId) return res.status(403).json({ error: 'Unauthorized' });
-
-    await saveReceipt(Number(req.params.id), String(receipt_url), String(row.payment_method || 'cash'));
-    await sql("UPDATE orders SET status='review' WHERE id=?", req.params.id);
-
-    // Older builds upload the receipt here instead of calling /pay, so this is
-    // their last checkout step. Skip when /pay already confirmed the booking.
-    if (String(row.status) === 'pending') {
-      const titles = await getOrderCourseTitles(Number(req.params.id));
-      await notifyBookingConfirmed(req.user!.userId, Number(req.params.id), Number(row.amount) || 0, titles, 'digital');
+    if (row.status === 'paid' || row.status === 'cancelled') {
+      return res.status(409).json({ error: 'لا يمكن تعديل إيصال طلب مدفوع أو ملغي' });
     }
-    res.json({ message: 'Receipt uploaded' });
+
+    await saveReceipt(Number(req.params.id), String(receipt_url), 'cash');
+    await sql("UPDATE orders SET status='review', payment_method='cash', sender_phone=NULL WHERE id=?", req.params.id);
+
+    // The student finished the treasury payment: tell them the receipt is with
+    // the admin (a second, distinct notification after the booking one).
+    const titles = await getOrderCourseTitles(Number(req.params.id));
+    await sendNotification(req.user!.userId, 'order_receipt_uploaded', {
+      courseTitle: titles.join('، '),
+      amount: Number(row.amount) || undefined,
+      orderId: Number(req.params.id),
+    }).catch((e) => console.error('[Notify] order_receipt_uploaded failed:', e.message));
+
+    res.json({ message: 'تم رفع الإيصال، وسيتم مراجعته من الإدارة', status: 'review' });
   } catch (err: any) {
     console.error('Receipt upload error:', err?.message || err);
     res.status(500).json({ error: 'فشل رفع الإيصال' });

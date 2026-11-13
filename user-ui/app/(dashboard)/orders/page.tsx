@@ -8,7 +8,7 @@ import { useAuth } from '../../../lib/auth';
 import { useBranding } from '../../../components/BrandingProvider';
 import { PageSkeleton } from '../../../components/Skeleton';
 import M3BottomSheet from '../../../components/M3BottomSheet';
-import PaymentStep from '../../../components/PaymentStep';
+import ReceiptUpload from '../../../components/ReceiptUpload';
 import { loginUrl } from '../../../lib/redirect';
 
 interface Order {
@@ -98,7 +98,7 @@ export default function OrdersPage() {
   const [detailOrder, setDetailOrder] = useState<OrderDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
-  const [payOrder, setPayOrder] = useState<OrderDetail | null>(null);
+  const [receiptOrder, setReceiptOrder] = useState<OrderDetail | null>(null);
   const [busyOrderId, setBusyOrderId] = useState<number | null>(null);
 
   useEffect(() => {
@@ -124,9 +124,17 @@ export default function OrdersPage() {
     setDetailLoading(false);
   };
 
-  const openPay = async (orderId: number) => {
-    try { setPayOrder(await api(`/api/orders/my/${orderId}`)); }
+  const openReceipt = async (orderId: number) => {
+    try { setReceiptOrder(await api(`/api/orders/my/${orderId}`)); }
     catch { /* keep the list usable; the toast layer reports real failures */ }
+  };
+
+  /* After uploading a receipt the order is "review" until an admin approves it. */
+  const afterReceipt = async () => {
+    const id = receiptOrder?.id;
+    setReceiptOrder(null);
+    await fetchOrders();
+    if (id && detailOrder?.id === id) await openDetail(id);
   };
 
   /* Student cancels an unpaid booking (pending or review only). */
@@ -230,10 +238,17 @@ export default function OrdersPage() {
                 </div>
               </button>
               {order.status === 'pending' && (
-                <button onClick={() => openPay(order.id)}
+                <button onClick={() => openReceipt(order.id)}
                   className="w-full h-11 rounded-full text-sm font-bold"
                   style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
-                  ادفع الآن
+                  رفع إيصال الدفع
+                </button>
+              )}
+              {order.status === 'review' && (
+                <button onClick={() => openReceipt(order.id)}
+                  className="w-full h-11 rounded-full text-sm font-bold border"
+                  style={{ borderColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-primary)' }}>
+                  تحديث صورة الإيصال
                 </button>
               )}
               {(order.status === 'pending' || order.status === 'review') && (
@@ -378,28 +393,26 @@ export default function OrdersPage() {
         )
       )}
 
-      {payOrder && (
+      {receiptOrder && (
         isMobile ? (
-          <M3BottomSheet open={!!payOrder} onClose={() => setPayOrder(null)} title="الدفع" maxHeightVh={85}>
+          <M3BottomSheet open={!!receiptOrder} onClose={() => setReceiptOrder(null)} title="رفع إيصال الدفع" maxHeightVh={85}>
             <div className="px-5 pb-6">
-              <PaymentStep orderId={payOrder.id} amount={Number(payOrder.amount)}
-                onDone={() => { setPayOrder(null); fetchOrders(); }} />
+              <ReceiptUpload orderId={receiptOrder.id} onDone={afterReceipt} />
             </div>
           </M3BottomSheet>
         ) : (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setPayOrder(null)}>
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setReceiptOrder(null)}>
             <div className="absolute inset-0" style={{ backgroundColor: 'rgba(0,0,0,0.4)' }} />
             <div className="relative w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-md3-md p-6 shadow-xl"
               style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }} onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>دفع الطلب</h2>
-                <button onClick={() => setPayOrder(null)} className="w-10 h-10 rounded-full flex items-center justify-center"
+                <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>رفع إيصال الدفع</h2>
+                <button onClick={() => setReceiptOrder(null)} className="w-10 h-10 rounded-full flex items-center justify-center"
                   style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                   <span className="material-symbols-outlined">close</span>
                 </button>
               </div>
-              <PaymentStep orderId={payOrder.id} amount={Number(payOrder.amount)}
-                onDone={() => { setPayOrder(null); fetchOrders(); }} />
+              <ReceiptUpload orderId={receiptOrder.id} onDone={afterReceipt} />
             </div>
           </div>
         )
