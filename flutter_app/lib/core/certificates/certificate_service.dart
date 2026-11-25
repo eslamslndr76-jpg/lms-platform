@@ -38,16 +38,6 @@ class CertificateService {
   static File _htmlFile(Directory dir, int id) =>
       File('${dir.path}${Platform.pathSeparator}certificate_$id.html');
 
-  static bool _looksLikePdf(File file) {
-    try {
-      final bytes = file.readAsBytesSync();
-      if (bytes.length < 5) return false;
-      return bytes[0] == 0x25 && bytes[1] == 0x50 && bytes[2] == 0x44; // %PD
-    } catch (_) {
-      return false;
-    }
-  }
-
   static Future<bool> _download(String path, String savePath) async {
     try {
       await ApiClient().dio.download(
@@ -66,7 +56,8 @@ class CertificateService {
     }
   }
 
-  /// PDF الشهادة: يُعاد من الملف المحفوظ، أو يُولَّد داخل الجهاز مرة واحدة.
+  /// PDF الشهادة (احتياطي أوفلاين فقط): يُولَّد داخل الجهاز.
+  /// يُمسح الكاش القديم دائماً لأن التصميم قد يتغير عبر الـ backend.
   static Future<CertificateDocument?> ensurePdf(
     CertificateModel cert, {
     required String studentName,
@@ -75,8 +66,9 @@ class CertificateService {
   }) async {
     final dir = await _dir();
     final file = _pdfFile(dir, cert.id);
-    if (await file.exists() && _looksLikePdf(file)) {
-      return CertificateDocument(file: file, isPdf: true);
+    // Clear stale cached PDF so we don't serve an old design.
+    if (await file.exists()) {
+      try { await file.delete(); } catch (_) {}
     }
     try {
       final generated = await CertificatePdfService.build(
@@ -91,33 +83,37 @@ class CertificateService {
     }
   }
 
-  /// نسخة HTML من الـ API (بديل احتياطي فقط).
+  /// نسخة HTML من الـ API — يُنزَّل دائماً لضمان عرض أحدث تصميم للشهادة.
   static Future<CertificateDocument?> ensureHtml(CertificateModel cert) async {
     final dir = await _dir();
     final file = _htmlFile(dir, cert.id);
-    if (await file.exists() && await file.length() > 512) {
-      return CertificateDocument(file: file, isPdf: false);
+    // Always re-download to get the latest backend design (self-contained HTML).
+    if (await file.exists()) {
+      try { await file.delete(); } catch (_) {}
     }
     final ok = await _download('/api/certificates/${cert.id}/html', file.path);
     if (ok) return CertificateDocument(file: file, isPdf: false);
     return null;
   }
 
-  /// مستند جاهز للعرض أوفلاين: PDF إن أمكن، وإلا HTML.
+  /// مستند جاهز للعرض: HTML من الـ backend أولاً (تصميم محدَّث دائماً)،
+  /// يتراجع إلى PDF محلي فقط إذا فشل الاتصال.
   static Future<CertificateDocument?> documentFor(
     CertificateModel cert, {
     required String studentName,
     required String systemName,
     required String primaryHex,
   }) async {
-    final pdf = await ensurePdf(
+    // 1. Try fresh HTML from backend (matches web design).
+    final html = await ensureHtml(cert);
+    if (html != null) return html;
+    // 2. Fallback: locally-generated PDF (offline).
+    return ensurePdf(
       cert,
       studentName: studentName,
       systemName: systemName,
       primaryHex: primaryHex,
     );
-    if (pdf != null) return pdf;
-    return ensureHtml(cert);
   }
 
   /// مشاركة الشهادة (ملف PDF + كود التحقق).
