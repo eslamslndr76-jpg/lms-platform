@@ -46,6 +46,19 @@ export interface ExportDataset {
   columns: ExportColumn[];
   filters: ExportFilterDef[];
   build: (params: ExportParams) => Query;
+  /**
+   * Optional per-scope column set (e.g. drop the course column when the export
+   * is for a single course). Falls back to `columns`.
+   */
+  resolveColumns?: (params: ExportParams) => ExportColumn[];
+  /**
+   * Optional label/value report info block rendered above the table in the
+   * branded workbook (only for narrow scopes, e.g. one course/group/lecture).
+   */
+  buildInfo?: (
+    params: ExportParams,
+    rows: Record<string, unknown>[],
+  ) => Promise<{ label: string; value: string }[] | undefined>;
   /** Optional extra footer line (aggregates that do not fit a row, e.g. survey averages). */
   buildNote?: (params: ExportParams) => Promise<string | undefined>;
 }
@@ -72,6 +85,13 @@ function searchClause(columns: string[], params: ExportParams, args: unknown[]):
   const parts = columns.map((c) => `${c} LIKE ?`);
   columns.forEach(() => args.push(like));
   return ` AND (${parts.join(' OR ')})`;
+}
+
+/** 'YYYY-MM-DD…' → 'd/m/yyyy' for the report info block. */
+function formatDateShort(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  return `${Number(m[3])}/${Number(m[2])}/${Number(m[1])}`;
 }
 
 const ACTIVE_FILTER: ExportFilterDef = {
@@ -385,7 +405,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
     key: 'attendance',
     section: 'groups',
     name: 'سجلات الحضور',
-    description: 'حضور كل طالب في كل محاضرة مع طريقة التحقق والوقت.',
+    description: 'حضور وغياب كل طالب مسجَّل في كل محاضرة مع طريقة التحقق والوقت.',
     icon: '✅',
     columns: [
       { key: 'id', header: '#', type: 'number', width: 8 },
@@ -395,7 +415,16 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'group_name', header: 'المجموعة', type: 'text' },
       { key: 'lecture_date', header: 'تاريخ المحاضرة', type: 'date', width: 15 },
       { key: 'topic', header: 'الموضوع', type: 'text', width: 26 },
-      { key: 'attended', header: 'حضر؟', type: 'boolean', width: 10 },
+      {
+        key: 'attended',
+        header: 'الحالة',
+        type: 'text',
+        width: 14,
+        badge: {
+          '1': { label: '✓ حضر', tone: 'success' },
+          '0': { label: '✗ لم يحضر', tone: 'danger' },
+        },
+      },
       { key: 'verification_method', header: 'طريقة التحقق', type: 'text', width: 14 },
       { key: 'attended_at', header: 'وقت الحضور', type: 'datetime', width: 18 },
     ],
@@ -414,11 +443,24 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       SEARCH_FILTER('اسم الطالب'),
       ...RANGE_FILTERS,
     ],
+    resolveColumns: (params) => {
+      // Narrow scope: the course (and the group, when it is a single one) move
+      // to the workbook report info block — see buildInfo below.
+      const hide = new Set<string>();
+      if (params.lectureId || params.groupId) {
+        hide.add('course');
+        hide.add('group_name');
+      } else if (params.courseId) {
+        hide.add('course');
+      }
+      const full = EXPORT_DATASETS.find((d) => d.key === 'attendance')!.columns;
+      return hide.size ? full.filter((c) => !hide.has(c.key)) : full;
+    },
     build: (params) => {
       const args: unknown[] = [];
       let where = '1=1';
-      if (params.status === 'attended') where += ' AND a.attended = 1';
-      if (params.status === 'absent') where += ' AND a.attended = 0';
+      if (params.status === 'attended') where += ' AND la.attended = 1';
+      if (params.status === 'absent') where += ' AND COALESCE(la.attended, 0) = 0';
       if (params.courseId) {
         where += ' AND g.course_id = ?';
         args.push(params.courseId);
@@ -428,26 +470,100 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args.push(params.groupId);
       }
       if (params.studentId) {
-        where += ' AND a.user_id = ?';
+        where += ' AND u.id = ?';
         args.push(params.studentId);
       }
       if (params.lectureId) {
-        where += ' AND a.lecture_id = ?';
+        where += ' AND l.id = ?';
         args.push(params.lectureId);
       }
       where += searchClause(['u.name', 'u.phone'], params, args);
       where += dateClause('l.date', params, args);
+      // Every enrolled student × every lecture of their group, with the
+      // attendance row LEFT JOINed on — absentees (no row / attended=0) come
+      // from the join, never inserted into the database for exporting.
       return {
-        text: `SELECT a.id, u.name AS student, u.phone, c.title_ar AS course, g.name AS group_name,
-                 l.date AS lecture_date, l.topic, a.attended, a.verification_method, a.attended_at
-               FROM lecture_attendance a
-               JOIN lectures l ON a.lecture_id = l.id
-               JOIN groups g ON l.group_id = g.id
-               JOIN courses c ON g.course_id = c.id
-               JOIN users u ON a.user_id = u.id
-               WHERE ${where} ORDER BY l.date DESC, u.name ASC`,
+        text: `SELECT la.id AS id, u.id AS student_id, u.name AS student, u.phone,
+                 c.title_ar AS course, g.name AS group_name,
+                 l.date AS lecture_date, l.topic, COALESCE(la.attended, 0) AS attended,
+                 la.verification_method, la.attended_at
+               FROM groups g
+               JOIN lectures l ON l.group_id = g.id
+               JOIN group_students gs ON gs.group_id = g.id
+               JOIN users u ON u.id = gs.user_id
+               LEFT JOIN lecture_attendance la ON la.lecture_id = l.id AND la.user_id = u.id
+               LEFT JOIN courses c ON c.id = g.course_id
+               WHERE ${where} ORDER BY u.name ASC, l.date ASC`,
         args,
       };
+    },
+    buildInfo: async (params, rows) => {
+      // Report info block only when the scope is a single course/group/lecture.
+      if (!params.lectureId && !params.groupId && !params.courseId) return undefined;
+
+      let scope: Record<string, any> | null = null;
+      if (params.lectureId) {
+        const r = await sql(
+          `SELECT c.title_ar AS course, g.name AS group_name, g.instructor_name, g.location,
+                  p.name AS place_name, c.course_mode
+           FROM lectures l
+           JOIN groups g ON l.group_id = g.id
+           LEFT JOIN courses c ON c.id = g.course_id
+           LEFT JOIN places p ON p.id = g.place_id
+           WHERE l.id = ? LIMIT 1`,
+          params.lectureId,
+        );
+        scope = (r.rows[0] as any) ?? null;
+      } else if (params.groupId) {
+        const r = await sql(
+          `SELECT c.title_ar AS course, g.name AS group_name, g.instructor_name, g.location,
+                  p.name AS place_name, c.course_mode
+           FROM groups g
+           LEFT JOIN courses c ON c.id = g.course_id
+           LEFT JOIN places p ON p.id = g.place_id
+           WHERE g.id = ? LIMIT 1`,
+          params.groupId,
+        );
+        scope = (r.rows[0] as any) ?? null;
+      } else if (params.courseId) {
+        const r = await sql('SELECT title_ar AS course FROM courses WHERE id = ? LIMIT 1', params.courseId);
+        scope = (r.rows[0] as any) ?? null;
+      }
+      if (!scope) return undefined;
+
+      // Lecture window and the counts come from the exported rows themselves
+      // (each row = one student × one lecture of the scope), so the block
+      // always matches exactly what is in the sheet — including any status filter.
+      const dates = [...new Set(rows.map((r) => String(r.lecture_date ?? '')).filter(Boolean))].sort();
+      const datesText =
+        dates.length === 0
+          ? '—'
+          : dates.length === 1
+            ? formatDateShort(dates[0])
+            : dates.length <= 3
+              ? dates.map(formatDateShort).join('، ')
+              : `من ${formatDateShort(dates[0])} إلى ${formatDateShort(dates[dates.length - 1])} (${dates.length} محاضرات)`;
+      const students = new Set(rows.map((r) => String(r.student_id ?? ''))).size;
+      const present = rows.filter((r) => Number(r.attended) === 1).length;
+      const absent = rows.length - present;
+      const place =
+        scope.course_mode !== 'offline' ? 'أونلاين' : scope.place_name || scope.location || '—';
+
+      const info: { label: string; value: string }[] = [{ label: 'الكورس', value: scope.course || '—' }];
+      if (params.lectureId || params.groupId) {
+        info.push(
+          { label: 'المجموعة', value: scope.group_name || '—' },
+          { label: 'المحاضر', value: scope.instructor_name || '—' },
+          { label: 'المكان', value: place },
+        );
+      }
+      info.push(
+        { label: 'تواريخ المحاضرات', value: datesText },
+        { label: 'عدد الطلاب', value: String(students) },
+        { label: 'الحاضرون', value: String(present) },
+        { label: 'الغائبون', value: String(absent) },
+      );
+      return info;
     },
   },
   {
@@ -580,6 +696,16 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'courseId', label: 'الكورس', type: 'course' },
       { key: 'groupId', label: 'المجموعة', type: 'group' },
     ],
+    resolveColumns: (params) => {
+      // Per-student export: the identity fields move to the workbook report
+      // info block (see buildInfo) instead of repeating in every row.
+      if (!params.studentId) {
+        return EXPORT_DATASETS.find((d) => d.key === 'survey_results')!.columns;
+      }
+      return EXPORT_DATASETS
+        .find((d) => d.key === 'survey_results')!
+        .columns.filter((c) => !['course', 'group_name', 'student', 'anonymous'].includes(c.key));
+    },
     build: (params) => {
       const args: unknown[] = [];
       let where = "s.status = 'submitted'";
@@ -590,6 +716,12 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       if (params.groupId) {
         where += ' AND s.group_id = ?';
         args.push(params.groupId);
+      }
+      if (params.studentId) {
+        // Anonymity rule: an anonymous response is never attributed or
+        // searched, so a per-student export only ever matches a named one.
+        where += ' AND s.user_id = ? AND s.is_anonymous = 0';
+        args.push(params.studentId);
       }
       return {
         text: `SELECT c.title_ar AS course, g.name AS group_name,
@@ -617,6 +749,21 @@ export const EXPORT_DATASETS: ExportDataset[] = [
                WHERE ${where} ORDER BY c.title_ar ASC, g.name ASC, s.submitted_at ASC`,
         args,
       };
+    },
+    buildInfo: async (params, rows) => {
+      // Report info block for the per-student export (identity fields are
+      // derived from the exported rows, which are guaranteed named here).
+      if (!params.studentId || rows.length === 0) return undefined;
+      const row = rows[0] as any;
+      return [
+        { label: 'الطالب', value: String(row.student || '—') },
+        { label: 'الكورس', value: String(row.course || '—') },
+        { label: 'المجموعة', value: String(row.group_name || '—') },
+        {
+          label: 'وقت التسليم',
+          value: row.submitted_at ? new Date(String(row.submitted_at)).toLocaleString('ar-EG') : '—',
+        },
+      ];
     },
     buildNote: async (params) => {
       try {

@@ -1,7 +1,7 @@
 # عقد الـ API بين المنصة والتطبيق (`api-contract.md`)
 
 > يكتبه وكيل المنصة من الكود الفعلي. وكيل التطبيق يقرأه فقط ولا يعدّل إلا القسم 11.
-> المصدر: `backend/src/routes/*` و`backend/src/services/*` بتاريخ 2026-11-10.
+> المصدر: `backend/src/routes/*` و`backend/src/services/*` بتاريخ 2026-11-25.
 
 ## 1. عام
 
@@ -93,7 +93,7 @@
 | `paid` | مدفوع ومؤكَّد |
 | `cancelled` | ملغي |
 
-- **انتهاء الحجز تلقائياً:** الطلب `pending` غير المدفوع يُلغى تلقائياً بعد **مدة الحجز** (افتراضياً 168 ساعة = 7 أيام، تُعدَّل من لوحة الأدمن `GET/PUT /api/settings/booking` بالحقل `hours` من 1 إلى 720). الطلب `review` لا ينتهي تلقائياً. يُرسل إشعار `order_expired` للطالب ويصبح بإمكانه الحجز من جديد.
+- **انتهاء الحجز تلقائياً:** الطلب `pending` غير المدفوع يُلغى تلقائياً بعد **مدة الحجز** (افتراضياً 168 ساعة = 7 أيام، تُعدَّل من لوحة الأدمن `GET/PUT /api/settings/booking` بالحقل `hours` من 1 إلى 720). يتم الإلغاء كسولاً أيضاً عند قراءة قائمة الطلبات (`GET /api/orders/my` وقائمة الأدمن). الطلب `review` لا ينتهي تلقائياً. يُرسل إشعار `order_expired` للطالب ويصبح بإمكانه الحجز من جديد.
 - **سبب الإلغاء:** كل طلب ملغي يحمل `cancel_reason`: `student` (الطالب ألغى حجزه) | `admin` (الإدارة) | `expired` (انتهت المدة). حقل اختياري قد يكون `null` في الطلبات القديمة.
 
 **قائمة/تفصيل** — كل عنصر طلب يضم: `id, status, amount, payment_method, notes_student, sender_phone, cancel_reason, created_at, course_id, title_ar, title_en, items:[{course_id,title_ar,title_en,instructor,course_mode,image_url,price}], receipt:{file_url,payment_method,verified_by,verified_at,created_at}|null`. التفصيل يضيف `groups:[{id,name,course_id,instructor_name,location,start_date,end_date,is_complete,zoom_link}]`.
@@ -135,9 +135,10 @@
 
 - قيمة الـ QR: `<FRONTEND_URL>/attendance/<lectureId>?code=<CODE>` (نص الرابط نفسه؛ التطبيق يقبل أيضاً JSON `{"v":1,"c":"<CODE>"}`).
 - الكود 6 خانات hex، يتغيّر كل **15 ثانية**، ويُقبل الكود الحالي والسابق (≈30 ثانية سماح).
-- `POST /api/attendance/mark` (student) — `{ lectureId, code, method: "qr"|"manual" }` → `{ success:true, message }` أو `{ success:false, error }`؛ `alreadyMarked:true` إن سبق التسجيل. أخطاء: 400 (بيانات ناقصة/كود خاطئ/الجلسة غير نشطة)، 403 (ليس في المجموعة).
-- `GET /api/attendance/:lectureId/current` (مستخدم) → `{ code, qrData, expiresIn }`.
-- للأدمن: `POST /api/attendance/:lectureId/start` → `{ seed, code, qrData, expiresAt, expiresIn }`، و`POST /api/attendance/stop/:lectureId`.
+- `POST /api/attendance/mark` (student) — `{ lectureId, code, method: "qr"|"manual" }` → `{ success:true, message }` أو `{ success:false, error }`؛ `alreadyMarked:true` إن سبق التسجيل. أخطاء: 400 (بيانات ناقصة/كود خاطئ/الجلسة غير نشطة/انتهى وقت تسجيل الحضور)، 403 (ليس في المجموعة).
+- `GET /api/attendance/poll` (student) — يعيد الجلسات النشطة وغير المنتهية للطالب: `{ active: [{ lectureId, groupId, groupName, topic }], hasActive }` (ويغلق الجلسات المنتهية كسولاً). وبالمثل يعيد `GET /api/groups/my/:groupId/lectures` حقل `attendance_active` (`1`/`0`) للجلسة المفتوحة وغير المنتهية فقط.
+- `GET /api/attendance/:lectureId/current` (admin/employee — صلاحية `groups:read` فقط، لا يتاح للطلاب) → `{ code, qrData, expiresIn }`، أو 400 `{ error, code:"", qrData:"", expiresIn:0, expired }` عند الإيقاف أو الانتهاء.
+- للأدمن: `POST /api/attendance/:lectureId/start` → `{ seed, code, qrData, expiresAt, expiresIn, studentsNotified }` (تُفتح الجلسة لمدة **ساعتين** بتوقيت SQLite `datetime('now','+2 hours')`، وتُغلق تلقائياً عند الانتهاء أو إتمام المحاضرة أو إتمام المجموعة)، و`POST /api/attendance/stop/:lectureId`.
 - ملاحظة: التطبيق يسجّل الحضور بـ QR فقط (لا Bluetooth).
 
 ## 7. إصدار التطبيق
@@ -163,7 +164,7 @@
 | `GET /api/surveys/my` | المجموعات المكتملة وحالة الاستبيان |
 | `GET /api/surveys/my/:groupId` | تعريف الاستبيان + المسودة |
 | `PUT /api/surveys/my/:groupId/draft` | حفظ تلقائي |
-| `POST /api/surveys/my/:groupId/submit` | إرسال نهائي (مرة واحدة) |
+| `POST /api/surveys/my/:groupId/submit` | إرسال نهائي (مرة واحدة)؛ الرد يضاف إليه `certificate: { id, serial_id } \| null` — تُصدَر الشهادة تلقائياً بعد التسليم إن كان للطالب طلب `paid` للكورس ولا شهادة نشطة (بلا حد أدنى للحضور؛ فشل الإصدار لا يفشل التسليم) |
 
 عنصر القائمة: `{ group_id, group_name, course_title, course_mode, completed_at, closes_at, days_left, status, answered_at, updated_at }`، `status`: `pending` \| `draft` \| `submitted` \| `closed`.
 
@@ -201,12 +202,12 @@
 
 | المسار | الدور | الوظيفة |
 |---|---|---|
-| `GET /api/courses/:id` | مستخدم | كائن الكورس يتضمّن `materials_url` (رابط المادة العلمية؛ يُعرض للطالب المسجَّل والموظف فقط) |
+| `GET /api/courses/:id` | مستخدم | كائن الكورس يتضمّن `materials_url` (رابط المادة العلمية؛ يُعرض للطالب المسجَّل والموظف فقط) مع تحويل الحقول المنطقية إلى أرقام (`0`/`1`) كمسار القائمة |
 | `GET /api/groups/:id/report` | admin/employee | بيانات تقرير المجموعة (الطلاب والحضور والاستبيان) |
 | `POST /api/groups/:id/report/word` | admin/employee | تنزيل تقرير Word؛ حقل multipart اختياري `images` (حتى 8 صور JPG/PNG، لا تُخزَّن) |
 | `GET /api/settings/report` | مستخدم | نصوص التقرير الافتراضية (المنسق، الشهادة، الملاحظات، التوصيات، نوع النشاط) |
 | `PUT /api/settings/report` | admin | حفظ النصوص الافتراضية |
-| `GET /api/exports/:dataset?groupId=` | صلاحية القراءة للقسم | ملف Excel: `group_roster` (كشف المجموعة) · `survey_results` (نتائج الاستبيان + متوسطات البنود) · `instructor_eval` (تقييم المحاضر للطلاب) |
+| `GET /api/exports/:dataset?groupId=` | صلاحية القراءة للقسم | ملف Excel: `group_roster` (كشف المجموعة) · `survey_results` (نتائج الاستبيان + متوسطات البنود؛ يقبل `studentId=` لتصدير رد طالب بعينه — الردود المجهولة لا تطابق أبداً) · `instructor_eval` (تقييم المحاضر للطلاب) · `attendance` (يقبل `lectureId=`/`studentId=`؛ يعرض الحاضرين والغائبين معاً وعمود «الحالة» بعلامة) |
 | `GET/POST/PUT/DELETE /api/admin/payment-methods` | admin | إدارة طرق الدفع (الطرق المستخدمة في طلبات تُعطَّل ولا تُحذف) |
 | `GET /api/settings/booking` | admin/employee | مدة الحجز بالساعات `{ hours }` (افتراضي 168) |
 | `PUT /api/settings/booking` | admin | تعديل مدة الحجز (1..720 ساعة) |

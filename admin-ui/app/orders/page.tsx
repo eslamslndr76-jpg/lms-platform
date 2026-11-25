@@ -190,15 +190,35 @@ export default function OrdersPage() {
     { value: 'cancelled', label: 'ملغي' },
   ];
 
-  if (loading && orders.length === 0) return <div className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الطلبات</h1></div><div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}><Skeleton rows={8} cols={6} /></div></div>;
-  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={load} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
+  if (loading && orders.length === 0) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلبات</h1>
+        <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
+          <Skeleton rows={8} cols={6} />
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div
+        className="p-6 rounded-[var(--md-sys-shape-corner-medium)] flex flex-col items-center gap-3 text-center"
+        style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
+      >
+        <span className="material-symbols-outlined text-[28px]" aria-hidden>error</span>
+        <p className="text-sm">{error}</p>
+        <button onClick={load} className="md3-btn md3-btn--filled text-sm">إعادة المحاولة</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الطلبات</h1>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلبات</h1>
         <div className="flex gap-2">
-          <button onClick={openAddOrder} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
+          <button onClick={openAddOrder} className="md3-btn md3-btn--filled" style={{ backgroundColor: 'var(--md-sys-color-primary)' }}>
             + إضافة حجز
           </button>
           <ExportButton dataset="orders" title="تصدير الطلبات" query={{ status }} />
@@ -208,28 +228,28 @@ export default function OrdersPage() {
       <div className="flex gap-2 overflow-x-auto pb-2">
         {statusFilters.map(s => (
           <button key={s.value} onClick={() => { setStatus(s.value); setPage(1); }}
-            className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${status === s.value ? 'text-white shadow-sm' : 'border'}`}
-            style={status === s.value ? { backgroundColor: 'var(--primary)' } : { borderColor: 'var(--border)', color: 'var(--text)' }}>
+            className={`px-4 py-2 rounded-xl text-sm whitespace-nowrap transition-all ${status === s.value ? 'bg-primary text-on-primary' : 'border'}`}
+            style={status === s.value ? { backgroundColor: 'var(--md-sys-color-primary)' } : { borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }}>
             {s.label}
           </button>
         ))}
       </div>
 
-      <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
         <DataTable
           columns={[
             { key: 'id', label: '#' },
             { key: 'student_name', label: 'الطالب', render: (v: string, r: any) =>
-              <span className="cursor-pointer" style={{ color: 'var(--primary)' }} onClick={() => router.push(`/students/${r.user_id}`)}>{v}</span> },
+              <span className="cursor-pointer" style={{ color: 'var(--md-sys-color-primary)' }} onClick={() => router.push(`/students/${r.user_id}`)}>{v}</span> },
             { key: 'title_ar', label: 'الكورسات', render: (v: string, r: any) =>
-              <span style={{ color: 'var(--text)' }}>{Array.isArray(r.items) && r.items.length ? r.items.map((i: any) => i.title_ar).join('، ') : v || '-'}</span> },
+              <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{Array.isArray(r.items) && r.items.length ? r.items.map((i: any) => i.title_ar).join('، ') : v || '-'}</span> },
             { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
             { key: 'sender_phone', label: 'رقم المحوِّل', render: (v: string) => v || '-' },
             { key: 'status', label: 'الحالة', render: (v: string, row: any) => (
               <select value={v} onChange={e => { e.stopPropagation(); updateStatus(row.id, e.target.value); }}
                 onClick={e => e.stopPropagation()}
                 className="px-2 py-1 rounded-lg text-xs border font-medium cursor-pointer"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }}>
                 <option value="pending">معلق</option>
                 <option value="review">قيد المراجعة</option>
                 <option value="paid">مدفوع</option>
@@ -240,9 +260,9 @@ export default function OrdersPage() {
             { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
               <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                 <button onClick={() => { setSelectedOrder(row); setEditForm({ amount: row.amount, notes_team: row.notes_team || row.notes || '', notes_student: row.notes_student || '', payment_method: row.payment_method || '', sender_phone: row.sender_phone || '' }); setEditing(true); }}
-                  className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
+                  className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 10px' }}>تعديل</button>
                 <button onClick={() => setConfirmDelete(row)}
-                  className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">حذف</button>
+                  className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 10px', color: 'var(--md-sys-color-error)' }}>حذف</button>
               </div>
             )},
           ]}
@@ -256,24 +276,27 @@ export default function OrdersPage() {
         {selectedOrder && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الطالب</span>
-                <span style={{ color: 'var(--text)' }}>{selectedOrder.student_name}</span>
-                <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>{selectedOrder.student_email}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطالب</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.student_name}</span>
+                <span className="block text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{selectedOrder.student_email}</span>
               </div>
-              <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورسات</span>
+              <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الكورسات</span>
                 {Array.isArray(selectedOrder.items) && selectedOrder.items.length > 0 ? (
                   <div className="space-y-1">
                     {selectedOrder.items.map((item: any, i: number) => (
                       <div key={i} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="cursor-pointer" style={{ color: 'var(--primary)' }} onClick={() => router.push(`/courses/${item.course_id}`)}>{item.title_ar}</span>
+                        <span className="cursor-pointer" style={{ color: 'var(--md-sys-color-primary)' }} onClick={() => router.push(`/courses/${item.course_id}`)}>{item.title_ar}</span>
                         <span className="flex items-center gap-2">
-                          <span style={{ color: 'var(--text)' }}>{item.price} ج.م</span>
+                          <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{item.price} ج.م</span>
                           {selectedOrder.status !== 'cancelled' && (
                             <button onClick={() => removeOrderItem(selectedOrder, item.course_id, item.title_ar)}
                               disabled={removingItem === item.course_id}
-                              title="حذف الكورس من الطلب" className="text-red-500 text-xs px-1 disabled:opacity-50">
+                              title="حذف الكورس من الطلب"
+                              aria-label="حذف الكورس من الطلب"
+                              className="md3-btn md3-btn--icon"
+                              style={{ width: 28, minWidth: 28, height: 28, color: 'var(--md-sys-color-error)' }}>
                               {removingItem === item.course_id ? '...' : '✕'}
                             </button>
                           )}
@@ -282,23 +305,23 @@ export default function OrdersPage() {
                     ))}
                   </div>
                 ) : (
-                  <span style={{ color: 'var(--text)' }}>{selectedOrder.title_ar || '-'}</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.title_ar || '-'}</span>
                 )}
               </div>
               {editing ? (
                 <>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المبلغ</span>
+                  <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>المبلغ</span>
                     <input type="number" value={editForm.amount}
                       onChange={e => setEditForm({ ...editForm, amount: Number(e.target.value) })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }} />
                   </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</span>
+                  <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>طريقة الدفع</span>
                     <select value={editForm.payment_method} onChange={e => setEditForm({ ...editForm, payment_method: e.target.value })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                      style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }}>
                       <option value="">اختر</option>
                       {editForm.payment_method && !paymentMethods.some((m: any) => m.key === editForm.payment_method) && (
                         <option value={editForm.payment_method}>{editForm.payment_method}</option>
@@ -308,78 +331,78 @@ export default function OrdersPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل</span>
+                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات فريق العمل</span>
                     <textarea value={editForm.notes_team} onChange={e => setEditForm({ ...editForm, notes_team: e.target.value })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm h-16"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }} />
                   </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</span>
+                  <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>رقم المحوِّل</span>
                     <input type="text" value={editForm.sender_phone} onChange={e => setEditForm({ ...editForm, sender_phone: e.target.value })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }} />
                   </div>
-                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب (تظهر له)</span>
+                  <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات الطالب (تظهر له)</span>
                     <textarea value={editForm.notes_student} onChange={e => setEditForm({ ...editForm, notes_student: e.target.value })}
                       className="w-full px-3 py-1.5 rounded-lg border text-sm h-16"
-                      style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface)' }} />
                   </div>
                 </>
               ) : (
                 <>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المبلغ</span>
-                    <span style={{ color: 'var(--text)' }}>{selectedOrder.amount} ج.م</span>
+                  <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>المبلغ</span>
+                    <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.amount} ج.م</span>
                   </div>
-                  <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                    <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</span>
-                    <span style={{ color: 'var(--text)' }}>{paymentLabel(selectedOrder.payment_method)}</span>
+                  <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                    <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>طريقة الدفع</span>
+                    <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{paymentLabel(selectedOrder.payment_method)}</span>
                   </div>
                   {(selectedOrder.notes || selectedOrder.notes_team) && (
-                    <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedOrder.notes_team || selectedOrder.notes}</span>
+                    <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                      <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات فريق العمل</span>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.notes_team || selectedOrder.notes}</span>
                     </div>
                   )}
                   {selectedOrder.notes_student && (
-                    <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedOrder.notes_student}</span>
+                    <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                      <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات الطالب</span>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.notes_student}</span>
                     </div>
                   )}
                   {selectedOrder.sender_phone && (
-                    <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                      <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedOrder.sender_phone}</span>
+                    <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                      <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>رقم المحوِّل</span>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedOrder.sender_phone}</span>
                     </div>
                   )}
                 </>
               )}
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الحالة</span>
                 <StatusBadge status={selectedOrder.status} />
                 {selectedOrder.status === 'cancelled' && selectedOrder.cancel_reason && (
-                  <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  <span className="block text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                     {selectedOrder.cancel_reason === 'expired' ? 'سبب الإلغاء: انتهت مدة الحجز تلقائياً'
                       : selectedOrder.cancel_reason === 'student' ? 'سبب الإلغاء: الطالب ألغى الحجز'
                         : 'سبب الإلغاء: الإدارة'}
                   </span>
                 )}
               </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>التاريخ</span>
-                <span style={{ color: 'var(--text)' }}>{new Date(selectedOrder.created_at).toLocaleDateString('ar-EG')}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>التاريخ</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{new Date(selectedOrder.created_at).toLocaleDateString('ar-EG')}</span>
               </div>
               {(selectedOrder.receipt?.file_url || selectedOrder.receipt_url) && (
-                <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--bg)' }}>
-                  <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الإيصال</span>
+                <div className="p-3 rounded-xl col-span-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                  <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الإيصال</span>
                   <a href={selectedOrder.receipt?.file_url || selectedOrder.receipt_url} target="_blank" rel="noreferrer">
-                    <img src={selectedOrder.receipt?.file_url || selectedOrder.receipt_url} alt="الإيصال" className="max-h-56 rounded-xl border" style={{ borderColor: 'var(--border)' }} />
+                    <img src={selectedOrder.receipt?.file_url || selectedOrder.receipt_url} alt="الإيصال" className="max-h-56 rounded-xl border" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }} />
                   </a>
                   {selectedOrder.receipt?.created_at && (
-                    <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    <span className="block text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                       أُرسل في {new Date(selectedOrder.receipt.created_at).toLocaleString('ar-EG')}
                     </span>
                   )}
@@ -387,23 +410,23 @@ export default function OrdersPage() {
               )}
             </div>
 
-            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
+            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
               {editing ? (
                 <>
-                  <button onClick={saveEdit} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#16a34a' }}>💾 حفظ التعديلات</button>
-                  <button onClick={() => setEditing(false)} className="flex-1 py-2.5 rounded-xl text-sm font-medium border" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>إلغاء</button>
+                  <button onClick={saveEdit} className="md3-btn md3-btn--filled flex-1 text-sm">حفظ التعديلات</button>
+                  <button onClick={() => setEditing(false)} className="md3-btn md3-btn--outlined flex-1">إلغاء</button>
                 </>
               ) : (
                 <>
-                  <button onClick={() => setEditing(true)} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>✏️ تعديل</button>
+                  <button onClick={() => setEditing(true)} className="md3-btn md3-btn--filled flex-1">✏️ تعديل</button>
                   {selectedOrder.status !== 'paid' && selectedOrder.status !== 'cancelled' && (
                     <>
-                      <button onClick={() => updateStatus(selectedOrder.id, 'paid')} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#16a34a' }}>✅ موافقة</button>
-                      <button onClick={() => updateStatus(selectedOrder.id, 'review')} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#f59e0b' }}>🔍 للمراجعة</button>
-                      <button onClick={() => updateStatus(selectedOrder.id, 'cancelled')} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#dc2626' }}>✕ رفض</button>
+                      <button onClick={() => updateStatus(selectedOrder.id, 'paid')} className="md3-btn md3-btn--filled flex-1 text-sm">موافقة</button>
+                      <button onClick={() => updateStatus(selectedOrder.id, 'review')} className="md3-btn md3-btn--tonal flex-1 text-sm">للمراجعة</button>
+                      <button onClick={() => updateStatus(selectedOrder.id, 'cancelled')} className="md3-btn md3-btn--danger flex-1 text-sm">رفض</button>
                     </>
                   )}
-                  <button onClick={() => setConfirmDelete(selectedOrder)} className="px-3 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#dc2626' }}>🗑️</button>
+                  <button onClick={() => setConfirmDelete(selectedOrder)} className="md3-btn md3-btn--danger text-sm">حذف</button>
                 </>
               )}
             </div>
@@ -414,20 +437,19 @@ export default function OrdersPage() {
       <Modal open={addModal} onClose={() => setAddModal(false)} title="إضافة حجز جديد" size="lg">
         <div className="space-y-3">
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الطالب *</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطالب *</label>
             <select value={addForm.user_id} onChange={e => setAddForm({ ...addForm, user_id: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              className="md3-field">
               <option value="">اختر الطالب</option>
               {students.map((s: any) => <option key={s.id} value={s.id}>{s.name} ({s.email})</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الكورسات *</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الكورسات *</label>
             <div className="max-h-44 overflow-y-auto rounded-xl border p-2 space-y-1"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+              style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderColor: 'var(--md-sys-color-outline-variant)' }}>
               {courses.map((c: any) => (
-                <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text)' }}>
+                <label key={c.id} className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                   <input
                     type="checkbox"
                     checked={addForm.course_ids.includes(String(c.id))}
@@ -445,17 +467,16 @@ export default function OrdersPage() {
                 </label>
               ))}
             </div>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               الإجمالي:{' '}
               {courses.filter((c: any) => addForm.course_ids.includes(String(c.id)))
                 .reduce((sum: number, c: any) => sum + Number(c.price || 0), 0)} ج.م
             </p>
           </div>
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الدفع</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>طريقة الدفع</label>
             <select value={addForm.payment_method} onChange={e => setAddForm({ ...addForm, payment_method: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              className="md3-field">
               <option value="">اختر</option>
               {addForm.payment_method && !activePaymentMethods.some((m: any) => m.key === addForm.payment_method) && (
                 <option value={addForm.payment_method}>{addForm.payment_method}</option>
@@ -466,27 +487,24 @@ export default function OrdersPage() {
             </select>
           </div>
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات فريق العمل (داخلي)</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات فريق العمل (داخلي)</label>
             <textarea value={addForm.notes_team} onChange={e => setAddForm({ ...addForm, notes_team: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm h-16"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field h-16" />
           </div>
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رقم المحوِّل</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>رقم المحوِّل</label>
             <input type="text" value={addForm.sender_phone} onChange={e => setAddForm({ ...addForm, sender_phone: e.target.value })}
               placeholder="رقم الهاتف أو المحفظة الذي حُوِّل منه"
-              className="w-full px-4 py-2.5 rounded-xl border text-sm"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field" />
           </div>
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>ملاحظات الطالب (تظهر له)</label>
+            <label className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>ملاحظات الطالب (تظهر له)</label>
             <textarea value={addForm.notes_student} onChange={e => setAddForm({ ...addForm, notes_student: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm h-16"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field h-16" />
           </div>
           <button onClick={addOrder} disabled={adding}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-50"
-            style={{ backgroundColor: 'var(--primary)' }}>
+            className="md3-btn md3-btn--filled w-full font-medium"
+            style={{ backgroundColor: 'var(--md-sys-color-primary)' }}>
             {adding ? 'جاري الحفظ...' : 'حفظ الحجز'}
           </button>
         </div>

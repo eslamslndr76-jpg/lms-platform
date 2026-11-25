@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/surveys/surveys_provider.dart';
 import '../../core/models/survey_model.dart';
 import '../../core/utils/json_utils.dart';
+import '../certificates/certificates_screen.dart';
 
 /// Post-course survey screen: every item defined by the API, step by step,
 /// with auto-saved drafts and a single final submission.
@@ -30,6 +31,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
   String? _submitError;
   Timer? _draftTimer;
   bool _submitted = false;
+  Map<String, dynamic>? _issuedCertificate;
 
   @override
   void initState() {
@@ -134,7 +136,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       if (_notesCtrl.text.trim().isNotEmpty) {
         payload['notes'] = _notesCtrl.text.trim();
       }
-      await context.read<SurveysProvider>().submit(
+      final certificate = await context.read<SurveysProvider>().submit(
             groupId: widget.groupId,
             answers: payload,
             isAnonymous: _isAnonymous,
@@ -143,6 +145,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
       setState(() {
         _submitted = true;
         _isSubmitting = false;
+        _issuedCertificate = certificate;
       });
     } catch (e) {
       if (!mounted) return;
@@ -179,7 +182,7 @@ class _SurveyScreenState extends State<SurveyScreen> {
           : _loadError != null
               ? _ErrorView(message: _loadError!, onRetry: _load)
               : _submitted
-                  ? _ThankYouView(survey: _survey!)
+                  ? _ThankYouView(survey: _survey!, certificate: _issuedCertificate)
                   : !_survey!.canEdit
                       ? _NotAvailableView(survey: _survey!)
                       : _buildForm(cs),
@@ -678,14 +681,17 @@ class _YesNoButton extends StatelessWidget {
 
 class _ThankYouView extends StatelessWidget {
   final Survey survey;
-  const _ThankYouView({required this.survey});
+  /// Present when the backend issued the certificate right after submission.
+  final Map<String, dynamic>? certificate;
+  const _ThankYouView({required this.survey, this.certificate});
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final tt = Theme.of(context).textTheme;
+    final serial = certificate?['serial_id']?.toString() ?? '';
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -699,10 +705,47 @@ class _ThankYouView extends StatelessWidget {
             Text('شكراً لك!', style: tt.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
             const SizedBox(height: 10),
             Text(
-              'تم إرسال إجاباتك بنجاح. رأيك يساعدنا على تحسين برامجنا التدريبية.',
+              'تم استلام استبيانك بنجاح. رأيك يساعدنا على تحسين برامجنا التدريبية.',
               textAlign: TextAlign.center,
               style: tt.bodyMedium?.copyWith(color: cs.onSurfaceVariant, height: 1.5),
             ),
+            if (certificate != null) ...[
+              const SizedBox(height: 22),
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.workspace_premium_rounded, size: 40, color: cs.primary),
+                    const SizedBox(height: 8),
+                    Text(
+                      'شهادتك جاهزة 🎓',
+                      style: tt.titleMedium?.copyWith(fontWeight: FontWeight.w800, color: cs.onSurface),
+                    ),
+                    if (serial.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        'رقم الشهادة: $serial',
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const CertificatesScreen()),
+                        );
+                      },
+                      icon: const Icon(Icons.workspace_premium_rounded, size: 18),
+                      label: const Text('افتح شهادتك'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
       ),

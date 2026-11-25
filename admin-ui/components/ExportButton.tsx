@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, type CSSProperties } from 'react';
+import { useState } from 'react';
 import ExportModal from './ExportModal';
 import type { ExportQuery } from '../lib/exportUtils';
 
@@ -24,8 +24,11 @@ interface Props {
   disabled?: boolean;
 }
 
-const base =
-  'inline-flex items-center justify-center gap-1.5 text-sm font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed';
+const sizeClasses: Record<string, string> = {
+  primary: 'md3-btn md3-btn--filled',
+  soft: 'md3-btn md3-btn--outlined',
+  icon: 'md3-btn md3-btn--icon md3-btn--outlined',
+};
 
 export default function ExportButton({
   dataset,
@@ -39,18 +42,6 @@ export default function ExportButton({
 }: Props) {
   const [open, setOpen] = useState(false);
 
-  const styles: Record<string, CSSProperties> = {
-    primary: { backgroundColor: 'var(--primary)', color: '#fff' },
-    soft: { backgroundColor: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' },
-    icon: { backgroundColor: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' },
-  };
-
-  const sizes: Record<string, string> = {
-    primary: 'px-4 py-2 rounded-xl',
-    soft: 'px-3 py-2 rounded-xl',
-    icon: 'w-9 h-9 rounded-xl',
-  };
-
   return (
     <>
       <button
@@ -59,10 +50,9 @@ export default function ExportButton({
         disabled={disabled}
         title={variant === 'icon' ? label : undefined}
         aria-label={label}
-        className={`${base} ${sizes[variant]} ${className}`}
-        style={styles[variant]}
+        className={`${sizeClasses[variant]} ${variant !== 'primary' ? 'rounded-[var(--md-sys-shape-corner-small)]' : ''} ${className}`}
       >
-        <span aria-hidden>📥</span>
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>download</span>
         {variant !== 'icon' && <span>{label}</span>}
       </button>
 

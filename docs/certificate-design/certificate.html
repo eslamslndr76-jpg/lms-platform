@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>شهادة دورات طلاب – HIMS</title>
+  <link rel="stylesheet" href="certificate.css">
+  <script src="certificate-data.js" defer></script>
+  <script src="certificate-template.js" defer></script>
+</head>
+<body>
+  <div id="certificate-error" class="error-box" role="alert" hidden></div>
+  <main class="certificate" aria-label="شهادة إتمام دورة تدريبية">
+    <div class="pattern-layer" aria-hidden="true"></div>
+    <img class="watermark" src="assets/unit-training-logo.png" alt="" aria-hidden="true">
+
+    <div class="outer-border" aria-hidden="true"></div>
+    <div class="inner-border" aria-hidden="true"></div>
+
+    <img class="corner corner-tl" src="assets/certificate-corner.svg" alt="" aria-hidden="true">
+    <img class="corner corner-tr" src="assets/certificate-corner.svg" alt="" aria-hidden="true">
+    <img class="corner corner-bl" src="assets/certificate-corner.svg" alt="" aria-hidden="true">
+    <img class="corner corner-br" src="assets/certificate-corner.svg" alt="" aria-hidden="true">
+
+    <header class="header">
+      <div class="logo-box unit-logo-box">
+        <img src="assets/unit-training-logo-crop.png" alt="شعار وحدة التدريب والتطوير بالمعهد" class="unit-logo">
+        
+      </div>
+
+      <div class="title-block">
+        <div class="title-kicker">H.I.M.S · T.D.U</div>
+        <div class="title-heading">
+          <img class="title-flourish title-flourish-left" src="assets/title-flourish.svg" alt="" aria-hidden="true">
+          <h1>شهادة</h1>
+          <img class="title-flourish title-flourish-right" src="assets/title-flourish.svg" alt="" aria-hidden="true">
+        </div>
+        <div class="title-rule"><span></span><b>✦</b><span></span></div>
+      </div>
+
+      <div class="logo-box institute-logo-box">
+        <img src="assets/institute-logo-crop.png" alt="شعار المعهد العالي للعلوم الإدارية" class="institute-logo">
+      </div>
+    </header>
+
+    <section class="content" aria-label="بيانات الشهادة">
+      <p class="intro">تشهد وحدة التدريب والتطوير بالمعهد بأن <strong id="student-label">الطالبة</strong></p>
+      <h2 id="student-name" class="student-name">ملك طارق يونس</h2>
+      <p id="completion-verb" class="completion-verb">قد اجتازت بنجاح الدورة التدريبية</p>
+      <h3 id="course-name" class="course-name" dir="auto">Microsoft Office</h3>
+
+      <div class="course-meta">
+        <span class="meta-line"></span>
+        <p id="completion-period">يونيه 2025  (بواقع 18 ساعة)</p>
+        <span class="meta-line"></span>
+      </div>
+
+
+    </section>
+
+      <aside class="verification-card" aria-label="التحقق الإلكتروني من الشهادة">
+        <div class="verification-title">تحقق من صحة الشهادة</div>
+        <a id="verification-link" class="verification-link" href="https://example.invalid/certificate/verify/HIMS-2025-000001" aria-label="فتح صفحة التحقق من الشهادة">
+          <span class="qr-frame">
+            <img id="verification-qr" src="assets/demo-verification-qr.png" alt="رمز QR للتحقق من صحة الشهادة">
+          </span>
+        </a>
+        <div class="verification-hint">امسح الرمز لفتح صفحة التحقق</div>
+        <div class="serial-label">كود الشهادة (Serial)</div>
+        <div id="certificate-serial" class="certificate-serial" dir="ltr">HIMS-2025-000001</div>
+      </aside>
+
+    <img class="divider divider-bottom" src="assets/ornamental-divider.png" alt="">
+
+    <footer class="signatures">
+      <section class="signature">
+        <p class="signature-role">رئيس مجلس الإدارة</p>
+        <p class="signature-name" id="chairman-name">أ.د. عادل المهدي</p>
+      </section>
+      <section class="signature">
+        <p class="signature-role">عميد المعهد</p>
+        <p class="signature-name" id="dean-name">أ.د. عمر صقر</p>
+      </section>
+      <section class="signature">
+        <p class="signature-role">مدير وحدة التدريب<br>والتطوير</p>
+        <p class="signature-name" id="unit-manager-name">د. شيماء عبدالدايم</p>
+      </section>
+    </footer>
+  </main>
+</body>
+</html>

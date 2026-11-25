@@ -1,0 +1,421 @@
+@page { size: A4 landscape; margin: 0; }
+:root {
+  --navy: #18366f;
+  --navy-deep: #102958;
+  --blue: #159bc8;
+  --blue-soft: #9bb8d8;
+  --gold: #ad9143;
+  --gold-light: #d8c58b;
+  --paper: #fffdf7;
+  --ink: #1b2d55;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; width: 297mm; height: 210mm; background: #fff; }
+body {
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", "Amiri", Tahoma, sans-serif;
+  color: var(--ink);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.certificate {
+  position: relative;
+  direction: ltr;
+  width: 297mm;
+  height: 210mm;
+  overflow: hidden;
+  background: var(--paper);
+  isolation: isolate;
+}
+
+/* Repeated geometric arabesque pattern: intentionally visible, but soft enough for certificate text. */
+.pattern-layer {
+  position: absolute;
+  z-index: 0;
+  top: 8mm;
+  right: 8mm;
+  bottom: 8mm;
+  left: 8mm;
+  background-image: url("assets/certificate-pattern.png");
+  background-size: 34mm 34mm;
+  background-repeat: repeat;
+  opacity: .36;
+  pointer-events: none;
+}
+.watermark {
+  position: absolute;
+  z-index: 1;
+  width: 120mm;
+  height: 120mm;
+  object-fit: contain;
+  left: 88.5mm;
+  top: 43mm;
+  opacity: .12;
+  pointer-events: none;
+}
+.outer-border, .inner-border {
+  position: absolute;
+  pointer-events: none;
+  z-index: 8;
+}
+.outer-border { top: 5mm; right: 5mm; bottom: 5mm; left: 5mm; border: .65mm solid var(--navy); }
+.inner-border { top: 7mm; right: 7mm; bottom: 7mm; left: 7mm; border: .25mm solid var(--gold); }
+
+/* Four coordinated vector corners replace the former mismatched floral raster corners. */
+.corner {
+  position: absolute;
+  z-index: 9;
+  width: 25mm;
+  height: 25mm;
+  object-fit: contain;
+  pointer-events: none;
+}
+.corner-tl { top: 4.5mm; left: 4.5mm; }
+.corner-tr { top: 4.5mm; right: 4.5mm; transform: scaleX(-1); }
+.corner-bl { bottom: 4.5mm; left: 4.5mm; transform: scaleY(-1); }
+.corner-br { bottom: 4.5mm; right: 4.5mm; transform: scale(-1); }
+
+.header {
+  position: absolute;
+  top: 8mm;
+  left: 15mm;
+  right: 15mm;
+  height: 34mm;
+  display: block;
+  z-index: 5;
+  direction: ltr;
+}
+.logo-box {
+  position: absolute;
+  top: 0;
+  height: 31mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.unit-logo-box { left: 9mm; width: 42mm; }
+.institute-logo-box { right: 9mm; width: 42mm; }
+.unit-logo { width: 37mm; height: 29mm; object-fit: contain; }
+.institute-logo { width: 39mm; height: 30mm; object-fit: contain; }
+.title-block {
+  position: absolute;
+  top: 0.5mm;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 138mm;
+  text-align: center;
+  padding: 0 4mm;
+}
+.title-kicker {
+  color: var(--blue);
+  font: 700 9.5pt "DejaVu Sans", sans-serif;
+  letter-spacing: 2px;
+  margin-bottom: 1mm;
+}
+ .title-heading {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 17mm;
+  margin: .2mm auto 0;
+}
+.title-flourish {
+  position: absolute;
+  top: 50%;
+  width: 30mm;
+  height: 10mm;
+  object-fit: fill;
+  transform: translateY(-50%);
+  opacity: .98;
+}
+.title-flourish-left { left: 3mm; }
+.title-flourish-right { right: 3mm; transform: translateY(-50%) scaleX(-1); }
+h1 {
+  position: relative;
+  margin: 0;
+  padding: 0 3mm 1mm;
+  color: var(--navy);
+  font-family: "Amiri", "Noto Naskh Arabic", "Noto Sans Arabic", serif;
+  font-size: 43pt;
+  line-height: 1.12;
+  font-weight: 700;
+  text-shadow: 0 .35mm 0 rgba(173,145,67,.30), 0 .8mm 1mm rgba(16,41,88,.10);
+}
+.title-rule {
+  display: flex;
+  align-items: center;
+  gap: 3mm;
+  justify-content: center;
+  margin: 1mm auto 0;
+  width: 62mm;
+  color: var(--gold);
+}
+.title-rule span { height: .6mm; background: var(--gold); flex: 1; }
+.title-rule b { font-size: 14pt; line-height: 1; }
+
+.content {
+  direction: rtl;
+  position: absolute;
+  z-index: 3;
+  top: 47mm;
+  left: 22mm;
+  right: 22mm;
+  height: 111mm;
+  text-align: center;
+}
+.intro {
+  margin: 0 auto 1mm;
+  max-width: 205mm;
+  color: var(--navy);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 20.5pt;
+  line-height: 1.48;
+  font-weight: 700;
+}
+.intro strong { color: #087fae; font-weight: 800; }
+.student-name {
+  margin: 2mm auto 1.5mm;
+  color: #a1873b;
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 38pt;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -.2px;
+  text-shadow: 0 .25mm 0 rgba(100,80,20,.09);
+  max-width: 175mm;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.completion-verb {
+  margin: 1mm 0 0;
+  color: var(--navy);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 21pt;
+  font-weight: 700;
+  line-height: 1.42;
+}
+.course-name {
+  margin: 2.2mm auto 0;
+  color: #15243a;
+  font-family: "Aptos", "Segoe UI", "DejaVu Sans", "Noto Sans Arabic", sans-serif;
+  font-size: 29pt;
+  font-weight: 700;
+  line-height: 1.22;
+  max-width: 175mm;
+  white-space: nowrap;
+  direction: auto;
+  unicode-bidi: isolate;
+}
+.course-meta {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5mm;
+  width: 184mm;
+  margin: 6mm auto 0;
+}
+.course-meta p {
+  margin: 0;
+  padding: 2.8mm 8mm;
+  border: .4mm solid var(--gold);
+  border-radius: 3.5mm;
+  color: var(--navy);
+  background: rgba(255,253,247,.9);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 18pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.meta-line { height: .5mm; flex: 1; max-width: 22mm; background: var(--gold); }
+/* Certificate verification: scannable QR plus the same serial printed as selectable text. */
+.verification-card {
+  position: absolute;
+  z-index: 6;
+  right: 20mm;
+  top: 63mm;
+  direction: ltr;
+  width: 47mm;
+  min-height: 59mm;
+  padding: 2mm 2mm 1.7mm;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: .85mm;
+  text-align: center;
+  background: rgba(255,253,247,.96);
+  border: .45mm solid var(--gold);
+  border-radius: 3.4mm;
+  box-shadow: inset 0 0 0 .45mm rgba(216,197,139,.48), 0 .5mm 1.2mm rgba(16,41,88,.07);
+}
+.verification-card::before,
+.verification-card::after {
+  content: "✦";
+  position: absolute;
+  top: 2.3mm;
+  color: var(--gold);
+  font-size: 7pt;
+  line-height: 1;
+}
+.verification-card::before { left: 2.4mm; }
+.verification-card::after { right: 2.4mm; }
+.verification-title {
+  direction: rtl;
+  width: 100%;
+  padding: 0 4mm .6mm;
+  color: var(--navy);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 8.6pt;
+  line-height: 1.35;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.verification-link {
+  /* The link itself is a full-width flex row so the QR frame is centered
+     against the verification card, not against the page's RTL/LTR text flow. */
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  align-self: stretch;
+  text-align: center;
+  text-decoration: none;
+  line-height: 0;
+  direction: ltr;
+}
+.qr-frame {
+  display: flex;
+  flex: 0 0 30.5mm;
+  width: 30.5mm;
+  height: 30.5mm;
+  padding: 1.1mm;
+  margin: 0 auto;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: .45mm solid var(--navy);
+  border-radius: 1.6mm;
+}
+#verification-qr {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  image-rendering: pixelated;
+}
+.verification-hint {
+  direction: rtl;
+  color: var(--navy);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 6.5pt;
+  font-weight: 700;
+  line-height: 1.25;
+  width: 100%;
+  text-align: center;
+  white-space: nowrap;
+}
+.serial-label {
+  direction: rtl;
+  margin-top: .2mm;
+  color: #8b7130;
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  width: 100%;
+  text-align: center;
+  font-size: 6.5pt;
+  font-weight: 800;
+  line-height: 1.1;
+}
+.certificate-serial {
+  max-width: 100%;
+  color: var(--navy-deep);
+  font-family: "DejaVu Sans", "Liberation Mono", monospace;
+  width: 100%;
+  text-align: center;
+  font-size: 7.6pt;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: .15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.divider-bottom {
+  position: absolute;
+  z-index: 3;
+  left: 58mm;
+  right: 58mm;
+  bottom: 48mm;
+  width: 181mm;
+  height: 8mm;
+  object-fit: fill;
+  opacity: .95;
+}
+.signatures {
+  position: absolute;
+  z-index: 4;
+  left: 18mm;
+  right: 18mm;
+  bottom: 10mm;
+  height: 35mm;
+  display: block;
+  direction: ltr;
+}
+.signature {
+  position: absolute;
+  top: 0;
+  width: 75mm;
+  min-width: 0;
+  overflow: visible;
+  text-align: center;
+  direction: rtl;
+}
+.signature:nth-child(1) { left: 0; }
+.signature:nth-child(2) { left: 50%; transform: translateX(-50%); }
+.signature:nth-child(3) { right: 0; }
+.signature-role {
+  max-width: 100%;
+  margin: 0 0 2.3mm;
+  color: var(--navy);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 15pt;
+  line-height: 1.4;
+  font-weight: 700;
+  white-space: normal;
+}
+.signature-name {
+  margin: 0;
+  padding-top: 2.5mm;
+  border-top: .25mm solid rgba(24,54,111,.38);
+  color: var(--navy-deep);
+  font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+  font-size: 18pt;
+  font-weight: 700;
+}
+.error-box {
+  position: fixed;
+  z-index: 100;
+  top: 10mm;
+  left: 10mm;
+  right: 10mm;
+  padding: 5mm;
+  color: #7b1717;
+  background: #fff0f0;
+  border: 1mm solid #b3261e;
+  font: 18px sans-serif;
+  text-align: center;
+}
+.certificate-invalid .certificate { filter: grayscale(1); opacity: .35; }
+@media screen {
+  html, body { width: 100%; min-height: 100%; height: auto; background: #e8ebf2; }
+  .certificate { margin: 18px auto; box-shadow: 0 12px 40px rgba(10,25,60,.18); }
+}
+@media print {
+  html, body { width: 297mm; height: 210mm; background: #fff; }
+  .certificate { margin: 0; box-shadow: none; }
+  .error-box { position: absolute; }
+}

@@ -100,7 +100,15 @@ class CartProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       }
-    } catch (_) {}
+      _actionError = _serverMessage(res.data) ?? 'فشل حذف الكورس من السلة';
+      _actionErrorCode = res.statusCode;
+    } on DioException catch (e) {
+      _actionErrorCode = e.response?.statusCode;
+      _actionError = _serverMessage(e.response?.data) ?? 'تعذر حذف الكورس من السلة، تحقق من اتصالك';
+    } catch (_) {
+      _actionError = 'فشل حذف الكورس من السلة';
+    }
+    notifyListeners();
     return false;
   }
 
@@ -115,7 +123,15 @@ class CartProvider extends ChangeNotifier {
         notifyListeners();
         return true;
       }
-    } catch (_) {}
+      _actionError = _serverMessage(res.data) ?? 'فشل تفريغ السلة';
+      _actionErrorCode = res.statusCode;
+    } on DioException catch (e) {
+      _actionErrorCode = e.response?.statusCode;
+      _actionError = _serverMessage(e.response?.data) ?? 'تعذر تفريغ السلة، تحقق من اتصالك';
+    } catch (_) {
+      _actionError = 'فشل تفريغ السلة';
+    }
+    notifyListeners();
     return false;
   }
 

@@ -27,9 +27,9 @@ interface PanelPosition {
 }
 
 const TYPE_ICON: Record<string, string> = {
-  success: '✅',
-  warning: '⚠️',
-  info: 'ℹ️',
+  success: 'check_circle',
+  warning: 'warning',
+  info: 'info',
 };
 
 function formatRelativeTime(value?: string | null): string {
@@ -238,15 +238,15 @@ export default function NotificationBell() {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => (open ? setOpen(false) : openPanel())}
-        className="relative w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0 transition-colors hover:bg-[var(--bg)]"
-        style={{ color: 'var(--text)', backgroundColor: open ? 'var(--bg)' : 'transparent' }}
+        className="relative w-10 h-10 rounded-full flex items-center justify-center shrink-0 transition-colors md3-btn md3-btn--icon"
+        style={open ? { backgroundColor: 'color-mix(in srgb, var(--md-sys-color-on-surface) 8%, transparent)' } : undefined}
       >
-        <span aria-hidden="true">🔔</span>
+        <span className="material-symbols-outlined text-[22px]" aria-hidden="true">notifications</span>
         {unread > 0 && (
           <span
             data-testid="notification-unread-badge"
-            className="absolute -top-1 -left-1 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center"
-            style={{ backgroundColor: '#ef4444', color: '#ffffff' }}
+            className="absolute -top-0.5 -left-0.5 min-w-[20px] h-5 px-1 rounded-full text-xs font-bold flex items-center justify-center"
+            style={{ backgroundColor: 'var(--md-sys-color-error)', color: 'var(--md-sys-color-on-error)' }}
           >
             {badgeText}
           </span>
@@ -260,30 +260,33 @@ export default function NotificationBell() {
             role="dialog"
             aria-label="الإشعارات"
             data-testid="notification-panel"
-            className="fixed z-[80] rounded-2xl border shadow-2xl overflow-hidden flex flex-col"
+            className="fixed z-[80] rounded-[var(--md-sys-shape-corner-large)] border md3-elevation-3 overflow-hidden flex flex-col"
             style={{
               top: panelPos.top,
               right: panelPos.right,
               width: panelPos.width,
               maxHeight: 'min(78vh, 600px)',
-              backgroundColor: 'var(--card)',
-              borderColor: 'var(--border)',
+              backgroundColor: 'var(--md-sys-color-surface-container-low)',
+              borderColor: 'var(--md-sys-color-outline-variant)',
               animation: 'notificationPanelIn 160ms ease-out',
             }}
           >
             <div
               className="px-4 py-3 border-b flex items-center justify-between gap-2 shrink-0"
-              style={{ borderColor: 'var(--border)' }}
+              style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-lg" aria-hidden="true">🔔</span>
-                <h2 className="font-bold text-sm truncate" style={{ color: 'var(--text)' }}>
+                <span className="material-symbols-outlined text-[20px]" aria-hidden="true">notifications</span>
+                <h2 className="font-bold text-sm truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                   الإشعارات
                 </h2>
                 {unread > 0 && (
                   <span
-                    className="text-[11px] px-2 py-0.5 rounded-full font-medium shrink-0"
-                    style={{ backgroundColor: 'var(--primary)', color: '#ffffff' }}
+                    className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0"
+                    style={{
+                      backgroundColor: 'var(--md-sys-color-primary-container)',
+                      color: 'var(--md-sys-color-on-primary-container)',
+                    }}
                   >
                     {badgeText} جديد
                   </span>
@@ -294,8 +297,8 @@ export default function NotificationBell() {
                   type="button"
                   data-testid="notification-mark-all"
                   onClick={markAllAsRead}
-                  className="text-xs font-medium px-2 py-1 rounded-lg whitespace-nowrap hover:bg-[var(--bg)]"
-                  style={{ color: 'var(--primary)' }}
+                  className="text-xs font-medium px-2 py-1 rounded-[var(--md-sys-shape-corner-extra-small)] whitespace-nowrap hover:brightness-95"
+                  style={{ color: 'var(--md-sys-color-primary)' }}
                 >
                   تعليم الكل كمقروء
                 </button>
@@ -304,8 +307,12 @@ export default function NotificationBell() {
 
             {actionError && (
               <div
-                className="px-4 py-2 text-[11px] border-b"
-                style={{ color: '#dc2626', borderColor: 'var(--border)', backgroundColor: '#fef2f2' }}
+                className="px-4 py-2 text-xs border-b"
+                style={{
+                  color: 'var(--md-sys-color-on-error-container)',
+                  borderColor: 'var(--md-sys-color-outline-variant)',
+                  backgroundColor: 'var(--md-sys-color-error-container)',
+                }}
               >
                 {actionError}
               </div>
@@ -316,31 +323,31 @@ export default function NotificationBell() {
                 <div className="p-4 space-y-3" aria-label="جارٍ تحميل الإشعارات">
                   {[0, 1, 2].map((row) => (
                     <div key={row} className="flex items-start gap-3 animate-pulse">
-                      <span className="w-7 h-7 rounded-full shrink-0" style={{ backgroundColor: 'var(--bg)' }} />
+                      <span className="w-7 h-7 rounded-full shrink-0 skeleton" />
                       <span className="flex-1 space-y-2">
-                        <span className="block h-3 rounded" style={{ backgroundColor: 'var(--bg)', width: '70%' }} />
-                        <span className="block h-2.5 rounded" style={{ backgroundColor: 'var(--bg)', width: '90%' }} />
+                        <span className="block h-3 skeleton" style={{ width: '70%' }} />
+                        <span className="block h-2.5 skeleton" style={{ width: '90%' }} />
                       </span>
                     </div>
                   ))}
                 </div>
               ) : error && notifications.length === 0 ? (
                 <div className="p-6 text-center space-y-3">
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{error}</p>
+                  <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{error}</p>
                   <button
                     type="button"
                     onClick={() => void load()}
-                    className="px-4 py-2 rounded-xl text-xs font-medium text-white"
-                    style={{ backgroundColor: 'var(--primary)' }}
+                    className="md3-btn md3-btn--filled text-xs"
                   >
                     إعادة المحاولة
                   </button>
                 </div>
               ) : notifications.length === 0 ? (
                 <div className="p-8 text-center space-y-2">
-                  <div className="text-3xl" aria-hidden="true">🔕</div>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>لا توجد إشعارات حالياً</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                  <span className="material-symbols-outlined text-[32px]" aria-hidden="true"
+                    style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>notifications_off</span>
+                  <p className="text-sm font-medium" style={{ color: 'var(--md-sys-color-on-surface)' }}>لا توجد إشعارات حالياً</p>
+                  <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                     ستظهر هنا إشعاراتك الجديدة خلال آخر 30 يوماً.
                   </p>
                 </div>
@@ -353,29 +360,31 @@ export default function NotificationBell() {
                       type="button"
                       data-testid="notification-item"
                       onClick={() => void openNotification(notification)}
-                      className="w-full text-right px-4 py-3 flex items-start gap-3 transition-colors border-b last:border-b-0 hover:bg-[var(--bg)]"
+                      className="w-full text-right px-4 py-3 flex items-start gap-3 transition-colors border-b last:border-b-0 hover:brightness-95"
                       style={{
-                        borderColor: 'var(--border)',
+                        borderColor: 'var(--md-sys-color-outline-variant)',
                         backgroundColor: isRead
                           ? 'transparent'
-                          : 'color-mix(in srgb, var(--primary) 8%, transparent)',
+                          : 'color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)',
                       }}
                     >
-                      <span className="text-lg mt-0.5 shrink-0" aria-hidden="true">
-                        {TYPE_ICON[notification.type || 'info'] || TYPE_ICON.info}
+                      <span className="mt-0.5 shrink-0 flex" aria-hidden="true">
+                        <span className="material-symbols-outlined text-[20px]" style={{ color: 'var(--md-sys-color-primary)' }}>
+                          {TYPE_ICON[notification.type || 'info'] || TYPE_ICON.info}
+                        </span>
                       </span>
                       <span className="flex-1 min-w-0">
                         <span className="flex items-start gap-2">
                           <span
                             className={`text-sm block truncate ${isRead ? 'font-medium' : 'font-bold'}`}
-                            style={{ color: 'var(--text)' }}
+                            style={{ color: 'var(--md-sys-color-on-surface)' }}
                           >
                             {notification.title}
                           </span>
                           {!isRead && (
                             <span
                               className="w-2 h-2 rounded-full shrink-0 mt-1.5"
-                              style={{ backgroundColor: 'var(--primary)' }}
+                              style={{ backgroundColor: 'var(--md-sys-color-primary)' }}
                               aria-label="غير مقروء"
                             />
                           )}
@@ -383,14 +392,14 @@ export default function NotificationBell() {
                         {notification.message && (
                           <span
                             className="text-xs mt-0.5 block truncate"
-                            style={{ color: 'var(--text-muted)' }}
+                            style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                           >
                             {notification.message}
                           </span>
                         )}
                         <span
-                          className="text-[11px] mt-1 block"
-                          style={{ color: 'var(--text-muted)' }}
+                          className="text-xs mt-1 block"
+                          style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                         >
                           {formatRelativeTime(notification.created_at)}
                         </span>
@@ -402,8 +411,8 @@ export default function NotificationBell() {
             </div>
 
             <div
-              className="px-4 py-2 border-t text-[11px] text-center shrink-0"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+              className="px-4 py-2 border-t text-xs text-center shrink-0"
+              style={{ borderColor: 'var(--md-sys-color-outline-variant)', color: 'var(--md-sys-color-on-surface-variant)' }}
             >
               تُحفظ الإشعارات لآخر 30 يوماً فقط
             </div>
@@ -419,29 +428,31 @@ export default function NotificationBell() {
             role="status"
             aria-live="polite"
             onClick={openPanel}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-sm text-right rounded-2xl border shadow-2xl px-4 py-3 flex items-start gap-3"
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[90] w-[calc(100%-2rem)] max-w-sm text-right rounded-[var(--md-sys-shape-corner-large)] md3-elevation-3 px-4 py-3 flex items-start gap-3"
             style={{
-              backgroundColor: 'var(--card)',
-              borderColor: 'var(--border)',
+              backgroundColor: 'var(--md-sys-color-surface-container-high)',
+              borderColor: 'var(--md-sys-color-outline-variant)',
               animation: 'notificationToastIn 200ms ease-out',
             }}
           >
-            <span className="text-xl shrink-0" aria-hidden="true">
-              {TYPE_ICON[toast.notification.type || 'info'] || '🔔'}
+            <span className="shrink-0 flex" aria-hidden="true">
+              <span className="material-symbols-outlined text-[22px]" style={{ color: 'var(--md-sys-color-primary)' }}>
+                {TYPE_ICON[toast.notification.type || 'info'] || 'notifications'}
+              </span>
             </span>
             <span className="flex-1 min-w-0">
-              <span className="block text-sm font-bold truncate" style={{ color: 'var(--text)' }}>
+              <span className="block text-sm font-bold truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                 {toast.notification.title}
               </span>
               {toast.notification.message && (
                 <span
                   className="block text-xs mt-0.5 truncate"
-                  style={{ color: 'var(--text-muted)' }}
+                  style={{ color: 'var(--md-sys-color-on-surface-variant)' }}
                 >
                   {toast.notification.message}
                 </span>
               )}
-              <span className="block text-[11px] mt-1 font-medium" style={{ color: 'var(--primary)' }}>
+              <span className="block text-xs mt-1 font-medium" style={{ color: 'var(--md-sys-color-primary)' }}>
                 {toast.count > 1 ? `${toast.count} إشعارات جديدة` : 'إشعار جديد'} · اضغط للعرض
               </span>
             </span>

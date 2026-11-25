@@ -32,11 +32,11 @@ interface Proposal {
 }
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  draft: { bg: 'var(--bg)', color: 'var(--text-muted)' },
-  submitted: { bg: '#dbeafe', color: '#1e40af' },
-  approved: { bg: '#dcfce7', color: '#166534' },
-  rejected: { bg: '#fee2e2', color: '#991b1b' },
-  needs_changes: { bg: '#fef3c7', color: '#92400e' },
+  draft: { bg: 'var(--md-sys-color-surface-container-highest)', color: 'var(--md-sys-color-on-surface-variant)' },
+  submitted: { bg: 'var(--md-sys-color-info-container)', color: 'var(--md-sys-color-on-info-container)' },
+  approved: { bg: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' },
+  rejected: { bg: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' },
+  needs_changes: { bg: 'var(--md-sys-color-warning-container)', color: 'var(--md-sys-color-on-warning-container)' },
 };
 
 function formatDate(value?: string | null): string {
@@ -245,7 +245,7 @@ export default function ProposalDetailPage() {
     return (
       <div className="space-y-3">
         {[0, 1, 2].map((row) => (
-          <div key={row} className="h-32 rounded-2xl animate-pulse" style={{ backgroundColor: 'var(--card)' }} />
+          <div key={row} className="h-32 md3-card md3-card--filled animate-pulse" />
         ))}
       </div>
     );
@@ -253,12 +253,11 @@ export default function ProposalDetailPage() {
 
   if (error || !proposal) {
     return (
-      <div className="rounded-2xl p-6 text-center space-y-3" style={{ backgroundColor: 'var(--card)' }}>
-        <p className="text-sm" style={{ color: '#991b1b' }}>{error || 'المقترح غير موجود'}</p>
+      <div className="md3-card md3-card--outlined p-6 text-center space-y-3">
+        <p className="text-sm text-error">{error || 'المقترح غير موجود'}</p>
         <button
           onClick={() => void load()}
-          className="px-5 py-2 rounded-xl text-sm font-medium text-white"
-          style={{ backgroundColor: 'var(--primary)' }}
+          className="md3-btn md3-btn--filled"
         >
           إعادة المحاولة
         </button>
@@ -267,24 +266,20 @@ export default function ProposalDetailPage() {
   }
 
   const colors = STATUS_COLORS[proposal.status] || STATUS_COLORS.draft;
-  const inputStyle = {
-    backgroundColor: 'var(--bg)',
-    borderColor: 'var(--border)',
-    color: 'var(--text)',
-  } as const;
 
   return (
     <div className="space-y-5 pb-10">
-      <Link href="/proposals" className="text-sm inline-flex items-center gap-1" style={{ color: 'var(--primary)' }}>
-        ← مقترحات الكورسات
+      <Link href="/proposals" className="md3-btn md3-btn--text inline-flex w-fit">
+        <span className="material-symbols-outlined text-[18px]" aria-hidden>arrow_forward</span>
+        مقترحات الكورسات
       </Link>
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
+          <h1 className="text-2xl font-bold text-on-surface">
             {proposal.course_title || 'مقترح بلا عنوان'}
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm mt-1 text-on-surface-variant">
             المحاضر: {proposal.instructor_name}
             {proposal.submitted_at ? ` · قُدّم في ${formatDate(proposal.submitted_at)}` : ''}
             {proposal.reviewed_at ? ` · روجع في ${formatDate(proposal.reviewed_at)}` : ''}
@@ -300,8 +295,7 @@ export default function ProposalDetailPage() {
           <button
             onClick={() => void exportWord()}
             disabled={exporting}
-            className="px-4 py-2 rounded-xl text-sm font-medium border disabled:opacity-50"
-            style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+            className="md3-btn md3-btn--outlined"
           >
             {exporting ? 'جارٍ التصدير…' : '⬇️ تصدير Word'}
           </button>
@@ -309,7 +303,7 @@ export default function ProposalDetailPage() {
       </div>
 
       {proposal.status === 'approved' && proposal.course_id && (
-        <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: '#dcfce7', color: '#166534' }}>
+        <div className="rounded-md3-sm p-3 text-sm" style={{ backgroundColor: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' }}>
           ✅ أُنشئ كورس من هذا المقترح —{' '}
           <Link href={`/courses/${proposal.course_id}`} className="underline font-medium">
             فتح الكورس #{proposal.course_id}
@@ -319,39 +313,35 @@ export default function ProposalDetailPage() {
 
       {/* ── Review actions ── */}
       {proposal.status !== 'approved' && (
-        <section className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}>
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>قرار المراجعة</h2>
+        <section className="md3-card md3-card--outlined p-5 space-y-3">
+          <h2 className="text-base font-semibold text-on-surface">قرار المراجعة</h2>
           <textarea
             value={note}
             onChange={(event) => setNote(event.target.value)}
             rows={2}
             maxLength={2000}
             placeholder="ملاحظة للمحاضر (مطلوبة عند طلب التعديل)"
-            className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-            style={inputStyle}
+            className="md3-field"
           />
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setConfirmAction('approve')}
               disabled={reviewing !== null}
-              className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-              style={{ backgroundColor: '#15803d' }}
+              className="md3-btn md3-btn--filled"
             >
               ✅ قبول المقترح
             </button>
             <button
               onClick={() => void review('needs_changes')}
               disabled={reviewing !== null}
-              className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: '#fef3c7', color: '#92400e' }}
+              className="md3-btn md3-btn--tonal"
             >
               ✏️ طلب تعديل
             </button>
             <button
               onClick={() => setConfirmAction('reject')}
               disabled={reviewing !== null}
-              className="px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
-              style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}
+              className="md3-btn md3-btn--outlined text-error"
             >
               ✖️ رفض
             </button>
@@ -360,15 +350,14 @@ export default function ProposalDetailPage() {
       )}
 
       {/* ── Content ── */}
-      <section className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}>
+      <section className="md3-card md3-card--outlined p-5 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>بيانات المقترح</h2>
+          <h2 className="text-base font-semibold text-on-surface">بيانات المقترح</h2>
           {editable && (
             <button
               onClick={() => void saveContent()}
               disabled={savingContent}
-              className="px-4 py-1.5 rounded-xl text-xs font-medium text-white disabled:opacity-50"
-              style={{ backgroundColor: 'var(--primary)' }}
+              className="md3-btn md3-btn--filled text-xs"
             >
               {savingContent ? 'جارٍ الحفظ…' : 'حفظ التعديلات'}
             </button>
@@ -376,20 +365,19 @@ export default function ProposalDetailPage() {
         </div>
 
         <div>
-          <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>اسم الدورة</label>
+          <label className="block text-sm mb-1 text-on-surface-variant">اسم الدورة</label>
           <input
             type="text"
             value={title}
             onChange={(event) => setTitle(event.target.value)}
             disabled={!editable}
             maxLength={200}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm disabled:opacity-70"
-            style={inputStyle}
+            className="md3-field"
           />
         </div>
 
         <div>
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm mb-1 text-on-surface-variant">
             أهداف الدورة — في نهاية الدورة التدريبية سوف يكون المتدرب قادراً على:
           </p>
           {objectives.map((objective, index) => (
@@ -404,14 +392,13 @@ export default function ProposalDetailPage() {
                 disabled={!editable}
                 rows={2}
                 maxLength={500}
-                className="flex-1 px-4 py-2 rounded-xl border text-sm resize-y disabled:opacity-70"
-                style={inputStyle}
+                className="md3-field flex-1"
               />
               {editable && objectives.length > 1 && (
                 <button
                   onClick={() => setObjectives(objectives.filter((_, i) => i !== index))}
-                  className="px-3 py-2 rounded-xl text-xs"
-                  style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}
+                  className="md3-btn md3-btn--icon text-xs text-error"
+                  style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
                   aria-label="حذف الهدف"
                 >
                   ✕
@@ -422,8 +409,7 @@ export default function ProposalDetailPage() {
           {editable && objectives.length < 40 && (
             <button
               onClick={() => setObjectives([...objectives, ''])}
-              className="text-xs px-3 py-1.5 rounded-lg border"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="md3-btn md3-btn--outlined text-xs"
             >
               + إضافة هدف
             </button>
@@ -431,16 +417,15 @@ export default function ProposalDetailPage() {
         </div>
 
         <div>
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المحتوى العلمي (يوماً بيوم)</p>
+          <p className="text-sm mb-1 text-on-surface-variant">المحتوى العلمي (يوماً بيوم)</p>
           {days.map((row, index) => (
-            <div key={index} className="rounded-xl p-3 mb-2 space-y-2" style={{ backgroundColor: 'var(--bg)' }}>
+            <div key={index} className="rounded-md3-md p-3 mb-2 space-y-2 bg-surface-container-low">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>اليوم {index + 1}</span>
+                <span className="text-xs font-medium text-on-surface-variant">اليوم {index + 1}</span>
                 {editable && days.length > 1 && (
                   <button
                     onClick={() => setDays(days.filter((_, i) => i !== index))}
-                    className="text-xs px-2 py-1 rounded-lg"
-                    style={{ backgroundColor: '#fee2e2', color: '#991b1b' }}
+                    className="md3-btn md3-btn--text text-xs text-error"
                   >
                     حذف
                   </button>
@@ -457,8 +442,7 @@ export default function ProposalDetailPage() {
                 disabled={!editable}
                 maxLength={120}
                 placeholder="اسم اليوم"
-                className="w-full px-3 py-2 rounded-xl border text-sm disabled:opacity-70"
-                style={inputStyle}
+                className="md3-field"
               />
               <textarea
                 value={row.topic}
@@ -471,10 +455,9 @@ export default function ProposalDetailPage() {
                 rows={3}
                 maxLength={2000}
                 placeholder="موضوعات اليوم"
-                className="w-full px-3 py-2 rounded-xl border text-sm resize-y disabled:opacity-70"
-                style={inputStyle}
+                className="md3-field"
               />
-              <p className="text-[11px]" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-xs text-on-surface-variant">
                 المحاضر: {proposal.instructor_name}
               </p>
             </div>
@@ -482,8 +465,7 @@ export default function ProposalDetailPage() {
           {editable && days.length < 60 && (
             <button
               onClick={() => setDays([...days, { day: '', topic: '' }])}
-              className="text-xs px-3 py-1.5 rounded-lg border"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="md3-btn md3-btn--outlined text-xs"
             >
               + إضافة يوم
             </button>
@@ -491,7 +473,7 @@ export default function ProposalDetailPage() {
         </div>
 
         <div>
-          <p className="text-xs mb-1" style={{ color: 'var(--text-muted)' }}>المادة العلمية (رابط)</p>
+          <p className="text-sm mb-1 text-on-surface-variant">المادة العلمية (رابط)</p>
           <input
             type="url"
             dir="ltr"
@@ -500,10 +482,9 @@ export default function ProposalDetailPage() {
             disabled={!editable}
             maxLength={1000}
             placeholder="https://drive.google.com/file/d/..."
-            className="w-full px-4 py-2.5 rounded-xl border text-sm text-left disabled:opacity-70"
-            style={inputStyle}
+            className="md3-field"
           />
-          <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs mt-1 text-on-surface-variant">
             رابط Google Drive أو PDF للمادة التي سيشرح منها المحاضر (للملفات الأكبر من 20 ميجا).
           </p>
           {proposal.materials_url && (
@@ -511,8 +492,7 @@ export default function ProposalDetailPage() {
               href={proposal.materials_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block text-xs mt-1"
-              style={{ color: 'var(--primary)' }}
+              className="inline-block text-xs mt-1 text-primary"
             >
               فتح الرابط المحفوظ ↗
             </a>
@@ -522,41 +502,38 @@ export default function ProposalDetailPage() {
 
       {/* ── Create course from an approved proposal ── */}
       {proposal.status === 'approved' && !proposal.course_id && (
-        <section className="rounded-2xl p-4 space-y-3" style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}>
+        <section className="md3-card md3-card--outlined p-5 space-y-3">
           <div>
-            <h2 className="font-bold" style={{ color: 'var(--text)' }}>إنشاء كورس من المقترح</h2>
-            <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+            <h2 className="text-base font-semibold text-on-surface">إنشاء كورس من المقترح</h2>
+            <p className="text-xs mt-1 text-on-surface-variant">
               الاسم والأهداف والمحتوى اليومي تنتقل تلقائياً — أكمل باقي البيانات ثم أنشئ الكورس.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الاسم بالعربية</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">الاسم بالعربية</label>
               <input
                 type="text"
                 value={courseForm.title_ar}
                 onChange={(event) => setCourseForm({ ...courseForm, title_ar: event.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الاسم بالإنجليزية</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">الاسم بالإنجليزية</label>
               <input
                 type="text"
                 value={courseForm.title_en}
                 onChange={(event) => setCourseForm({ ...courseForm, title_en: event.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>التصنيف</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">التصنيف</label>
               <select
                 value={courseForm.category_id}
                 onChange={(event) => setCourseForm({ ...courseForm, category_id: event.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               >
                 <option value="">بدون تصنيف</option>
                 {categories.map((category: any) => (
@@ -565,94 +542,86 @@ export default function ProposalDetailPage() {
               </select>
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>طريقة الحضور</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">طريقة الحضور</label>
               <select
                 value={courseForm.course_mode}
                 onChange={(event) => setCourseForm({ ...courseForm, course_mode: event.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               >
                 <option value="online">أونلاين</option>
                 <option value="offline">أوفلاين</option>
               </select>
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>السعر</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">السعر</label>
               <input
                 type="number"
                 min={0}
                 value={courseForm.price}
                 onChange={(event) => setCourseForm({ ...courseForm, price: Number(event.target.value) })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للطلاب</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">الحد الأقصى للطلاب</label>
               <input
                 type="number"
                 min={1}
                 value={courseForm.max_students}
                 onChange={(event) => setCourseForm({ ...courseForm, max_students: Number(event.target.value) })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>عدد المحاضرات</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">عدد المحاضرات</label>
               <input
                 type="number"
                 min={0}
                 value={courseForm.lecture_count}
                 onChange={(event) => setCourseForm({ ...courseForm, lecture_count: Number(event.target.value) })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>مدة المحاضرة (ساعة)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">مدة المحاضرة (ساعة)</label>
               <input
                 type="number"
                 min={0}
                 step={0.5}
                 value={courseForm.lecture_duration}
                 onChange={(event) => setCourseForm({ ...courseForm, lecture_duration: Number(event.target.value) })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>وصف مختصر</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">وصف مختصر</label>
               <textarea
                 value={courseForm.description}
                 onChange={(event) => setCourseForm({ ...courseForm, description: event.target.value })}
                 rows={3}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>مقدمة الكورس</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">مقدمة الكورس</label>
               <textarea
                 value={courseForm.introduction}
                 onChange={(event) => setCourseForm({ ...courseForm, introduction: event.target.value })}
                 rows={3}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الفئة المستهدفة</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">الفئة المستهدفة</label>
               <textarea
                 value={courseForm.target_audience}
                 onChange={(event) => setCourseForm({ ...courseForm, target_audience: event.target.value })}
                 rows={2}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>صورة الكورس</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">صورة الكورس</label>
               <input
                 type="file"
                 accept="image/*"
@@ -663,15 +632,14 @@ export default function ProposalDetailPage() {
                     setCourseForm((current) => ({ ...current, image_url: dataUrl }));
                   }
                 }}
-                className="w-full text-sm"
-                style={{ color: 'var(--text)' }}
+                className="w-full text-sm text-on-surface"
               />
               {courseForm.image_url && (
-                <img src={courseForm.image_url} alt="معاينة" className="mt-2 h-20 rounded-lg object-cover" />
+                <img src={courseForm.image_url} alt="معاينة" className="mt-2 h-20 rounded-md3-sm object-cover" />
               )}
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>رابط المادة العلمية</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">رابط المادة العلمية</label>
               <input
                 type="url"
                 dir="ltr"
@@ -679,13 +647,14 @@ export default function ProposalDetailPage() {
                 onChange={(event) => setCourseForm({ ...courseForm, materials_url: event.target.value })}
                 maxLength={500}
                 placeholder="https://drive.google.com/file/d/..."
-                className="w-full px-4 py-2.5 rounded-xl border text-sm text-left"
-                style={inputStyle}
+                className="md3-field"
               />
             </div>
-            <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--text)' }}>
+            <label className="flex items-center gap-2 text-sm text-on-surface min-h-[40px] cursor-pointer">
               <input
                 type="checkbox"
+                className="w-5 h-5 cursor-pointer"
+                style={{ accentColor: 'var(--md-sys-color-primary)' }}
                 checked={courseForm.is_active === 1}
                 onChange={(event) => setCourseForm({ ...courseForm, is_active: event.target.checked ? 1 : 0 })}
               />
@@ -695,8 +664,7 @@ export default function ProposalDetailPage() {
           <button
             onClick={() => void createCourse()}
             disabled={creatingCourse}
-            className="px-5 py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="md3-btn md3-btn--filled"
           >
             {creatingCourse ? 'جارٍ الإنشاء…' : 'إنشاء الكورس'}
           </button>

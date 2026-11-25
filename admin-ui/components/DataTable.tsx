@@ -46,76 +46,150 @@ export default function DataTable({ columns, data, onRowClick, selectable, rowKe
   };
 
   const colCount = columns.length + (selectable ? 1 : 0);
+  // Row height lands in the 52–56px range (M3 data-table rows).
+  const cellClass = 'px-4 py-3.5 align-middle';
 
   return (
     <div>
       {selectable && selectedIds && selectedIds.size > 0 && (
-        <div className="mb-3 px-4 py-2.5 rounded-xl border text-sm flex items-center gap-3"
-          style={{ backgroundColor: 'var(--primary)', borderColor: 'var(--primary)', color: 'white' }}>
-          <span>✓ تم تحديد {selectedIds.size} مجموعة</span>
-          <button onClick={() => onSelectionChange?.(new Set())}
-            className="mr-auto px-3 py-1 rounded-lg text-xs font-medium bg-white/20 hover:bg-white/30 transition-all">
+        <div
+          className="mb-3 px-4 py-2.5 rounded-[var(--md-sys-shape-corner-small)] text-sm flex items-center gap-3"
+          style={{
+            backgroundColor: 'var(--md-sys-color-primary-container)',
+            color: 'var(--md-sys-color-on-primary-container)',
+          }}
+        >
+          <span className="material-symbols-outlined text-[20px]" aria-hidden>check_circle</span>
+          <span>تم تحديد {selectedIds.size} مجموعة</span>
+          <button
+            onClick={() => onSelectionChange?.(new Set())}
+            className="mr-auto px-3 py-1.5 rounded-full text-xs font-medium transition-colors hover:brightness-95"
+            style={{ backgroundColor: 'var(--md-sys-color-on-primary-container)', color: 'var(--md-sys-color-primary-container)' }}
+          >
             إلغاء التحديد
           </button>
         </div>
       )}
       <div className="mb-3">
-        <input type="text" placeholder="بحث..." value={search} onChange={e => setSearch(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 transition-all"
-          style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+        <input
+          type="text"
+          placeholder="بحث..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          aria-label="بحث في الجدول"
+          className="md3-field"
+        />
       </div>
-      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: 'var(--border)' }}>
-        <table className="w-full text-sm">
+      <div className="overflow-x-auto rounded-[var(--md-sys-shape-corner-small)] border" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+        <table className="w-full text-sm" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
           <thead>
-            <tr className="border-b" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}>
+            <tr>
               {selectable && (
-                <th className="px-4 py-3 w-10">
-                  <input type="checkbox" checked={isAllSelected} onChange={toggleAll}
-                    className="accent-blue-600 w-4 h-4 cursor-pointer" />
+                <th className={`${cellClass} w-12 sticky right-0 z-10`} style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={toggleAll}
+                    aria-label="تحديد الكل"
+                    className="w-4 h-4 cursor-pointer"
+                    style={{ accentColor: 'var(--md-sys-color-primary)' }}
+                  />
                 </th>
               )}
-              {columns.map(col => (
-                <th key={col.key} onClick={() => col.sortable !== false && toggleSort(col.key)}
-                  className={`px-4 py-3 text-right font-medium whitespace-nowrap ${col.sortable !== false ? 'cursor-pointer hover:opacity-80' : ''}`}
-                  style={{ color: 'var(--text-muted)' }}>
-                  {col.label}
-                  {sortKey === col.key && <span className="mr-1">{sortDir === 'asc' ? '↑' : '↓'}</span>}
-                </th>
-              ))}
+              {columns.map((col, colIndex) => {
+                const isFirstSticky = !selectable && colIndex === 0;
+                return (
+                  <th
+                    key={col.key}
+                    onClick={() => col.sortable !== false && toggleSort(col.key)}
+                    scope="col"
+                    className={`${cellClass} text-right whitespace-nowrap border-b ${col.sortable !== false ? 'cursor-pointer select-none' : ''} ${isFirstSticky ? 'sticky right-0 z-10' : ''}`}
+                    style={{
+                      backgroundColor: 'var(--md-sys-color-surface-container)',
+                      borderColor: 'var(--md-sys-color-outline-variant)',
+                      color: 'var(--md-sys-color-on-surface-variant)',
+                      fontWeight: 500,
+                      fontSize: '13px',
+                    }}
+                  >
+                    <span className="inline-flex items-center gap-1">
+                      {col.label}
+                      {sortKey === col.key && (
+                        <span className="material-symbols-outlined text-[16px]" aria-hidden>
+                          {sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}
+                        </span>
+                      )}
+                    </span>
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {sorted.length === 0 ? (
-              <tr><td colSpan={colCount} className="px-4 py-8 text-center" style={{ color: 'var(--text-muted)' }}>لا توجد بيانات</td></tr>
+              <tr>
+                <td colSpan={colCount} className="px-4 py-10 text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+                  لا توجد بيانات
+                </td>
+              </tr>
             ) : sorted.map((row, i) => {
               const rowId = getRowId(row);
               const isSelected = selectedIds?.has(rowId);
               return (
-                <tr key={rowId} onClick={() => onRowClick?.(row)}
-                  className={`border-b transition-all animate-fade-in ${selectable ? 'cursor-pointer' : ''}`}
-                  style={{
-                    borderColor: 'var(--border)',
-                    animationDelay: `${i * 0.03}s`,
-                    backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.08)' : undefined,
-                  }}>
+                <tr
+                  key={rowId}
+                  onClick={() => onRowClick?.(row)}
+                  className={`transition-colors ${selectable || onRowClick ? 'cursor-pointer' : ''}`}
+                  style={{ animationDelay: `${i * 0.03}s` }}
+                  onMouseEnter={e => { if (!isSelected) e.currentTarget.style.backgroundColor = 'color-mix(in srgb, var(--md-sys-color-on-surface) 4%, transparent)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.backgroundColor = isSelected ? 'color-mix(in srgb, var(--md-sys-color-primary) 8%, transparent)' : ''; }}
+                >
                   {selectable && (
-                    <td className="px-4 py-3 w-10" onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={!!isSelected} onChange={() => toggleSelect(rowId)}
-                        className="accent-blue-600 w-4 h-4 cursor-pointer" />
+                    <td
+                      className={`${cellClass} w-12 sticky right-0 z-10 border-b`}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        backgroundColor: isSelected ? 'color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface-container-lowest))' : 'var(--md-sys-color-surface-container-lowest)',
+                        borderColor: 'var(--md-sys-color-outline-variant)',
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!!isSelected}
+                        onChange={() => toggleSelect(rowId)}
+                        aria-label={`تحديد الصف ${rowId}`}
+                        className="w-4 h-4 cursor-pointer"
+                        style={{ accentColor: 'var(--md-sys-color-primary)' }}
+                      />
                     </td>
                   )}
-                  {columns.map(col => (
-                    <td key={col.key} className="px-4 py-3" style={{ color: 'var(--text)' }}>
-                      {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '')}
-                    </td>
-                  ))}
+                  {columns.map((col, colIndex) => {
+                    const isFirstSticky = !selectable && colIndex === 0;
+                    return (
+                      <td
+                        key={col.key}
+                        className={`${cellClass} border-b ${isFirstSticky ? 'sticky right-0 z-10' : ''}`}
+                        style={{
+                          color: 'var(--md-sys-color-on-surface)',
+                          borderColor: 'var(--md-sys-color-outline-variant)',
+                          backgroundColor: isSelected
+                            ? 'color-mix(in srgb, var(--md-sys-color-primary) 8%, var(--md-sys-color-surface-container-lowest))'
+                            : isFirstSticky
+                              ? 'var(--md-sys-color-surface-container-lowest)'
+                              : undefined,
+                        }}
+                      >
+                        {col.render ? col.render(row[col.key], row) : String(row[col.key] ?? '')}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
-      <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>{sorted.length} نتيجة</p>
+      <p className="text-xs mt-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{sorted.length} نتيجة</p>
     </div>
   );
 }

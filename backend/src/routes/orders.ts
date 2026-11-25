@@ -6,6 +6,7 @@ import { sendNotification } from '../services/externalNotificationService';
 import {
   MAX_RECEIPT_CHARS,
   attachOrderDetails,
+  expireStaleBookings,
   findBlockingOrder,
   getOrderCourseTitles,
   removeCoursesFromCart,
@@ -312,6 +313,11 @@ router.delete('/:id/items/:courseId', authMiddleware, async (req: Request, res: 
 // ─────────────────────────────────────────────────────────────
 router.get('/my', authMiddleware, async (req: Request, res: Response) => {
   try {
+    // Lazy sweep: the 6-hour interval never runs on a warm production
+    // instance, so pending bookings past their window are cancelled on read.
+    await expireStaleBookings().catch((e: any) =>
+      console.error('Booking expiry lazy sweep failed:', e?.message || e),
+    );
     const result = await sql(
       `SELECT o.* FROM orders o WHERE o.user_id=? ORDER BY o.created_at DESC`,
       req.user!.userId,

@@ -27,11 +27,11 @@ const FILTERS = [
 ] as const;
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  draft: { bg: 'var(--bg)', color: 'var(--text-muted)' },
-  submitted: { bg: '#dbeafe', color: '#1e40af' },
-  approved: { bg: '#dcfce7', color: '#166534' },
-  rejected: { bg: '#fee2e2', color: '#991b1b' },
-  needs_changes: { bg: '#fef3c7', color: '#92400e' },
+  draft: { bg: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface-variant)' },
+  submitted: { bg: 'var(--md-sys-color-info-container)', color: 'var(--md-sys-color-on-info-container)' },
+  approved: { bg: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' },
+  rejected: { bg: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' },
+  needs_changes: { bg: 'var(--md-sys-color-warning-container)', color: 'var(--md-sys-color-on-warning-container)' },
 };
 
 function formatDate(value?: string | null): string {
@@ -91,19 +91,16 @@ export default function ProposalsPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>
+          <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>
             مقترحات الكورسات
           </h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-sm mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
             راجع مقترحات المحاضرين، وعدّلها إن لزم، ثم اقبلها وأنشئ الكورس منها.
           </p>
         </div>
-        <button
-          onClick={() => void load()}
-          className="px-4 py-2 rounded-xl text-sm font-medium border transition-all hover:opacity-80"
-          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
-        >
-          🔄 تحديث
+        <button onClick={() => void load()} className="md3-btn md3-btn--outlined">
+          <span className="material-symbols-outlined text-[18px]" aria-hidden>refresh</span>
+          تحديث
         </button>
       </div>
 
@@ -114,11 +111,13 @@ export default function ProposalsPage() {
             <button
               key={item.key}
               onClick={() => setFilter(item.key)}
-              className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
+              aria-pressed={active}
+              className="px-4 py-1.5 rounded-full text-sm font-medium transition-colors"
               style={{
-                backgroundColor: active ? 'var(--primary)' : 'var(--card)',
-                color: active ? '#fff' : 'var(--text)',
-                border: `1px solid ${active ? 'var(--primary)' : 'var(--border)'}`,
+                backgroundColor: active ? 'var(--md-sys-color-secondary-container)' : 'transparent',
+                color: active ? 'var(--md-sys-color-on-secondary-container)' : 'var(--md-sys-color-on-surface-variant)',
+                border: `1px solid ${active ? 'transparent' : 'var(--md-sys-color-outline)'}`,
+                minHeight: 40,
               }}
             >
               {item.label}
@@ -131,13 +130,12 @@ export default function ProposalsPage() {
           value={search}
           onChange={(event) => setSearch(event.target.value)}
           placeholder="ابحث باسم الدورة أو المحاضر…"
-          className="flex-1 min-w-[200px] px-4 py-2 rounded-xl border text-sm"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+          className="md3-field flex-1 min-w-[200px]"
         />
       </div>
 
       {error && (
-        <div className="rounded-xl p-3 text-sm" style={{ backgroundColor: '#fef2f2', color: '#991b1b' }}>
+        <div className="p-3 rounded-[var(--md-sys-shape-corner-small)] text-sm" style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
           {error}
         </div>
       )}
@@ -146,10 +144,10 @@ export default function ProposalsPage() {
         <Skeleton rows={3} cols={3} />
       ) : visible.length === 0 ? (
         <div
-          className="rounded-2xl p-10 text-center"
-          style={{ backgroundColor: 'var(--card)', color: 'var(--text-muted)' }}
+          className="p-10 text-center flex flex-col items-center"
+          style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', color: 'var(--md-sys-color-on-surface-variant)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}
         >
-          <div className="text-3xl mb-2">📝</div>
+          <span className="material-symbols-outlined text-[32px] mb-2" aria-hidden>description</span>
           لا توجد مقترحات مطابقة.
         </div>
       ) : (
@@ -160,15 +158,19 @@ export default function ProposalsPage() {
               <Link
                 key={proposal.id}
                 href={`/proposals/${proposal.id}`}
-                className="block rounded-2xl p-4 transition-shadow hover:shadow-md"
-                style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)' }}
+                className="block p-4 md3-elevation-1"
+                style={{
+                  backgroundColor: 'var(--md-sys-color-surface-container-low)',
+                  border: '1px solid var(--md-sys-color-outline-variant)',
+                  borderRadius: 'var(--md-sys-shape-corner-medium)',
+                }}
               >
                 <div className="flex flex-wrap items-start justify-between gap-2">
                   <div className="min-w-0">
-                    <h2 className="font-bold" style={{ color: 'var(--text)' }}>
+                    <h2 className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                       {proposal.course_title || 'مقترح بلا عنوان'}
                     </h2>
-                    <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-sm mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                       المحاضر: {proposal.instructor_name}
                       {proposal.submitted_at ? ` · قُدّم ${formatDate(proposal.submitted_at)}` : ` · آخر تحديث ${formatDate(proposal.updated_at)}`}
                       {proposal.course_id ? ` · كورس #${proposal.course_id}` : ''}
@@ -182,7 +184,7 @@ export default function ProposalsPage() {
                   </span>
                 </div>
                 {proposal.status === 'needs_changes' && proposal.admin_note && (
-                  <p className="text-xs mt-2" style={{ color: '#92400e' }}>
+                  <p className="text-sm mt-2" style={{ color: 'var(--md-sys-color-on-warning-container)' }}>
                     ملاحظتك: {proposal.admin_note}
                   </p>
                 )}

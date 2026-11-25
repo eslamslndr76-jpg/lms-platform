@@ -17,7 +17,25 @@ export default class ErrorBoundary extends Component<Props, State> {
   }
   render() {
     if (this.state.hasError) {
-      return <div className="flex flex-col items-center justify-center h-64 gap-4 p-4"><p className="text-red-500 font-medium">حدث خطأ غير متوقع</p><p className="text-sm max-w-md text-center" style={{ color: 'var(--text-muted)' }}>{this.state.error}</p><button onClick={() => { this.setState({ hasError: false, error: '' }); window.location.reload(); }} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
+      return (
+        <div className="flex flex-col items-center justify-center h-64 gap-4 p-4">
+          <div
+            className="w-14 h-14 rounded-full flex items-center justify-center"
+            style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
+            aria-hidden="true"
+          >
+            <span className="material-symbols-outlined text-[28px]">error</span>
+          </div>
+          <p className="font-medium" style={{ color: 'var(--md-sys-color-on-surface)' }}>حدث خطأ غير متوقع</p>
+          <p className="text-sm max-w-md text-center" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{this.state.error}</p>
+          <button
+            onClick={() => { this.setState({ hasError: false, error: '' }); window.location.reload(); }}
+            className="md3-btn md3-btn--filled"
+          >
+            إعادة المحاولة
+          </button>
+        </div>
+      );
     }
     return this.props.children;
   }

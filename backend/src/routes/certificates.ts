@@ -1,644 +1,678 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import { sql } from '../db/helpers';
 import { authMiddleware } from '../middleware/auth';
-import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
-
-/** Certificate logo markup: the configured logo, or the new default brand logo. */
-function logoHtmlFor(logoHeader: unknown): string {
-  const src =
-    typeof logoHeader === 'string' && logoHeader.trim() ? logoHeader.trim() : DEFAULT_LOGO_DATA_URL;
-  return `<img class="logo" src="${src}" alt="Logo" />`;
-}
+import {
+  CERT_PATTERN_DATA_URL,
+  CERT_WATERMARK_DATA_URL,
+  CERT_UNIT_LOGO_DATA_URL,
+  CERT_INSTITUTE_LOGO_DATA_URL,
+  CERT_DIVIDER_DATA_URL,
+  CERT_CORNER_SVG_DATA_URL,
+  CERT_FLOURISH_SVG_DATA_URL,
+} from '../config/certificateAssets';
 
 const router = Router();
 
-// توقيع الشهادة الافتراضي: مدير وحدة التدريب والتطوير.
-const DEFAULT_DIRECTOR_NAME = 'دكتور شيماء محمد محمد عبد الدايم';
-const DEFAULT_DIRECTOR_TITLE = 'مدير وحدة التدريب و التطوير';
+// Fixed signers and identity per the approved design reference
+// (docs/certificate-design). The unit-manager name honours the existing
+// 'certificate' setting when one is configured.
+const CERT_CHAIRMAN_NAME = 'أ.د. عادل المهدي';
+const CERT_DEAN_NAME = 'أ.د. عمر صقر';
+const CERT_UNIT_MANAGER_DEFAULT = 'د. شيماء عبدالدايم';
+const ARABIC_MONTHS = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيه', 'يوليه', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
 
+// ─── Shared certificate rendering: one data builder, one template ───
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Egyptian national-id digit normalization (Arabic/Indic → Latin). */
+function normalizeDigits(value: unknown): string {
+  const arabicIndic = '٠١٢٣٤٥٦٧٨٩';
+  const easternArabicIndic = '۰۱۲۳۴۵۶۷۸۹';
+  return String(value || '')
+    .replace(/[٠-٩]/g, (ch) => String(arabicIndic.indexOf(ch)))
+    .replace(/[۰-۹]/g, (ch) => String(easternArabicIndic.indexOf(ch)))
+    .replace(/[\s-]/g, '');
+}
+
+/**
+ * Structural national-id check (format only — NOT an identity verification):
+ * 14 digits, century code 2/3, valid birth date, known governorate code.
+ * Digit 13 (odd = male, even = female) decides the wording, per the design
+ * reference. Returns null when the id is missing or invalid.
+ */
+function genderFromNationalId(nationalId: unknown): 'male' | 'female' | null {
+  const id = normalizeDigits(nationalId);
+  if (!/^\d{14}$/.test(id)) return null;
+  const centuryCode = id[0];
+  if (centuryCode !== '2' && centuryCode !== '3') return null;
+  const year = Number((centuryCode === '2' ? '19' : '20') + id.slice(1, 3));
+  const month = Number(id.slice(3, 5));
+  const day = Number(id.slice(5, 7));
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  const governorate = id.slice(7, 9);
+  const validGovernorates = new Set([
+    '01', '02', '03', '04', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+    '21', '22', '23', '24', '25', '26', '27', '28', '29', '31', '32', '33', '34', '35', '88',
+  ]);
+  if (!validGovernorates.has(governorate)) return null;
+  return Number(id[12]) % 2 === 0 ? 'female' : 'male';
+}
+
+/**
+ * الطالب/الطالبة wording: the registered gender field first, then the
+ * national-id structure. When neither is conclusive the wording stays neutral
+ * (both forms) and a warning is logged for the admin — never a guess.
+ */
+function resolveGenderTexts(genderField: unknown, nationalId: unknown, userId: number) {
+  const g = String(genderField || '').trim().toLowerCase();
+  if (g === 'female' || g === 'أنثى' || g === 'f') {
+    return { studentLabel: 'الطالبة', completionVerb: 'قد اجتازت بنجاح الدورة التدريبية' };
+  }
+  if (g === 'male' || g === 'ذكر' || g === 'm') {
+    return { studentLabel: 'الطالب', completionVerb: 'قد اجتاز بنجاح الدورة التدريبية' };
+  }
+  const derived = genderFromNationalId(nationalId);
+  if (derived === 'female') return { studentLabel: 'الطالبة', completionVerb: 'قد اجتازت بنجاح الدورة التدريبية' };
+  if (derived === 'male') return { studentLabel: 'الطالب', completionVerb: 'قد اجتاز بنجاح الدورة التدريبية' };
+  console.warn(
+    `[Certificate] Gender unknown for student ${userId} (missing/invalid gender and national_id) — neutral wording used; please review the student record.`,
+  );
+  return { studentLabel: 'الطالب/الطالبة', completionVerb: 'قد اجتاز/اجتازت بنجاح الدورة التدريبية' };
+}
+
+// Certificate page: A4 landscape (297×210mm), the approved reference design.
+// Assets are inlined as data URLs so the HTML is fully self-contained.
 const CERTIFICATE_TEMPLATE = `<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800;900&family=Playfair+Display:wght@400;600;700;800&family=Aref+Ruqaa:wght@400;700&family=Great+Vibes&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>شهادة {{serialId}}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Arabic:wght@400;700;800;900&family=Amiri:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    @page { size: 297mm 210mm; margin: 0 !important; }
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
-
+    @page { size: A4 landscape; margin: 0; }
+    :root {
+      --navy: #18366f;
+      --navy-deep: #102958;
+      --blue: #159bc8;
+      --gold: #ad9143;
+      --gold-light: #d8c58b;
+      --paper: #fffdf7;
+      --ink: #1b2d55;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; width: 297mm; height: 210mm; background: #fff; }
     body {
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", "Amiri", Tahoma, sans-serif;
+      color: var(--ink);
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    .certificate {
+      position: relative;
+      direction: ltr;
       width: 297mm;
       height: 210mm;
-      font-family: 'Cairo', 'Inter', sans-serif;
-      position: relative;
       overflow: hidden;
-      background: #faf7f0;
-      color: #1a1a1a;
+      background: var(--paper);
+      isolation: isolate;
     }
-
-    /* ═══════════════════════════════════════════
-       BACKGROUND LAYERS — Floral Damask Pattern
-       ═══════════════════════════════════════════ */
-
-    /* Layer 1: Warm ivory gradient base */
-    .bg-gradient {
+    /* Repeated geometric arabesque pattern: visible but soft behind the text. */
+    .pattern-layer {
       position: absolute;
-      top: 0; right: 0; bottom: 0; left: 0;
-      background: linear-gradient(135deg, #faf7f0 0%, #f5efe3 35%, #faf7f0 65%, #f0ead8 100%);
       z-index: 0;
-    }
-
-    /* Layer 2: Floral damask repeating pattern */
-    .bg-floral {
-      position: absolute;
-      top: 0; right: 0; bottom: 0; left: 0;
-      z-index: 0;
+      top: 8mm;
+      right: 8mm;
+      bottom: 8mm;
+      left: 8mm;
+      background-image: url("__ASSET_PATTERN__");
+      background-size: 34mm 34mm;
+      background-repeat: repeat;
+      opacity: .36;
       pointer-events: none;
-      background-image:
-        radial-gradient(ellipse 28px 28px at 50% 50%, {{primaryColor}} 0%, transparent 65%),
-        radial-gradient(ellipse 16px 16px at 25% 25%, {{primaryColor}} 0%, transparent 60%),
-        radial-gradient(ellipse 16px 16px at 75% 75%, {{secondaryColor}} 0%, transparent 60%),
-        radial-gradient(ellipse 10px 5px at 15% 50%, {{primaryColor}} 0%, transparent 55%),
-        radial-gradient(ellipse 10px 5px at 85% 50%, {{primaryColor}} 0%, transparent 55%),
-        radial-gradient(ellipse 8px 8px at 50% 20%, {{secondaryColor}} 0%, transparent 55%),
-        radial-gradient(ellipse 8px 8px at 50% 80%, {{secondaryColor}} 0%, transparent 55%);
-      background-size: 100px 100px;
-      opacity: 0.04;
     }
-
-    /* Layer 3: Corner glows — stronger than before */
-    .bg-glow {
+    .watermark {
       position: absolute;
-      top: 0; right: 0; bottom: 0; left: 0;
-      z-index: 0;
-      pointer-events: none;
-      background:
-        radial-gradient(circle at 8% 8%, {{primaryColor}} 0%, transparent 35%),
-        radial-gradient(circle at 92% 92%, {{secondaryColor}} 0%, transparent 35%),
-        radial-gradient(circle at 50% 50%, {{primaryColor}} 0%, transparent 50%),
-        radial-gradient(circle at 92% 8%, {{primaryColor}} 0%, transparent 25%),
-        radial-gradient(circle at 8% 92%, {{secondaryColor}} 0%, transparent 25%);
-      opacity: 0.05;
-    }
-
-    /* Layer 4: Scattered star dots — double-layer pattern */
-    .bg-stars {
-      position: absolute;
-      top: 0; right: 0; bottom: 0; left: 0;
-      z-index: 0;
-      pointer-events: none;
-      background-image:
-        radial-gradient(circle, {{primaryColor}} 1.2px, transparent 1.2px),
-        radial-gradient(circle, {{secondaryColor}} 0.7px, transparent 0.7px);
-      background-size: 55px 55px, 38px 38px;
-      background-position: 0 0, 19px 19px;
-      opacity: 0.055;
-    }
-
-    /* ═══════════════════════════════════════════
-       SCALLOPED EDGE BORDER — 4 sides
-       ═══════════════════════════════════════════ */
-
-    .bg-scallop-top, .bg-scallop-bottom {
-      position: absolute; left: 8mm; right: 8mm; height: 10px;
-      z-index: 1; pointer-events: none;
-    }
-    .bg-scallop-top { top: 5.5mm; }
-    .bg-scallop-bottom { bottom: 5.5mm; }
-
-    .bg-scallop-top {
-      background:
-        radial-gradient(circle at 10px -1px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px),
-        radial-gradient(circle at 10px -1px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px);
-      background-size: 22px 10px;
-      background-repeat: repeat-x;
-    }
-    .bg-scallop-bottom {
-      background:
-        radial-gradient(circle at 10px 11px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px),
-        radial-gradient(circle at 10px 11px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px);
-      background-size: 22px 10px;
-      background-repeat: repeat-x;
-    }
-
-    .bg-scallop-left, .bg-scallop-right {
-      position: absolute; top: 8mm; bottom: 8mm; width: 10px;
-      z-index: 1; pointer-events: none;
-    }
-    .bg-scallop-left { left: 5.5mm; }
-    .bg-scallop-right { right: 5.5mm; }
-
-    .bg-scallop-left {
-      background:
-        radial-gradient(circle at -1px 10px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px),
-        radial-gradient(circle at -1px 10px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px);
-      background-size: 10px 22px;
-      background-repeat: repeat-y;
-    }
-    .bg-scallop-right {
-      background:
-        radial-gradient(circle at 11px 10px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px),
-        radial-gradient(circle at 11px 10px, transparent 7px, {{primaryColor}} 7px, {{primaryColor}} 8px, transparent 8px);
-      background-size: 10px 22px;
-      background-repeat: repeat-y;
-    }
-
-    /* Inner border */
-    .border-inner {
-      position: absolute;
-      top: 14mm; right: 14mm; bottom: 14mm; left: 14mm;
-      border: 1px solid {{primaryColor}}25;
-      border-radius: 4px;
-      pointer-events: none;
       z-index: 1;
+      width: 120mm;
+      height: 120mm;
+      object-fit: contain;
+      left: 88.5mm;
+      top: 43mm;
+      opacity: .12;
+      pointer-events: none;
     }
-
-    /* ═══════════════════════════════════════════
-       CORNER ORNAMENTS — L-shape + dot
-       ═══════════════════════════════════════════ */
-
+    .outer-border, .inner-border {
+      position: absolute;
+      pointer-events: none;
+      z-index: 8;
+    }
+    .outer-border { top: 5mm; right: 5mm; bottom: 5mm; left: 5mm; border: .65mm solid var(--navy); }
+    .inner-border { top: 7mm; right: 7mm; bottom: 7mm; left: 7mm; border: .25mm solid var(--gold); }
     .corner {
-      position: absolute; width: 60px; height: 60px;
-      pointer-events: none; z-index: 2;
-    }
-    .corner::before, .corner::after {
-      content: ''; position: absolute;
-      background: {{primaryColor}}; border-radius: 1px;
-    }
-
-    .corner-tl { top: 10mm; left: 10mm; }
-    .corner-tl::before { top: 0; left: 0; width: 50px; height: 3px; }
-    .corner-tl::after  { top: 0; left: 0; width: 3px; height: 50px; }
-
-    .corner-tr { top: 10mm; right: 10mm; }
-    .corner-tr::before { top: 0; right: 0; width: 50px; height: 3px; }
-    .corner-tr::after  { top: 0; right: 0; width: 3px; height: 50px; }
-
-    .corner-bl { bottom: 10mm; left: 10mm; }
-    .corner-bl::before { bottom: 0; left: 0; width: 50px; height: 3px; }
-    .corner-bl::after  { bottom: 0; left: 0; width: 3px; height: 50px; }
-
-    .corner-br { bottom: 10mm; right: 10mm; }
-    .corner-br::before { bottom: 0; right: 0; width: 50px; height: 3px; }
-    .corner-br::after  { bottom: 0; right: 0; width: 3px; height: 50px; }
-
-    .corner-dot {
-      position: absolute; width: 8px; height: 8px;
-      border-radius: 50%; background: {{primaryColor}};
-      opacity: 0.35;
-    }
-    .corner-tl .corner-dot { top: -4px; left: -4px; }
-    .corner-tr .corner-dot { top: -4px; right: -4px; }
-    .corner-bl .corner-dot { bottom: -4px; left: -4px; }
-    .corner-br .corner-dot { bottom: -4px; right: -4px; }
-
-    /* ═══════════════════════════════════════════
-       DECORATIVE CENTER LINE
-       ═══════════════════════════════════════════ */
-
-    .decorative-line {
       position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      width: 70mm; height: 1px;
-      background: linear-gradient(90deg, transparent, {{primaryColor}}30, transparent);
+      z-index: 9;
+      width: 25mm;
+      height: 25mm;
+      object-fit: contain;
       pointer-events: none;
-      z-index: 0;
     }
-
-    /* ═══════════════════════════════════════════
-       CONTENT LAYOUT
-       ═══════════════════════════════════════════ */
-
-    .content {
-      position: absolute;
-      top: 18mm; right: 18mm; bottom: 18mm; left: 18mm;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: space-between;
-      text-align: center;
-      padding: 4mm 12mm;
-      z-index: 1;
-    }
-
-    /* ═══════ HEADER ═══════ */
-
+    .corner-tl { top: 4.5mm; left: 4.5mm; }
+    .corner-tr { top: 4.5mm; right: 4.5mm; transform: scaleX(-1); }
+    .corner-bl { bottom: 4.5mm; left: 4.5mm; transform: scaleY(-1); }
+    .corner-br { bottom: 4.5mm; right: 4.5mm; transform: scale(-1); }
     .header {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 5px;
-    }
-
-    .logo { max-height: 50px; max-width: 170px; object-fit: contain; }
-
-    .system-name {
-      font-family: 'Cairo', sans-serif;
-      font-size: 9pt;
-      font-weight: 700;
-      color: {{primaryColor}};
-      letter-spacing: 0.5px;
-    }
-
-    /* ═══════ TITLE SECTION ═══════ */
-
-    .title-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .title-ar {
-      font-family: 'Cairo', sans-serif;
-      font-size: 34pt;
-      font-weight: 900;
-      background: linear-gradient(135deg, {{primaryColor}} 0%, {{secondaryColor}} 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      letter-spacing: 2px;
-      line-height: 1.2;
-    }
-
-    .title-en {
-      font-family: 'Playfair Display', 'Inter', sans-serif;
-      font-size: 10.5pt;
-      font-weight: 400;
-      color: #999;
-      text-transform: uppercase;
-      letter-spacing: 8px;
-    }
-
-    .title-divider-wrap {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-top: 4px;
-    }
-
-    .title-divider {
-      width: 180px; height: 3px;
-      background: linear-gradient(90deg, transparent, {{primaryColor}}, {{secondaryColor}}, {{primaryColor}}, transparent);
-      border-radius: 2px;
-    }
-
-    .divider-ornament {
-      color: {{primaryColor}};
-      font-size: 8px;
-      opacity: 0.5;
-    }
-
-    /* ═══════ STUDENT SECTION ═══════ */
-
-    .student-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 6px;
-    }
-
-    .presented-to {
-      font-family: 'Cairo', sans-serif;
-      font-size: 9pt;
-      color: #999;
-      font-weight: 500;
-    }
-
-    .student-name {
-      font-family: 'Cairo', sans-serif;
-      font-size: 30pt;
-      font-weight: 800;
-      background: linear-gradient(135deg, {{primaryColor}} 0%, {{secondaryColor}} 100%);
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      padding: 6px 80px;
-      border-bottom: 3px solid {{primaryColor}};
-      display: inline-block;
-      line-height: 1.3;
-      position: relative;
-    }
-
-    .student-name::after {
-      content: '✦  ✦  ✦';
       position: absolute;
-      bottom: -18px; left: 50%; transform: translateX(-50%);
-      font-size: 7px;
-      color: {{primaryColor}};
-      letter-spacing: 10px;
-      -webkit-text-fill-color: initial;
-      opacity: 0.5;
-    }
-
-    /* ═══════ COURSE SECTION ═══════ */
-
-    .course-section {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 3px;
-    }
-
-    .course-label {
-      font-family: 'Cairo', sans-serif;
-      font-size: 9pt;
-      color: #999;
-      font-weight: 500;
-    }
-
-    .course-name-ar {
-      font-family: 'Cairo', sans-serif;
-      font-size: 15pt;
-      font-weight: 700;
-      color: #333;
-    }
-
-    .course-name-en {
-      font-family: 'Inter', sans-serif;
-      font-size: 9.5pt;
-      color: #aaa;
-      font-style: italic;
-      font-weight: 300;
-    }
-
-    /* ═══════ STATS GRID ═══════ */
-
-    .stats-grid {
-      display: flex;
-      gap: 30px;
-      justify-content: center;
-      align-items: flex-start;
-    }
-
-    .stat-item {
-      text-align: center;
-      min-width: 90px;
-      padding: 8px 18px;
-      border-radius: 8px;
-      background: rgba(255,255,255,0.55);
-      border: 1px solid {{primaryColor}}12;
-      border-top: 3px solid {{primaryColor}};
-      box-shadow: 0 2px 10px rgba(0,0,0,0.04);
-    }
-
-    .stat-value {
-      font-family: 'Cairo', 'Inter', sans-serif;
-      font-size: 13pt;
-      font-weight: 700;
-      color: {{primaryColor}};
-      line-height: 1.3;
-    }
-
-    .stat-label {
-      font-family: 'Cairo', sans-serif;
-      font-size: 7pt;
-      color: #aaa;
-      letter-spacing: 1px;
-      margin-top: 2px;
-      font-weight: 600;
-    }
-
-    /* ═══════ BOTTOM SECTION ═══════ */
-
-    .bottom-section {
-      display: flex;
-      align-items: flex-end;
-      justify-content: space-between;
-      width: 100%;
-      gap: 20px;
-    }
-
-    /* ═══════ VERIFICATION ═══════ */
-
-    .verification {
-      display: flex;
-      align-items: center;
-      gap: 12px;
+      top: 8mm;
+      left: 15mm;
+      right: 15mm;
+      height: 34mm;
+      display: block;
+      z-index: 5;
       direction: ltr;
     }
-
-    .qr-wrapper {
-      background: white;
-      padding: 6px;
-      border-radius: 8px;
-      border: 2px solid {{primaryColor}}15;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-    }
-
-    .qr-code { width: 65px; height: 65px; display: block; }
-
-    .serial-info { text-align: left; }
-
-    .serial-label {
-      font-family: 'Inter', sans-serif;
-      font-size: 6.5pt;
-      color: #bbb;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-      margin-bottom: 1px;
-    }
-
-    .serial-id {
-      font-family: 'Inter', monospace;
-      font-size: 8.5pt;
-      color: #555;
-      font-weight: 500;
-      letter-spacing: 1px;
-    }
-
-    .verify-url { font-size: 6.5pt; color: #ccc; margin-top: 3px; }
-
-    /* ═══════ SIGNATURES ═══════ */
-
-    .signatures {
+    .logo-box {
+      position: absolute;
+      top: 0;
+      height: 31mm;
       display: flex;
-      gap: 50px;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
     }
-
-    .sig-block { text-align: center; min-width: 130px; }
-
-    .sig-name {
-      font-family: 'Aref Ruqaa', 'Great Vibes', cursive;
-      font-size: 20pt;
-      color: #1a1a1a;
-      line-height: 1.3;
+    .unit-logo-box { left: 9mm; width: 42mm; }
+    .institute-logo-box { right: 9mm; width: 42mm; }
+    .unit-logo { width: 37mm; height: 29mm; object-fit: contain; }
+    .institute-logo { width: 39mm; height: 30mm; object-fit: contain; }
+    .title-block {
+      position: absolute;
+      top: 0.5mm;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 138mm;
+      text-align: center;
+      padding: 0 4mm;
+    }
+    .title-kicker {
+      color: var(--blue);
+      font: 700 9.5pt "DejaVu Sans", sans-serif;
+      letter-spacing: 2px;
+      margin-bottom: 1mm;
+    }
+    .title-heading {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 17mm;
+      margin: .2mm auto 0;
+    }
+    .title-flourish {
+      position: absolute;
+      top: 50%;
+      width: 30mm;
+      height: 10mm;
+      object-fit: fill;
+      transform: translateY(-50%);
+      opacity: .98;
+    }
+    .title-flourish-left { left: 3mm; }
+    .title-flourish-right { right: 3mm; transform: translateY(-50%) scaleX(-1); }
+    h1 {
+      position: relative;
+      margin: 0;
+      padding: 0 3mm 1mm;
+      color: var(--navy);
+      font-family: "Amiri", "Noto Naskh Arabic", "Noto Sans Arabic", serif;
+      font-size: 43pt;
+      line-height: 1.12;
+      font-weight: 700;
+      text-shadow: 0 .35mm 0 rgba(173,145,67,.30), 0 .8mm 1mm rgba(16,41,88,.10);
+    }
+    .title-rule {
+      display: flex;
+      align-items: center;
+      gap: 3mm;
+      justify-content: center;
+      margin: 1mm auto 0;
+      width: 62mm;
+      color: var(--gold);
+    }
+    .title-rule span { height: .6mm; background: var(--gold); flex: 1; }
+    .title-rule b { font-size: 14pt; line-height: 1; }
+    .content {
+      direction: rtl;
+      position: absolute;
+      z-index: 3;
+      top: 47mm;
+      left: 22mm;
+      right: 22mm;
+      height: 111mm;
+      text-align: center;
+    }
+    .intro {
+      margin: 0 auto 1mm;
+      max-width: 205mm;
+      color: var(--navy);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 20.5pt;
+      line-height: 1.48;
       font-weight: 700;
     }
-
-    .sig-line {
-      width: 140px; height: 2px;
-      background: linear-gradient(90deg, transparent, {{primaryColor}}60, {{secondaryColor}}40, {{primaryColor}}60, transparent);
-      margin: 6px auto;
-      border-radius: 1px;
+    .intro strong { color: #087fae; font-weight: 800; }
+    .student-name {
+      margin: 2mm auto 1.5mm;
+      color: #a1873b;
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 38pt;
+      line-height: 1.25;
+      font-weight: 800;
+      letter-spacing: -.2px;
+      text-shadow: 0 .25mm 0 rgba(100,80,20,.09);
+      max-width: 175mm;
+      white-space: nowrap;
+      overflow: hidden;
     }
-
-    .sig-title {
-      font-family: 'Cairo', sans-serif;
-      font-size: 8pt;
-      color: #888;
-      font-weight: 600;
-      letter-spacing: 0.5px;
+    .completion-verb {
+      margin: 1mm 0 0;
+      color: var(--navy);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 21pt;
+      font-weight: 700;
+      line-height: 1.42;
     }
-
-    /* ═══════ FOOTER ═══════ */
-
-    .footer-text {
+    .course-name {
+      margin: 2.2mm auto 0;
+      color: #15243a;
+      font-family: "Aptos", "Segoe UI", "DejaVu Sans", "Noto Sans Arabic", sans-serif;
+      font-size: 29pt;
+      font-weight: 700;
+      line-height: 1.22;
+      max-width: 175mm;
+      white-space: nowrap;
+      direction: auto;
+      unicode-bidi: isolate;
+    }
+    .course-meta {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5mm;
+      width: 184mm;
+      margin: 6mm auto 0;
+    }
+    .course-meta p {
+      margin: 0;
+      padding: 2.8mm 8mm;
+      border: .4mm solid var(--gold);
+      border-radius: 3.5mm;
+      color: var(--navy);
+      background: rgba(255,253,247,.9);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 18pt;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .meta-line { height: .5mm; flex: 1; max-width: 22mm; background: var(--gold); }
+    /* Verification card: scannable QR + the same serial printed as real text. */
+    .verification-card {
       position: absolute;
-      bottom: 14mm;
-      left: 50%;
-      transform: translateX(-50%);
-      font-family: 'Cairo', sans-serif;
-      font-size: 6pt;
-      color: #bbb;
-      max-width: 480px;
+      z-index: 6;
+      right: 20mm;
+      top: 63mm;
+      direction: ltr;
+      width: 47mm;
+      min-height: 59mm;
+      padding: 2mm 2mm 1.7mm;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      gap: .85mm;
       text-align: center;
-      line-height: 1.5;
+      background: rgba(255,253,247,.96);
+      border: .45mm solid var(--gold);
+      border-radius: 3.4mm;
+      box-shadow: inset 0 0 0 .45mm rgba(216,197,139,.48), 0 .5mm 1.2mm rgba(16,41,88,.07);
     }
-
-    /* ═══════ SEAL WATERMARK ═══════ */
-
-    .seal {
+    .verification-card::before,
+    .verification-card::after {
+      content: "✦";
       position: absolute;
-      bottom: 40mm;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 60px; height: 60px;
-      border-radius: 50%;
-      border: 3px solid {{primaryColor}}20;
+      top: 2.3mm;
+      color: var(--gold);
+      font-size: 7pt;
+      line-height: 1;
+    }
+    .verification-card::before { left: 2.4mm; }
+    .verification-card::after { right: 2.4mm; }
+    .verification-title {
+      direction: rtl;
+      width: 100%;
+      padding: 0 4mm .6mm;
+      color: var(--navy);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 8.6pt;
+      line-height: 1.35;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .verification-link {
+      /* Full-width flex row so the QR frame is centered on the card axis. */
       display: flex;
+      width: 100%;
+      min-width: 0;
+      padding: 0;
+      margin: 0 auto;
       align-items: center;
       justify-content: center;
-      opacity: 0.18;
-      z-index: 0;
+      align-self: stretch;
+      text-align: center;
+      text-decoration: none;
+      line-height: 0;
+      direction: ltr;
     }
-
-    .seal-inner {
-      width: 42px; height: 42px;
-      border-radius: 50%;
-      border: 1.5px solid {{primaryColor}}30;
+    .qr-frame {
       display: flex;
+      flex: 0 0 30.5mm;
+      width: 30.5mm;
+      height: 30.5mm;
+      padding: 1.1mm;
+      margin: 0 auto;
       align-items: center;
       justify-content: center;
-      font-size: 18px;
+      background: #fff;
+      border: .45mm solid var(--navy);
+      border-radius: 1.6mm;
     }
-
-    /* ═══════ PRINT STYLES ═══════ */
-
+    .qr-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      image-rendering: pixelated;
+    }
+    .verification-hint {
+      direction: rtl;
+      color: var(--navy);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 6.5pt;
+      font-weight: 700;
+      line-height: 1.25;
+      width: 100%;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .serial-label {
+      direction: rtl;
+      margin-top: .2mm;
+      color: #8b7130;
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      width: 100%;
+      text-align: center;
+      font-size: 6.5pt;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .certificate-serial {
+      max-width: 100%;
+      color: var(--navy-deep);
+      font-family: "DejaVu Sans", "Liberation Mono", monospace;
+      width: 100%;
+      text-align: center;
+      font-size: 7.6pt;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: .15px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: clip;
+    }
+    .divider-bottom {
+      position: absolute;
+      z-index: 3;
+      left: 58mm;
+      right: 58mm;
+      bottom: 48mm;
+      width: 181mm;
+      height: 8mm;
+      object-fit: fill;
+      opacity: .95;
+    }
+    .signatures {
+      position: absolute;
+      z-index: 4;
+      left: 18mm;
+      right: 18mm;
+      bottom: 10mm;
+      height: 35mm;
+      display: block;
+      direction: ltr;
+    }
+    .signature {
+      position: absolute;
+      top: 0;
+      width: 75mm;
+      min-width: 0;
+      overflow: visible;
+      text-align: center;
+      direction: rtl;
+    }
+    .signature:nth-child(1) { left: 0; }
+    .signature:nth-child(2) { left: 50%; transform: translateX(-50%); }
+    .signature:nth-child(3) { right: 0; }
+    .signature-role {
+      max-width: 100%;
+      margin: 0 0 2.3mm;
+      color: var(--navy);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 15pt;
+      line-height: 1.4;
+      font-weight: 700;
+      white-space: normal;
+    }
+    .signature-name {
+      margin: 0;
+      padding-top: 2.5mm;
+      border-top: .25mm solid rgba(24,54,111,.38);
+      color: var(--navy-deep);
+      font-family: "Noto Sans Arabic", "Noto Naskh Arabic", Tahoma, sans-serif;
+      font-size: 18pt;
+      font-weight: 700;
+    }
+    @media screen {
+      html, body { width: 100%; min-height: 100%; height: auto; background: #e8ebf2; }
+      .certificate { margin: 18px auto; box-shadow: 0 12px 40px rgba(10,25,60,.18); }
+    }
     @media print {
-      html, body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; margin: 0 !important; padding: 0 !important; }
-      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; color-adjust: exact !important; }
+      html, body { width: 297mm; height: 210mm; background: #fff; }
+      .certificate { margin: 0; box-shadow: none; }
     }
   </style>
 </head>
 <body>
-  <!-- Background Layers -->
-  <div class="bg-gradient"></div>
-  <div class="bg-floral"></div>
-  <div class="bg-glow"></div>
-  <div class="bg-stars"></div>
+  <main class="certificate" aria-label="شهادة إتمام دورة تدريبية">
+    <div class="pattern-layer" aria-hidden="true"></div>
+    <img class="watermark" src="__ASSET_WATERMARK__" alt="" aria-hidden="true">
 
-  <!-- Scalloped Border — 4 sides -->
-  <div class="bg-scallop-top"></div>
-  <div class="bg-scallop-bottom"></div>
-  <div class="bg-scallop-left"></div>
-  <div class="bg-scallop-right"></div>
+    <div class="outer-border" aria-hidden="true"></div>
+    <div class="inner-border" aria-hidden="true"></div>
 
-  <!-- Inner Border -->
-  <div class="border-inner"></div>
+    <img class="corner corner-tl" src="__ASSET_CORNER__" alt="" aria-hidden="true">
+    <img class="corner corner-tr" src="__ASSET_CORNER__" alt="" aria-hidden="true">
+    <img class="corner corner-bl" src="__ASSET_CORNER__" alt="" aria-hidden="true">
+    <img class="corner corner-br" src="__ASSET_CORNER__" alt="" aria-hidden="true">
 
-  <!-- Corner Ornaments with dots -->
-  <div class="corner corner-tl"><span class="corner-dot"></span></div>
-  <div class="corner corner-tr"><span class="corner-dot"></span></div>
-  <div class="corner corner-bl"><span class="corner-dot"></span></div>
-  <div class="corner corner-br"><span class="corner-dot"></span></div>
-
-  <!-- Decorative center line -->
-  <div class="decorative-line"></div>
-
-  <!-- Seal watermark -->
-  <div class="seal"><div class="seal-inner">&#x1F393;</div></div>
-
-  <!-- Main Content -->
-  <div class="content">
-    <div class="header">
-      {{logoHtml}}
-      <div class="system-name">{{systemName}}</div>
-    </div>
-
-    <div class="title-section">
-      <div class="title-ar">{{certificateTitle}}</div>
-      <div class="title-en">{{certificateTitleEn}}</div>
-      <div class="title-divider-wrap">
-        <span class="divider-ornament">◆</span>
-        <div class="title-divider"></div>
-        <span class="divider-ornament">◆</span>
+    <header class="header">
+      <div class="logo-box unit-logo-box">
+        <img src="__ASSET_UNIT_LOGO__" alt="شعار وحدة التدريب والتطوير بالمعهد" class="unit-logo">
       </div>
-    </div>
 
-    <div class="student-section">
-      <div class="presented-to">يُ certify بأن الطالب / الطالبة</div>
-      <div class="student-name">{{studentName}}</div>
-    </div>
-
-    <div class="course-section">
-      <div class="course-label">قد أتم بنجاح دورة تدريبية بعنوان</div>
-      <div class="course-name-ar">{{courseNameAr}}</div>
-      <div class="course-name-en">{{courseNameEn}}</div>
-    </div>
-
-    <div class="stats-grid">
-      <div class="stat-item">
-        <div class="stat-value">{{lecturesAttended}} / {{lecturesTotal}}</div>
-        <div class="stat-label">المحاضرات</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value">{{courseDuration}}</div>
-        <div class="stat-label">المدة</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value">{{instructorName}}</div>
-        <div class="stat-label">المدرب</div>
-      </div>
-      <div class="stat-item">
-        <div class="stat-value">{{issueDate}}</div>
-        <div class="stat-label">تاريخ الإصدار</div>
-      </div>
-    </div>
-
-    <div class="bottom-section">
-      <div class="verification">
-        <div class="qr-wrapper">
-          <img class="qr-code" src="{{qrDataUrl}}" alt="QR" />
+      <div class="title-block">
+        <div class="title-kicker">H.I.M.S · T.D.U</div>
+        <div class="title-heading">
+          <img class="title-flourish title-flourish-left" src="__ASSET_FLOURISH__" alt="" aria-hidden="true">
+          <h1>شهادة</h1>
+          <img class="title-flourish title-flourish-right" src="__ASSET_FLOURISH__" alt="" aria-hidden="true">
         </div>
-        <div class="serial-info">
-          <div class="serial-label">Certificate ID</div>
-          <div class="serial-id">{{serialId}}</div>
-          <div class="verify-url">{{verificationUrl}}</div>
-        </div>
+        <div class="title-rule"><span></span><b>✦</b><span></span></div>
       </div>
-      <div class="signatures">
-        <div class="sig-block">
-          <div class="sig-name">{{directorName}}</div>
-          <div class="sig-line"></div>
-          <div class="sig-title">{{directorTitle}}</div>
-        </div>
-        <div class="sig-block">
-          <div class="sig-name">{{instructorName}}</div>
-          <div class="sig-line"></div>
-          <div class="sig-title">المدرب المعتمد</div>
-        </div>
-      </div>
-    </div>
-  </div>
 
-  <div class="footer-text">{{footerText}}</div>
+      <div class="logo-box institute-logo-box">
+        <img src="__ASSET_INSTITUTE_LOGO__" alt="شعار المعهد العالي للعلوم الإدارية" class="institute-logo">
+      </div>
+    </header>
+
+    <section class="content" aria-label="بيانات الشهادة">
+      <p class="intro">تشهد وحدة التدريب والتطوير بالمعهد بأن <strong>{{studentLabel}}</strong></p>
+      <h2 class="student-name">{{studentName}}</h2>
+      <p class="completion-verb">{{completionVerb}}</p>
+      <h3 class="course-name" dir="auto">{{courseName}}</h3>
+
+      <div class="course-meta">
+        <span class="meta-line"></span>
+        <p>{{periodText}}</p>
+        <span class="meta-line"></span>
+      </div>
+    </section>
+
+    <aside class="verification-card" aria-label="التحقق الإلكتروني من الشهادة">
+      <div class="verification-title">تحقق من صحة الشهادة</div>
+      <a class="verification-link" href="{{verificationUrl}}" aria-label="فتح صفحة التحقق من الشهادة">
+        <span class="qr-frame">
+          <img src="{{qrDataUrl}}" alt="رمز QR للتحقق من صحة الشهادة">
+        </span>
+      </a>
+      <div class="verification-hint">امسح الرمز لفتح صفحة التحقق</div>
+      <div class="serial-label">كود الشهادة (Serial)</div>
+      <div class="certificate-serial" dir="ltr">{{serialId}}</div>
+    </aside>
+
+    <img class="divider divider-bottom" src="__ASSET_DIVIDER__" alt="">
+
+    <footer class="signatures">
+      <section class="signature">
+        <p class="signature-role">رئيس مجلس الإدارة</p>
+        <p class="signature-name">{{chairmanName}}</p>
+      </section>
+      <section class="signature">
+        <p class="signature-role">عميد المعهد</p>
+        <p class="signature-name">{{deanName}}</p>
+      </section>
+      <section class="signature">
+        <p class="signature-role">مدير وحدة التدريب<br>والتطوير</p>
+        <p class="signature-name">{{unitManagerName}}</p>
+      </section>
+    </footer>
+  </main>
 </body>
 </html>`;
 
+// Resolve asset placeholders once at boot (all inlined, no runtime file access).
+const CERTIFICATE_HTML_TEMPLATE = CERTIFICATE_TEMPLATE.replace(/__ASSET_(\w+)__/g, (_m, key: string) => {
+  const assets: Record<string, string> = {
+    PATTERN: CERT_PATTERN_DATA_URL,
+    WATERMARK: CERT_WATERMARK_DATA_URL,
+    UNIT_LOGO: CERT_UNIT_LOGO_DATA_URL,
+    INSTITUTE_LOGO: CERT_INSTITUTE_LOGO_DATA_URL,
+    DIVIDER: CERT_DIVIDER_DATA_URL,
+    CORNER: CERT_CORNER_SVG_DATA_URL,
+    FLOURISH: CERT_FLOURISH_SVG_DATA_URL,
+  };
+  return assets[key] || '';
+});
+
+/**
+ * The single certificate data builder + renderer. Every HTML route (public
+ * verify by serial, owner view, legacy download) renders through this — one
+ * design, one source of data, no duplicated template. No survey or identity
+ * data beyond the public name is embedded; the national_id is used only to
+ * resolve the wording and never reaches the HTML, QR, logs or errors.
+ */
+async function renderCertificateFor(
+  cert: { serial_id: string; issued_at: string; user_id: number; course_id: number },
+  frontendUrl: string,
+): Promise<string> {
+  const studentResult = await sql('SELECT name, gender, national_id FROM users WHERE id=?', cert.user_id);
+  const courseResult = await sql('SELECT title_ar, title_en, lecture_count, lecture_duration FROM courses WHERE id=?', cert.course_id);
+  if (studentResult.rows.length === 0 || courseResult.rows.length === 0) {
+    throw new Error('Certificate data not found');
+  }
+  const student = studentResult.rows[0] as any;
+  const course = courseResult.rows[0] as any;
+
+  // Completion month/year: the student's own group(s) for this course.
+  let completedAt: string | null = null;
+  try {
+    const completedResult = await sql(
+      `SELECT MAX(COALESCE(completed_at, end_date)) AS completed
+       FROM groups g
+       JOIN group_students gs ON gs.group_id = g.id
+       WHERE g.course_id=? AND gs.user_id=?`,
+      cert.course_id, cert.user_id,
+    );
+    completedAt = ((completedResult.rows[0] as any)?.completed as string) || null;
+  } catch { /* fall back to the issue date below */ }
+  const periodSource = completedAt || cert.issued_at;
+  const periodDate = periodSource ? new Date(periodSource) : null;
+  const hasPeriod = !!periodDate && !Number.isNaN(periodDate.getTime());
+  const completionMonth = hasPeriod ? ARABIC_MONTHS[periodDate!.getMonth()] : '';
+  const completionYear = hasPeriod ? String(periodDate!.getFullYear()) : '';
+
+  // Training hours from the course definition; the term is omitted when unknown.
+  const hours = course.lecture_count && course.lecture_duration
+    ? Number(course.lecture_count) * Number(course.lecture_duration)
+    : Number(course.lecture_duration) || null;
+  const periodText = hasPeriod
+    ? `${completionMonth} ${completionYear}${hours ? ` (بواقع ${hours} ساعة)` : ''}`
+    : '';
+
+  const { studentLabel, completionVerb } = resolveGenderTexts(student.gender, student.national_id, Number(cert.user_id));
+
+  let unitManagerName = CERT_UNIT_MANAGER_DEFAULT;
+  try {
+    const settingsResult = await sql("SELECT value FROM system_settings WHERE key='certificate'");
+    if (settingsResult.rows.length > 0) {
+      const certSettings = JSON.parse(String(settingsResult.rows[0].value));
+      if (typeof certSettings.directorName === 'string' && certSettings.directorName.trim()) {
+        unitManagerName = certSettings.directorName.trim();
+      }
+    }
+  } catch { /* keep the design default */ }
+
+  // Real verification link + QR (same serial and page the system already uses).
+  const verificationUrl = `${frontendUrl}/verify?serial=${cert.serial_id}`;
+  const QRCode = (await import('qrcode')).default;
+  const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
+    width: 240, margin: 2, color: { dark: '#18366f', light: '#ffffff' },
+  });
+
+  const values: Record<string, string> = {
+    studentName: escapeHtml(student.name),
+    studentLabel: escapeHtml(studentLabel),
+    completionVerb: escapeHtml(completionVerb),
+    courseName: escapeHtml(course.title_ar || course.title_en || ''),
+    periodText: escapeHtml(periodText),
+    chairmanName: escapeHtml(CERT_CHAIRMAN_NAME),
+    deanName: escapeHtml(CERT_DEAN_NAME),
+    unitManagerName: escapeHtml(unitManagerName),
+    serialId: escapeHtml(cert.serial_id),
+    verificationUrl: escapeHtml(verificationUrl),
+    qrDataUrl,
+  };
+  return CERTIFICATE_HTML_TEMPLATE.replace(/\{\{(\w+)\}\}/g, (match, key: string) =>
+    values[key] !== undefined ? values[key] : match,
+  );
+}
 router.get('/my', authMiddleware, async (req: Request, res: Response) => {
   try {
     let result;
@@ -699,13 +733,10 @@ router.get('/verify/:serial', async (req: Request, res: Response) => {
 // Public Certificate HTML Preview by serial
 // (No auth required — for verify page)
 // ═══════════════════════════════════════════════
-
 router.get('/verify/:serial/html', async (req: Request, res: Response) => {
   try {
     const certResult = await sql(
-      `SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id, cert.status
-       FROM certificates cert
-       WHERE cert.serial_id=?`,
+      'SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id, cert.status FROM certificates cert WHERE cert.serial_id=?',
       req.params.serial,
     );
     if (certResult.rows.length === 0) {
@@ -718,104 +749,8 @@ router.get('/verify/:serial/html', async (req: Request, res: Response) => {
       return res.status(403).json({ error: 'This certificate has been revoked' });
     }
 
-    // Fetch student + course data
-    const studentResult = await sql('SELECT name as student_name FROM users WHERE id=?', cert.user_id);
-    const courseResult = await sql(
-      'SELECT title_ar as course_name_ar, title_en as course_name_en, instructor as instructor_name, lecture_count, lecture_duration FROM courses WHERE id=?',
-      cert.course_id,
-    );
-    if (studentResult.rows.length === 0 || courseResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Certificate data not found' });
-    }
-    const studentName = (studentResult.rows[0] as any).student_name;
-    const course = courseResult.rows[0] as any;
-
-    // Fetch branding
-    let branding: any = {};
-    try {
-      const brandingResult = await sql("SELECT value FROM system_settings WHERE key='branding'");
-      if (brandingResult.rows.length > 0) {
-        branding = JSON.parse(brandingResult.rows[0].value as string);
-      }
-    } catch { /* use defaults */ }
-
-    // Fetch certificate settings
-    let certSettings: any = {};
-    try {
-      const settingsResult = await sql("SELECT value FROM system_settings WHERE key='certificate'");
-      if (settingsResult.rows.length > 0) {
-        certSettings = JSON.parse(settingsResult.rows[0].value as string);
-      }
-    } catch { /* use defaults */ }
-
-    // Calculate attendance
-    let lecturesAttended = 0;
-    let lecturesTotal = 0;
-    try {
-      const groupsResult = await sql('SELECT id FROM groups WHERE course_id=?', cert.course_id);
-      const groupIds = (groupsResult.rows as any[]).map(g => g.id);
-      if (groupIds.length > 0) {
-        const placeholders = groupIds.map(() => '?').join(',');
-        const totalResult = await sql(`SELECT COUNT(*) as total FROM lectures WHERE group_id IN (${placeholders})`, ...groupIds);
-        lecturesTotal = Number(totalResult.rows[0].total);
-        const attendedResult = await sql(
-          `SELECT COUNT(*) as attended FROM lecture_attendance la JOIN lectures l ON la.lecture_id = l.id WHERE l.group_id IN (${placeholders}) AND la.user_id = ? AND la.attended = 1`,
-          ...groupIds, cert.user_id,
-        );
-        lecturesAttended = Number(attendedResult.rows[0].attended);
-      }
-    } catch { /* use defaults */ }
-
-    // Course duration
-    let courseDuration = '';
-    if (course.lecture_count && course.lecture_duration) {
-      courseDuration = `${course.lecture_count * course.lecture_duration} ساعة`;
-    } else if (course.lecture_duration) {
-      courseDuration = `${course.lecture_duration} ساعة`;
-    }
-
-    // QR code
     const frontendUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.headers.host || 'localhost:3000'}`;
-    const verificationUrl = `${frontendUrl}/verify?serial=${cert.serial_id}`;
-    const QRCode = (await import('qrcode')).default;
-    const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
-      width: 200, margin: 2,
-      color: { dark: branding.primaryColor || '#2563eb', light: '#ffffff' },
-    });
-
-    const formatDateAr = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    };
-
-    // Fill template
-    let html = CERTIFICATE_TEMPLATE;
-    const logoHtml = logoHtmlFor(branding.logoHeader);
-    const replacements: Record<string, string> = {
-      studentName: studentName || '',
-      courseNameAr: course.course_name_ar || '',
-      courseNameEn: course.course_name_en || '',
-      instructorName: course.instructor_name || 'غير محدد',
-      lecturesAttended: String(lecturesAttended),
-      lecturesTotal: String(lecturesTotal),
-      courseDuration: courseDuration || 'غير محدد',
-      issueDate: formatDateAr(cert.issued_at),
-      serialId: cert.serial_id || '',
-      verificationUrl,
-      qrDataUrl,
-      logoHtml,
-      systemName: branding.systemName || 'وحدة التدريب و التطوير',
-      primaryColor: branding.primaryColor || '#2563eb',
-      secondaryColor: branding.secondaryColor || '#7c3aed',
-      directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME,
-      directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
-      certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
-      certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
-      footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
-    };
-    html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => replacements[key] !== undefined ? replacements[key] : match);
-
+    const html = await renderCertificateFor(cert, frontendUrl);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (err: any) {
@@ -828,21 +763,14 @@ router.get('/verify/:serial/html', async (req: Request, res: Response) => {
 // Download Certificate — Returns filled HTML
 // (PDF is generated client-side via html2pdf.js)
 // ═══════════════════════════════════════════════
-
 router.get('/:id/html', authMiddleware, async (req: Request, res: Response) => {
   try {
     const certId = req.params.id;
 
-    // 1. Fetch certificate with student + course + instructor data
+    // 1. Fetch the certificate base row (student/course data is loaded by the
+    //    shared renderer below).
     const certResult = await sql(
-      `SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id,
-              u.name as student_name,
-              c.title_ar as course_name_ar, c.title_en as course_name_en,
-              c.instructor as instructor_name, c.lecture_count, c.lecture_duration
-       FROM certificates cert
-       JOIN users u ON cert.user_id=u.id
-       JOIN courses c ON cert.course_id=c.id
-       WHERE cert.id=?`,
+      'SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id, cert.status FROM certificates cert WHERE cert.id=?',
       certId,
     );
 
@@ -852,128 +780,23 @@ router.get('/:id/html', authMiddleware, async (req: Request, res: Response) => {
 
     const cert = certResult.rows[0] as any;
 
-    // Block revoked certificates from being downloaded
+    // 2. Block revoked certificates from being downloaded
     if (cert.status === 'revoked') {
       return res.status(403).json({ error: 'This certificate has been revoked and is no longer valid' });
     }
 
-    // 2. Check ownership
+    // 3. Check ownership
     if (Number(req.user!.userId) !== Number(cert.user_id) && req.user!.roleId !== 1) {
       return res.status(403).json({ error: 'Not authorized' });
     }
 
-    // 3. Fetch branding settings
-    let branding: any = {};
-    try {
-      const brandingResult = await sql("SELECT value FROM system_settings WHERE key='branding'");
-      if (brandingResult.rows.length > 0) {
-        branding = JSON.parse(brandingResult.rows[0].value as string);
-      }
-    } catch { /* use defaults */ }
-
-    // 4. Fetch certificate settings
-    let certSettings: any = {};
-    try {
-      const settingsResult = await sql("SELECT value FROM system_settings WHERE key='certificate'");
-      if (settingsResult.rows.length > 0) {
-        certSettings = JSON.parse(settingsResult.rows[0].value as string);
-      }
-    } catch { /* use defaults */ }
-
-    // 5. Count attended lectures
-    let lecturesAttended = 0;
-    let lecturesTotal = 0;
-    try {
-      const groupsResult = await sql(
-        'SELECT id FROM groups WHERE course_id=?',
-        cert.course_id,
-      );
-      const groupIds = (groupsResult.rows as any[]).map(g => g.id);
-
-      if (groupIds.length > 0) {
-        const placeholders = groupIds.map(() => '?').join(',');
-        const totalResult = await sql(
-          `SELECT COUNT(*) as total FROM lectures WHERE group_id IN (${placeholders})`,
-          ...groupIds,
-        );
-        lecturesTotal = Number(totalResult.rows[0].total);
-
-        const attendedResult = await sql(
-          `SELECT COUNT(*) as attended
-           FROM lecture_attendance la
-           JOIN lectures l ON la.lecture_id = l.id
-           WHERE l.group_id IN (${placeholders}) AND la.user_id = ? AND la.attended = 1`,
-          ...groupIds, cert.user_id,
-        );
-        lecturesAttended = Number(attendedResult.rows[0].attended);
-      }
-    } catch { /* use 0 values */ }
-
-    // 6. Build course duration string
-    let courseDuration = '';
-    if (cert.lecture_count && cert.lecture_duration) {
-      const totalHours = cert.lecture_count * cert.lecture_duration;
-      courseDuration = `${totalHours} ساعة`;
-    } else if (cert.lecture_duration) {
-      courseDuration = `${cert.lecture_duration} ساعة`;
-    }
-
-    // 7. Build verification URL
     const frontendUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.headers.host || 'localhost:3000'}`;
-    const verificationUrl = `${frontendUrl}/verify?serial=${cert.serial_id}`;
-
-    // 8. Generate QR code data URL
-    const QRCode = (await import('qrcode')).default;
-    const qrDataUrl = await QRCode.toDataURL(verificationUrl, {
-      width: 200,
-      margin: 2,
-      color: { dark: branding.primaryColor || '#2563eb', light: '#ffffff' },
-    });
-
-    // 9. Format date
-    const formatDateAr = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    };
-
-    // 10. Fill HTML template
-    let html = CERTIFICATE_TEMPLATE;
-
-    const logoHtml = logoHtmlFor(branding.logoHeader);
-
-    const replacements: Record<string, string> = {
-      studentName: cert.student_name || '',
-      courseNameAr: cert.course_name_ar || '',
-      courseNameEn: cert.course_name_en || '',
-      instructorName: cert.instructor_name || 'غير محدد',
-      lecturesAttended: String(lecturesAttended),
-      lecturesTotal: String(lecturesTotal),
-      courseDuration: courseDuration || 'غير محدد',
-      issueDate: formatDateAr(cert.issued_at),
-      serialId: cert.serial_id || '',
-      verificationUrl,
-      qrDataUrl,
-      logoHtml,
-      systemName: branding.systemName || 'وحدة التدريب و التطوير',
-      primaryColor: branding.primaryColor || '#2563eb',
-      secondaryColor: branding.secondaryColor || '#7c3aed',
-      directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME,
-      directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
-      certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
-      certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
-      footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
-    };
-
-    html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-      return replacements[key] !== undefined ? replacements[key] : match;
-    });
-
+    const html = await renderCertificateFor(cert, frontendUrl);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (err: any) {
     console.error('[Certificate HTML] Error:', err.message);
-    res.status(500).json({ error: 'Failed to generate certificate HTML' });
+    res.status(500).json({ error: 'Failed to generate certificate' });
   }
 });
 
@@ -983,14 +806,7 @@ router.get('/:id/download', authMiddleware, async (req: Request, res: Response) 
     const certId = req.params.id;
 
     const certResult = await sql(
-      `SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id,
-              u.name as student_name,
-              c.title_ar as course_name_ar, c.title_en as course_name_en,
-              c.instructor as instructor_name, c.lecture_count, c.lecture_duration
-       FROM certificates cert
-       JOIN users u ON cert.user_id=u.id
-       JOIN courses c ON cert.course_id=c.id
-       WHERE cert.id=?`,
+      'SELECT cert.id, cert.serial_id, cert.issued_at, cert.user_id, cert.course_id, cert.status FROM certificates cert WHERE cert.id=?',
       certId,
     );
 
@@ -1001,76 +817,15 @@ router.get('/:id/download', authMiddleware, async (req: Request, res: Response) 
     const cert = certResult.rows[0] as any;
 
     if (cert.status === 'revoked') {
-      return res.status(403).json({ error: 'This certificate has been revoked' });
+      return res.status(403).json({ error: 'This certificate has been revoked and is no longer valid' });
     }
 
     if (Number(req.user!.userId) !== Number(cert.user_id) && req.user!.roleId !== 1) {
       return res.status(403).json({ error: 'Not authorized' });
-    }    let branding: any = {};
-    try {
-      const brandingResult = await sql("SELECT value FROM system_settings WHERE key='branding'");
-      if (brandingResult.rows.length > 0) branding = JSON.parse(brandingResult.rows[0].value as string);
-    } catch {}
-
-    let certSettings: any = {};
-    try {
-      const settingsResult = await sql("SELECT value FROM system_settings WHERE key='certificate'");
-      if (settingsResult.rows.length > 0) certSettings = JSON.parse(settingsResult.rows[0].value as string);
-    } catch {}
-
-    let lecturesAttended = 0;
-    let lecturesTotal = 0;
-    try {
-      const groupsResult = await sql('SELECT id FROM groups WHERE course_id=?', cert.course_id);
-      const groupIds = (groupsResult.rows as any[]).map(g => g.id);
-      if (groupIds.length > 0) {
-        const placeholders = groupIds.map(() => '?').join(',');
-        const totalResult = await sql(`SELECT COUNT(*) as total FROM lectures WHERE group_id IN (${placeholders})`, ...groupIds);
-        lecturesTotal = Number(totalResult.rows[0].total);
-        const attendedResult = await sql(
-          `SELECT COUNT(*) as attended FROM lecture_attendance la JOIN lectures l ON la.lecture_id = l.id WHERE l.group_id IN (${placeholders}) AND la.user_id = ? AND la.attended = 1`,
-          ...groupIds, cert.user_id,
-        );
-        lecturesAttended = Number(attendedResult.rows[0].attended);
-      }
-    } catch {}
-
-    let courseDuration = '';
-    if (cert.lecture_count && cert.lecture_duration) {
-      courseDuration = `${cert.lecture_count * cert.lecture_duration} ساعة`;
-    } else if (cert.lecture_duration) {
-      courseDuration = `${cert.lecture_duration} ساعة`;
     }
 
     const frontendUrl = process.env.FRONTEND_URL || `${req.protocol}://${req.headers.host || 'localhost:3000'}`;
-    const verificationUrl = `${frontendUrl}/verify?serial=${cert.serial_id}`;
-    const QRCode = (await import('qrcode')).default;
-    const qrDataUrl = await QRCode.toDataURL(verificationUrl, { width: 200, margin: 2, color: { dark: branding.primaryColor || '#2563eb', light: '#ffffff' } });
-
-    const formatDateAr = (dateStr: string): string => {
-      const d = new Date(dateStr);
-      const months = ['يناير','فبراير','مارس','أبريل','مايو','يونيو','يوليو','أغسطس','سبتمبر','أكتوبر','نوفمبر','ديسمبر'];
-      return `${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
-    };
-
-    let html = CERTIFICATE_TEMPLATE;
-
-    const logoHtml = logoHtmlFor(branding.logoHeader);
-    const replacements: Record<string, string> = {
-      studentName: cert.student_name || '', courseNameAr: cert.course_name_ar || '',
-      courseNameEn: cert.course_name_en || '', instructorName: cert.instructor_name || 'غير محدد',
-      lecturesAttended: String(lecturesAttended), lecturesTotal: String(lecturesTotal),
-      courseDuration: courseDuration || 'غير محدد', issueDate: formatDateAr(cert.issued_at),
-      serialId: cert.serial_id || '', verificationUrl, qrDataUrl, logoHtml,
-      systemName: branding.systemName || 'وحدة التدريب و التطوير',
-      primaryColor: branding.primaryColor || '#2563eb', secondaryColor: branding.secondaryColor || '#7c3aed',
-        directorName: certSettings.directorName || DEFAULT_DIRECTOR_NAME, directorTitle: certSettings.directorTitle || DEFAULT_DIRECTOR_TITLE,
-      certificateTitle: certSettings.certificateTitle || 'شهادة إتمام',
-      certificateTitleEn: certSettings.certificateTitleEn || 'Certificate of Completion',
-      footerText: certSettings.footerText || 'هذه الشهادة صادرة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)',
-    };
-    html = html.replace(/\{\{(\w+)\}\}/g, (match, key) => replacements[key] !== undefined ? replacements[key] : match);
-
+    const html = await renderCertificateFor(cert, frontendUrl);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch (err: any) {

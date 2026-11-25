@@ -994,8 +994,7 @@ class _MyCoursesTabState extends State<_MyCoursesTab> {
   bool _isGroupCompleted(Map<String, dynamic> g) {
     return g['status']?.toString() == 'completed' ||
         g['completed_at'] != null ||
-        g['is_complete'] == 1 ||
-        g['is_complete'] == true;
+        toBool(g['is_complete']);
   }
 
   Widget _filterChip(String label, String value, int count) {

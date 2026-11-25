@@ -20,18 +20,18 @@ function renderMarkdown(text: string): JSX.Element[] {
       const headers = tableRows[0];
       const data = tableRows.slice(1);
       elements.push(
-        <div key={key} className="overflow-x-auto my-2 rounded-lg border" style={{ borderColor: 'var(--border)' }}>
-          <table className="w-full text-xs" dir="rtl">
+        <div key={key} className="overflow-x-auto my-2 rounded-[var(--md-sys-shape-corner-small)] border" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+          <table className="w-full text-sm" dir="rtl">
             <thead>
-              <tr style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-                {headers.map((h, i) => <th key={i} className="px-3 py-2 text-right">{h}</th>)}
+              <tr style={{ backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface-variant)' }}>
+                {headers.map((h, i) => <th key={i} className="px-3 py-2 text-right font-medium">{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {data.map((row, ri) => (
-                <tr key={ri} style={{ borderTop: '1px solid var(--border)' }}>
+                <tr key={ri} style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
                   {row.map((cell, ci) => (
-                    <td key={ci} className="px-3 py-1.5" style={{ color: 'var(--text)' }}>{cell}</td>
+                    <td key={ci} className="px-3 py-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>{cell}</td>
                   ))}
                 </tr>
               ))}
@@ -63,7 +63,7 @@ function renderMarkdown(text: string): JSX.Element[] {
       return;
     }
     if (line.trim().startsWith('---')) {
-      elements.push(<hr key={i} className="my-2" style={{ borderColor: 'var(--border)' }} />);
+      elements.push(<hr key={i} className="my-2" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }} />);
       return;
     }
 
@@ -73,7 +73,11 @@ function renderMarkdown(text: string): JSX.Element[] {
     const italicMatch = html.match(/\*(.+?)\*/g);
     if (italicMatch) html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
     const codeMatch = html.match(/`(.+?)`/g);
-    if (codeMatch) html = html.replace(/`(.+?)`/g, '<code class="bg-gray-100 dark:bg-gray-800 px-1 rounded text-xs">$1</code>');
+    if (codeMatch)
+      html = html.replace(
+        /`(.+?)`/g,
+        '<code style="background:var(--md-sys-color-surface-container-highest);color:var(--md-sys-color-on-surface);padding:0 4px;border-radius:4px;font-size:12px">$1</code>',
+      );
 
     const isHeader = line.trim().startsWith('### ');
     const isBullet = line.trim().startsWith('- ') || line.trim().startsWith('* ');
@@ -81,13 +85,13 @@ function renderMarkdown(text: string): JSX.Element[] {
 
     if (isHeader) {
       elements.push(
-        <div key={i} className="font-bold text-sm mt-2 mb-1" style={{ color: 'var(--text)' }}>
+        <div key={i} className="font-bold text-sm mt-2 mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           {line.trim().replace(/^### /, '')}
         </div>
       );
     } else if (isBullet) {
       elements.push(
-        <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
+        <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           <span className="mt-1">•</span>
           <span dangerouslySetInnerHTML={{ __html: html.replace(/^[-*] /, '') }} />
         </div>
@@ -95,14 +99,14 @@ function renderMarkdown(text: string): JSX.Element[] {
     } else if (isNumbered) {
       const num = line.trim().match(/^(\d+)[.)] /)?.[1] || '';
       elements.push(
-        <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--text)' }}>
+        <div key={i} className="flex items-start gap-2 text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>
           <span className="mt-0.5 text-xs font-bold min-w-[18px]">{num}.</span>
           <span dangerouslySetInnerHTML={{ __html: html.replace(/^\d+[.)] /, '') }} />
         </div>
       );
     } else {
       elements.push(
-        <div key={i} className="text-sm leading-relaxed" style={{ color: 'var(--text)' }}
+        <div key={i} className="text-sm leading-relaxed" style={{ color: 'var(--md-sys-color-on-surface)' }}
           dangerouslySetInnerHTML={{ __html: html }} />
       );
     }
@@ -236,27 +240,46 @@ export default function AIAssistant() {
 
   return (
     <>
-      <button onClick={() => setOpen(!open)}
-        className="fixed bottom-5 left-5 z-50 w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-2xl hover:scale-110 transition-transform"
-        style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-        {open ? '✕' : '🤖'}
+      <button
+        onClick={() => setOpen(!open)}
+        aria-label={open ? 'إغلاق المساعد الذكي' : 'فتح المساعد الذكي'}
+        className="fixed bottom-5 left-5 z-50 w-14 h-14 rounded-full md3-elevation-2 flex items-center justify-center hover:brightness-110 transition-transform"
+        style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}
+      >
+        <span className="material-symbols-outlined text-[26px]" aria-hidden="true">
+          {open ? 'close' : 'smart_toy'}
+        </span>
       </button>
 
       {open && (
-        <div className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden flex flex-col"
-          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', maxHeight: '75vh' }}>
-          <div className="px-4 py-3 font-bold text-sm flex items-center gap-2"
-            style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
-            <span>🤖</span> المساعد الذكي
+        <div
+          className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 md3-elevation-3 overflow-hidden flex flex-col"
+          style={{
+            backgroundColor: 'var(--md-sys-color-surface-container-low)',
+            borderRadius: 'var(--md-sys-shape-corner-extra-large)',
+            maxHeight: '75vh',
+          }}
+        >
+          <div
+            className="px-4 py-3 font-bold text-sm flex items-center gap-2"
+            style={{
+              backgroundColor: 'var(--md-sys-color-primary-container)',
+              color: 'var(--md-sys-color-on-primary-container)',
+            }}
+          >
+            <span className="material-symbols-outlined text-[20px]" aria-hidden>smart_toy</span> المساعد الذكي
           </div>
 
           <div className="flex-1 overflow-y-auto p-3 space-y-3" style={{ minHeight: 300 }}>
             {messages.length === 1 && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {QUICK_ACTIONS.map((qa, i) => (
-                  <button key={i} onClick={() => send(qa.message)}
-                    className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
-                    style={{ backgroundColor: 'var(--bg)', color: 'var(--primary)', border: '1px solid var(--border)' }}>
+                  <button
+                    key={i}
+                    onClick={() => send(qa.message)}
+                    className="md3-btn md3-btn--outlined text-xs"
+                    style={{ minHeight: 40, padding: '0 12px' }}
+                  >
                     {qa.label}
                   </button>
                 ))}
@@ -265,24 +288,33 @@ export default function AIAssistant() {
 
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-start' : 'justify-end'}`}>
-                <div className={`max-w-[85%] px-3 py-2 rounded-2xl text-sm ${
+                <div className={`max-w-[85%] px-3 py-2 rounded-md3-lg text-sm ${
                   msg.role === 'user'
                     ? 'rounded-br-sm'
                     : 'rounded-bl-sm'
                 }`}
                   style={msg.role === 'user'
-                    ? { backgroundColor: 'var(--bg)', color: 'var(--text)' }
-                    : { backgroundColor: 'var(--primary)', color: '#fff' }
+                    ? {
+                        backgroundColor: 'var(--md-sys-color-surface-container-highest)',
+                        color: 'var(--md-sys-color-on-surface)',
+                      }
+                    : {
+                        backgroundColor: 'var(--md-sys-color-primary)',
+                        color: 'var(--md-sys-color-on-primary)',
+                      }
                   }>
                   {msg.role === 'assistant'
                     ? <div className="space-y-1">{renderMarkdown(msg.text)}</div>
                     : msg.text
                   }
                   {msg.role === 'assistant' && hasTable(msg.text) && (
-                    <button onClick={() => downloadExcel(msg.text)}
-                      className="mt-2 px-2 py-1 rounded text-xs font-medium opacity-80 hover:opacity-100 transition-opacity"
-                      style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}>
-                      📥 تصدير Excel
+                    <button
+                      onClick={() => downloadExcel(msg.text)}
+                      className="mt-2 px-2.5 py-1.5 rounded-full text-xs font-medium transition-colors hover:brightness-110"
+                      style={{ backgroundColor: 'var(--md-sys-color-on-primary)', color: 'var(--md-sys-color-primary)' }}
+                    >
+                      <span className="material-symbols-outlined text-[14px] align-middle" aria-hidden>download</span>
+                      {' '}تصدير Excel
                     </button>
                   )}
                 </div>
@@ -290,8 +322,14 @@ export default function AIAssistant() {
             ))}
             {loading && (
               <div className="flex justify-end">
-                <div className="px-3 py-2 rounded-2xl text-sm" style={{ backgroundColor: 'var(--primary)', color: '#fff', opacity: 0.8 }}>
-                  <span className="inline-block animate-pulse">جاري التفكير</span>🤔
+                <div
+                  className="px-3 py-2 rounded-md3-lg text-sm"
+                  style={{
+                    backgroundColor: 'var(--md-sys-color-primary-container)',
+                    color: 'var(--md-sys-color-on-primary-container)',
+                  }}
+                >
+                  <span className="inline-block animate-pulse">جاري التفكير…</span>
                 </div>
               </div>
             )}
@@ -299,28 +337,47 @@ export default function AIAssistant() {
           </div>
 
           {image && (
-            <div className="px-3 py-1.5 flex items-center gap-2 text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
-              <span>📷</span> تم إرفاق صورة
-              <button onClick={() => setImage(null)} className="mr-auto font-bold hover:opacity-70">✕</button>
+            <div
+              className="px-3 py-1.5 flex items-center gap-2 text-xs"
+              style={{
+                backgroundColor: 'var(--md-sys-color-surface-container)',
+                color: 'var(--md-sys-color-on-surface-variant)',
+              }}
+            >
+              <span className="material-symbols-outlined text-[16px]" aria-hidden>image</span> تم إرفاق صورة
+              <button
+                onClick={() => setImage(null)}
+                aria-label="إزالة الصورة"
+                className="mr-auto md3-btn md3-btn--icon"
+                style={{ width: 32, minWidth: 32, height: 32 }}
+              >
+                <span className="material-symbols-outlined text-[16px]">close</span>
+              </button>
             </div>
           )}
 
-          <div className="p-3 flex gap-2" style={{ borderTop: '1px solid var(--border)' }}>
-            <button onClick={() => fileRef.current?.click()}
-              className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-lg transition-colors"
-              style={{ color: 'var(--text-muted)' }}>
-              📷
+          <div className="p-3 flex gap-2" style={{ borderTop: '1px solid var(--md-sys-color-outline-variant)' }}>
+            <button
+              onClick={() => fileRef.current?.click()}
+              aria-label="إرفاق صورة"
+              className="md3-btn md3-btn--icon shrink-0"
+            >
+              <span className="material-symbols-outlined text-[20px]">photo_camera</span>
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImage} />
-            <input value={input}
+            <input
+              value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && send()}
               placeholder="اكتب رسالتك..."
-              className="flex-1 px-3 py-2 rounded-xl text-sm"
-              style={{ backgroundColor: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }} />
-            <button onClick={() => send()} disabled={loading}
-              className="shrink-0 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50 transition-opacity"
-              style={{ backgroundColor: 'var(--primary)', color: '#fff' }}>
+              aria-label="رسالة للمساعد الذكي"
+              className="md3-field flex-1"
+            />
+            <button
+              onClick={() => send()}
+              disabled={loading}
+              className="md3-btn md3-btn--filled shrink-0 text-sm"
+            >
               إرسال
             </button>
           </div>

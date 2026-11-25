@@ -13,6 +13,7 @@ import {
 import { sql } from '../db/helpers';
 import { createNotification } from './notificationService';
 import { sendNotification } from './externalNotificationService';
+import { dualLogoHeaderTable } from './wordReportService';
 
 /**
  * Course proposals (edit-plan.md §6): an instructor proposes a course before it
@@ -452,6 +453,12 @@ export async function buildProposalWord(proposal: any): Promise<Buffer> {
       spacing: 120,
     }),
   ];
+
+  // Dual-logo header above the text headers: institute (HIMS) right, unit left.
+  const headerTable = await dualLogoHeaderTable();
+  if (headerTable) {
+    children.unshift(headerTable);
+  }
 
   proposal.objectives.forEach((objective: string) => {
     children.push(rtlParagraph(`• ${objective}`, { size: 24, spacing: 80 }));

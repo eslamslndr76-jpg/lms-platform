@@ -1,5 +1,6 @@
 import { sql } from '../db/helpers';
 import { attachOrderDetails, removeCoursesFromCart } from '../services/orderService';
+import { issueCertificate } from '../services/certificateService';
 
 interface ToolHandler {
   declaration: {
@@ -699,11 +700,12 @@ reg({
   },
   handler: async (args, _u, roleId) => {
     if (roleId > 2) return 'غير مصرح لك بإصدار شهادات';
-    const exists = await sql(`SELECT * FROM certificates WHERE user_id=? AND course_id=?`, args.user_id, args.course_id);
-    if (exists.rows.length > 0) return 'الشهادة موجودة بالفعل لهذا الطالب في هذا الكورس';
-    const serial = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-    await sql('INSERT INTO certificates (user_id,course_id,serial_id) VALUES (?,?,?)', args.user_id, args.course_id, serial);
-    return JSON.stringify({ message: 'تم إصدار الشهادة بنجاح', serial });
+    const result = await issueCertificate(args.user_id, args.course_id);
+    if (result.issued) {
+      return JSON.stringify({ message: 'تم إصدار الشهادة بنجاح', serial: result.certificate!.serial_id });
+    }
+    if (result.reason === 'duplicate') return 'الشهادة موجودة بالفعل لهذا الطالب في هذا الكورس';
+    return 'فشل إصدار الشهادة — حاول مرة أخرى';
   },
 });
 

@@ -12,10 +12,12 @@
 ## The agent and the current plan
 One agent works on the whole project: `backend/`, `admin-ui/`, `user-ui/` and `flutter_app/`.
 
-- The current work plan is `fixes_plan.md` + `fixes_plan/phase-N-*.md`. Read the master file and ONLY the current phase file. Each phase file states its area (platform = `backend/` `admin-ui/` `user-ui/`, app = `flutter_app/`).
+- The current work plan is `admin_plan.md` + `admin_plan/phase-N-*.md`. Read the master file and ONLY the current phase file. Each phase file states its area (platform = `backend/` `admin-ui/` `user-ui/`, app = `flutter_app/`).
 - `api-contract.md` (root) is the live description of the API the app consumes. Keep it accurate whenever you change an endpoint the app uses.
 - Reference documents for forms (survey, instructor evaluation, report, proposal) live in `docs/forms-refs/*.md`. Read them only when a phase says so.
-- When a phase is finished write the completion line in the phase file and update the status table in `fixes_plan.md`.
+- The certificate design reference lives in `docs/certificate-design/` (design file + image assets). Read it only in the certificate-design phase.
+- Brand assets live in `brand-assets/`: unit logo (`logo.png`, `logo.svg`, `logo-white.png`) and the institute logo (`institute-logo.png`, HIMS).
+- When a phase is finished write the completion line in the phase file and update the status table in `admin_plan.md`.
 
 ## Layout
 npm workspace with three pillars (+ the standalone Flutter project):
@@ -43,6 +45,7 @@ npm workspace with three pillars (+ the standalone Flutter project):
 ## Conventions
 - RTL Arabic: `<html lang="ar" dir="rtl">` in both root layouts. All new UI must be RTL-aware, mobile first.
 - No `next/image`: images are base64 data URLs (`lib/imageUtils.ts` → `compressAndEncode`, max 800px / JPEG 0.7) in plain `<img>`.
+- Design system: the Material 3 tokens in `user-ui/app/globals.css` are the source of truth; `admin-ui` mirrors them (admin_plan phases 8 to 14). Never hard-code colors or use `opacity` to dim text; minimum text size 12px (14px for content).
 - State: React Context only. Animations: hand-rolled CSS keyframes. Icons: emoji glyphs. No extra libraries.
 - TypeScript `strict: true`. Alias `@/*` exists, but code mostly uses relative imports.
 - DB columns, API fields, and frontend variables use the same names. Define request/response JSON before wiring frontend to backend.
@@ -96,6 +99,17 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - New notification types: `order_expired`, `order_course_removed` (link `/orders`) — 2026-11-10
 - Cart is server-owned: `POST /api/orders` (and admin manual orders) removes only the booked courses from the cart; `POST /api/cart` returns 409 for a paid/booked course; `GET /api/cart` self-cleans those rows — 2026-11-11
 - Single payment route (treasury cash): `GET /api/payment-methods` returns only `kind='cash'`; `POST /api/orders` always creates `pending` + `cash` (client `payment_method`/`receipt` ignored); receipt uploaded later via `PATCH /api/orders/:id/receipt` (→ `review`, notification `order_receipt_uploaded`); `PATCH /api/orders/:id/pay` kept as legacy cash-only confirmation — 2026-11-14
+- GET /api/surveys/group/:id/stats — also returns `scale`, `notes_label`, and per-response `user_id` (null for anonymous) for the admin per-student survey view/export — 2026-11-23
+- GET /api/exports/survey_results — accepts `studentId=` (with `groupId=`) for a per-student export (identity fields move to the workbook info block); anonymous responses never match — 2026-11-23
+- GET /api/exports/attendance — now derives absentees (LEFT JOIN over group_students × lectures, no DB rows written); status column rendered as ✓/✗ badge; narrow scope (lectureId/groupId/courseId) moves course/group fields to the workbook info block — 2026-11-23
+- POST /api/surveys/my/:groupId/submit — response now includes `certificate: { id, serial_id } | null`: the certificate auto-issues after submission when the student has a paid order for the course (no attendance minimum); issuance failure never fails the submission — 2026-11-23
+- Certificates: all issuers (manual admin route, group-completion auto-issue, AI tool, post-survey auto-issue) now go through the shared `services/certificateService.ts` (`issueCertificate`/`issueCertificateIfPaid`) — one duplicate rule (active per student+course → 409), one serial format, one notification; no survey↔certificate link stored — 2026-11-23
+- Certificate HTML redesigned from the approved reference pack (`docs/certificate-design/`): one template + one shared renderer (`renderCertificateFor`) behind all three routes (`/verify/:serial/html`, `/:id/html`, `/:id/download` — 1083→838 lines); assets inlined in `config/certificateAssets.ts`; A4 landscape single page; الطالب/الطالبة wording from `users.gender` then national-id digit 13 (neutral wording + warning when unknown — never guessed); QR + serial unchanged (same verify page) — 2026-11-23
+- Attendance sessions now expire: one "open" definition (`active=1 AND datetime(expires_at) > now`), single write format (`datetime('now','+2 hours')`), enforced in /current /mark /poll and the student/admin lecture lists, lazy close on read, closed on lecture/group completion — 2026-11-23
+- Permissions tightened: `GET /api/attendance/:lectureId/current` and `GET /api/settings/auto-group` are staff-only; `POST /api/groups/:id/report/word` requires ADMIN/EMPLOYEE; `DELETE /api/admin/users/:id/hard` is ADMIN-only; Telegram webhook fails closed (503) when no secret is configured — 2026-11-23
+- OTP fixes: expiry stored in SQLite format matching the verify query (was ISO vs `datetime('now')` — codes stayed valid ~24h), and the per-minute send limit now parses SQLite timestamps as UTC (never fired before) — 2026-11-23
+- `GET /api/courses/:id` now Number()-converts all boolean flags like the list endpoint (`featured`, `enable_direct_purchase`, …) — clients compare strictly — 2026-11-23
+- Booking expiry now also runs lazily on order list reads (`GET /api/orders/my`, admin orders list) since the 6-hour interval never runs on a warm production instance — 2026-11-23
 
 ## Language & branding
 - Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").

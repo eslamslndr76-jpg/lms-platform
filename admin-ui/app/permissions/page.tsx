@@ -131,63 +131,66 @@ function PermissionMatrix({
   return (
     <div className="space-y-2">
       {inheritHint && (
-        <p className="text-xs rounded-xl px-3 py-2" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+        <p className="text-sm rounded-md3-sm px-3 py-2 bg-surface-container-low text-on-surface-variant">
           {inheritHint}
         </p>
       )}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-        {sections.map((section) => {
-          const actions = parseActions(value[section.key]);
-          const locked = disabled || section.managerOnly;
-          return (
-            <div
-              key={section.key}
-              className="rounded-xl p-3 border flex flex-col gap-2"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }}
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-sm font-medium flex items-center gap-2" style={{ color: 'var(--text)' }}>
-                    <span>{section.icon}</span>
-                    <span className="truncate">{section.label}</span>
-                  </p>
-                  <p className="text-[11px] mt-0.5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                    {section.description}
-                  </p>
-                </div>
-                {section.managerOnly && (
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full shrink-0"
-                    style={{ backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' }}
-                  >
-                    مدير فقط
-                  </span>
-                )}
-              </div>
-              <div className="flex gap-2">
-                {(['read', 'write'] as const).map((action) => {
-                  const active = actions.includes(action);
-                  return (
-                    <button
-                      key={action}
-                      type="button"
-                      disabled={locked}
-                      onClick={() => onChange(togglePermission(value, section.key, action))}
-                      className="px-3 py-1 rounded-lg text-xs font-medium border transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                      style={
-                        active
-                          ? { backgroundColor: 'var(--primary)', borderColor: 'var(--primary)', color: '#fff' }
-                          : { backgroundColor: 'transparent', borderColor: 'var(--border)', color: 'var(--text-muted)' }
-                      }
-                    >
-                      {action === 'read' ? 'عرض' : 'تعديل'}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
+      <div className="overflow-auto max-h-[70vh] rounded-md3-md border border-outline-variant">
+        <table className="w-full text-sm min-w-[520px] border-collapse">
+          <caption className="sr-only">مصفوفة الصلاحيات</caption>
+          <thead>
+            <tr>
+              <th scope="col" className="text-start py-3 px-3 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10">القسم</th>
+              <th scope="col" className="py-3 px-2 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10 w-24">عرض</th>
+              <th scope="col" className="py-3 px-2 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10 w-24">تعديل</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sections.map((section) => {
+              const actions = parseActions(value[section.key]);
+              const locked = disabled || section.managerOnly;
+              return (
+                <tr key={section.key} className="border-t border-outline-variant align-top">
+                  <th scope="row" className="text-start py-3 px-3 font-normal">
+                    <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-on-surface">
+                      <span aria-hidden>{section.icon}</span>
+                      <span>{section.label}</span>
+                      {section.managerOnly && (
+                        <span className="text-xs px-2 py-0.5 rounded-full shrink-0 bg-warning-container text-on-warning-container">
+                          مدير فقط
+                        </span>
+                      )}
+                    </span>
+                    <span className="block text-xs mt-1 leading-relaxed text-on-surface-variant">
+                      {section.description}
+                    </span>
+                  </th>
+                  {(['read', 'write'] as const).map((action) => {
+                    const active = actions.includes(action);
+                    const label = action === 'read' ? 'عرض' : 'تعديل';
+                    return (
+                      <td key={action} className="py-2 px-2 text-center">
+                        <label
+                          className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] ${locked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-5 h-5 cursor-pointer disabled:cursor-not-allowed"
+                            style={{ accentColor: 'var(--md-sys-color-primary)' }}
+                            checked={active}
+                            disabled={locked}
+                            aria-label={`${label} — ${section.label}`}
+                            onChange={() => onChange(togglePermission(value, section.key, action))}
+                          />
+                        </label>
+                      </td>
+                    );
+                  })}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     </div>
   );
@@ -517,10 +520,10 @@ export default function PermissionsPage() {
 
   if (!can('employees')) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 gap-3 rounded-2xl border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <div className="md3-card md3-card--outlined flex flex-col items-center justify-center h-64 gap-3">
         <span className="text-4xl">🔒</span>
-        <h1 className="text-lg font-bold" style={{ color: 'var(--text)' }}>هذه المنطقة مخصصة لمدير النظام</h1>
-        <p className="text-sm text-center px-6" style={{ color: 'var(--text-muted)' }}>
+        <h1 className="text-lg font-bold text-on-surface">هذه المنطقة مخصصة لمدير النظام</h1>
+        <p className="text-sm text-center px-6 text-on-surface-variant">
           إدارة الحسابات والأدوار والصلاحيات متاحة لمدير النظام فقط.
         </p>
       </div>
@@ -531,9 +534,9 @@ export default function PermissionsPage() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>المستخدمون والصلاحيات</h1>
+          <h1 className="text-2xl font-bold text-on-surface">المستخدمون والصلاحيات</h1>
         </div>
-        <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+        <div className="md3-card md3-card--outlined p-4">
           <Skeleton rows={6} cols={6} />
         </div>
       </div>
@@ -543,16 +546,15 @@ export default function PermissionsPage() {
   if (error) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <p style={{ color: '#dc2626' }}>{error}</p>
-        <button onClick={load} className="px-4 py-2 rounded-xl text-white text-sm" style={{ backgroundColor: 'var(--primary)' }}>
+        <p className="msg-err px-4 py-3 rounded-md3-sm text-sm">{error}</p>
+        <button onClick={load} className="md3-btn md3-btn--filled">
           إعادة المحاولة
         </button>
       </div>
     );
   }
 
-  const inputClass = 'w-full px-4 py-2.5 rounded-xl border text-sm outline-none transition-all focus:ring-2';
-  const inputStyle = { backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' } as const;
+  const inputClass = 'w-full md3-field';
   const staffRoles = roles.filter((role) => role.id !== 3);
 
   const userColumns = [
@@ -565,31 +567,25 @@ export default function PermissionsPage() {
             <img src={row.avatar} alt={value} className="w-8 h-8 rounded-full object-cover" />
           ) : (
             <span
-              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-              style={{ backgroundColor: 'var(--bg)', color: 'var(--primary)' }}
+              className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-primary-container text-on-primary-container"
             >
               {String(value || '?').trim().charAt(0)}
             </span>
           )}
           <div className="min-w-0">
-            <p className="text-sm font-medium truncate" style={{ color: 'var(--text)' }}>{value}</p>
-            <p className="text-[11px] truncate" style={{ color: 'var(--text-muted)' }}>{row.email}</p>
+            <p className="text-sm font-medium truncate text-on-surface">{value}</p>
+            <p className="text-xs truncate text-on-surface-variant">{row.email}</p>
           </div>
         </div>
       ),
     },
-    { key: 'phone', label: 'الهاتف', render: (value: string) => value || <span style={{ color: 'var(--text-muted)' }}>—</span> },
+    { key: 'phone', label: 'الهاتف', render: (value: string) => value || <span className="text-on-surface-variant">—</span> },
     {
       key: 'role_id',
       label: 'الدور',
       render: (value: number, row: StaffUser) => (
         <span
-          className="inline-block px-2.5 py-0.5 rounded-full text-xs font-medium"
-          style={
-            Number(value) === 1
-              ? { backgroundColor: 'rgba(37,99,235,0.12)', color: 'var(--primary)' }
-              : { backgroundColor: 'var(--bg)', color: 'var(--text)' }
-          }
+          className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${Number(value) === 1 ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface'}`}
         >
           {roleLabel(Number(value), row.role_name)}
         </span>
@@ -604,23 +600,22 @@ export default function PermissionsPage() {
         return (
           <div className="flex flex-col gap-1">
             <span
-              className="inline-block w-fit px-2 py-0.5 rounded-full text-[11px] font-medium"
-              style={custom ? { backgroundColor: 'rgba(245,158,11,0.15)', color: '#f59e0b' } : { backgroundColor: 'rgba(34,197,94,0.12)', color: '#16a34a' }}
+              className={custom ? 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-container text-on-warning-container' : 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-container text-on-success-container'}
             >
               {custom ? 'مخصصة للحساب' : 'وراثة من الدور'}
             </span>
-            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>{summarize(effective, sections)}</span>
+            <span className="text-xs text-on-surface-variant">{summarize(effective, sections)}</span>
           </div>
         );
       },
     },
-    { key: 'last_login', label: 'آخر دخول', render: (value: string) => <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(value)}</span> },
+    { key: 'last_login', label: 'آخر دخول', render: (value: string) => <span className="text-xs text-on-surface-variant">{formatDate(value)}</span> },
     {
       key: 'is_active',
       label: 'الحالة',
       render: (value: number) => (
-        <span className="inline-flex items-center gap-1 text-xs" style={{ color: Number(value) ? '#16a34a' : '#dc2626' }}>
-          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: Number(value) ? '#16a34a' : '#dc2626' }} />
+        <span className={`inline-flex items-center gap-1 text-xs font-medium ${Number(value) ? 'text-success' : 'text-error'}`}>
+          <span className={`w-2 h-2 rounded-full ${Number(value) ? 'bg-success' : 'bg-error'}`} />
           {Number(value) ? 'نشط' : 'معطل'}
         </span>
       ),
@@ -630,24 +625,24 @@ export default function PermissionsPage() {
       label: 'الإجراءات',
       render: (_: unknown, row: StaffUser) => (
         <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
-          <button onClick={() => openPermissions(row)} className="px-2 py-1 rounded-lg text-xs text-white" style={{ backgroundColor: 'var(--primary)' }}>
+          <button onClick={() => openPermissions(row)} className="md3-btn md3-btn--tonal">
             الصلاحيات
           </button>
-          <button onClick={() => openEdit(row)} className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">
+          <button onClick={() => openEdit(row)} className="md3-btn md3-btn--text">
             تعديل
           </button>
           <button
             onClick={() => setToggleTarget(row)}
             disabled={row.id === currentUser?.id}
-            className="px-2 py-1 rounded-lg text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: Number(row.is_active) ? '#fef2f2' : '#f0fdf4', color: Number(row.is_active) ? '#dc2626' : '#16a34a' }}
+            className="md3-btn md3-btn--text text-xs disabled:cursor-not-allowed"
+            style={{ color: Number(row.is_active) ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-success)' }}
           >
             {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
           </button>
           <button
             onClick={() => setDeleteTarget(row)}
             disabled={row.id === currentUser?.id}
-            className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="md3-btn md3-btn--text text-xs text-error"
           >
             حذف
           </button>
@@ -661,20 +656,19 @@ export default function PermissionsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>المستخدمون والصلاحيات</h1>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+          <h1 className="text-2xl font-bold text-on-surface">المستخدمون والصلاحيات</h1>
+          <p className="text-sm mt-1 text-on-surface-variant">
             إدارة حسابات الموظفين، والأدوار، ومصفوفة الصلاحيات، وبيانات الدخول من مكان واحد.
           </p>
         </div>
         <div className="flex gap-2">
-          <button onClick={load} className="px-3 py-2 rounded-xl border text-sm" style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+          <button onClick={load} className="md3-btn md3-btn--outlined">
             تحديث
           </button>
           <ExportButton dataset="employees" title="تصدير الحسابات" />
           <button
             onClick={() => setAddOpen(true)}
-            className="px-4 py-2 rounded-xl text-white text-sm font-medium"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="md3-btn md3-btn--filled"
           >
             + حساب موظف
           </button>
@@ -682,11 +676,7 @@ export default function PermissionsPage() {
       </div>
 
       {/* Tabs */}
-      <div
-        className="flex flex-wrap gap-1 p-1 rounded-2xl border"
-        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-        role="tablist"
-      >
+      <div className="md3-tabs" role="tablist" aria-label="أقسام المستخدمين والصلاحيات">
         {TABS.map((item) => {
           const active = tab === item.key;
           return (
@@ -695,41 +685,36 @@ export default function PermissionsPage() {
               role="tab"
               aria-selected={active}
               onClick={() => setTab(item.key)}
-              className="flex-1 min-w-[150px] text-start px-4 py-2.5 rounded-xl transition-all"
-              style={active ? { backgroundColor: 'var(--primary)', color: '#fff' } : { color: 'var(--text)' }}
+              className={`md3-tab ${active ? 'md3-tab--active' : ''}`}
             >
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </span>
-              <span className="text-[11px] block mt-0.5" style={{ color: active ? 'rgba(255,255,255,0.8)' : 'var(--text-muted)' }}>
-                {item.hint}
-              </span>
+              <span aria-hidden>{item.icon}</span>
+              {item.label}
             </button>
           );
         })}
       </div>
+      <p className="text-sm text-on-surface-variant">{TABS.find((item) => item.key === tab)?.hint}</p>
 
       {/* ─── Accounts ─────────────────────────────────────────── */}
       {tab === 'accounts' && (
         <div className="space-y-4 animate-fade-in">
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <StatsCard title="إجمالي الحسابات" value={users.length} icon="👥" color="var(--primary)" />
-            <StatsCard title="حسابات نشطة" value={activeUsers.length} icon="🟢" color="#16a34a" />
-            <StatsCard title="حسابات معطلة" value={disabledUsers.length} icon="🔴" color="#dc2626" />
-            <StatsCard title="صلاحيات مخصصة" value={customPermissionUsers.length} subtitle="تتجاوز صلاحيات الدور" icon="🎯" color="#f59e0b" />
+            <StatsCard title="إجمالي الحسابات" value={users.length} icon="👥" color="var(--md-sys-color-primary)" />
+            <StatsCard title="حسابات نشطة" value={activeUsers.length} icon="🟢" color="var(--md-sys-color-success)" />
+            <StatsCard title="حسابات معطلة" value={disabledUsers.length} icon="🔴" color="var(--md-sys-color-error)" />
+            <StatsCard title="صلاحيات مخصصة" value={customPermissionUsers.length} subtitle="تتجاوز صلاحيات الدور" icon="🎯" color="var(--md-sys-color-warning)" />
           </div>
 
-          <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="md3-card md3-card--outlined p-4">
             <div className="flex items-center justify-between mb-3">
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>حسابات الفريق</h2>
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>اضغط «الصلاحيات» لتخصيص وصول موظف بعينه</span>
+              <h2 className="text-base font-semibold text-on-surface">حسابات الفريق</h2>
+              <span className="text-xs text-on-surface-variant">اضغط «الصلاحيات» لتخصيص وصول موظف بعينه</span>
             </div>
             {users.length === 0 ? (
               <div className="text-center py-10 space-y-2">
                 <p className="text-3xl">🗂️</p>
-                <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>لا توجد حسابات بعد</p>
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>ابدأ بإنشاء أول حساب موظف وحدد دوره.</p>
+                <p className="text-sm font-medium text-on-surface">لا توجد حسابات بعد</p>
+                <p className="text-xs text-on-surface-variant">ابدأ بإنشاء أول حساب موظف وحدد دوره.</p>
               </div>
             ) : (
               <DataTable columns={userColumns} data={users} />
@@ -741,13 +726,12 @@ export default function PermissionsPage() {
       {/* ─── Roles ────────────────────────────────────────────── */}
       {tab === 'roles' && (
         <div className="grid grid-cols-1 lg:grid-cols-[290px_1fr] gap-4 animate-fade-in">
-          <div className="rounded-2xl border p-3 space-y-2 h-fit" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="md3-card md3-card--outlined p-3 space-y-2 h-fit">
             <div className="flex items-center justify-between px-1">
-              <h2 className="font-bold text-sm" style={{ color: 'var(--text)' }}>الأدوار</h2>
+              <h2 className="text-sm font-semibold text-on-surface">الأدوار</h2>
               <button
                 onClick={() => setCreateRoleOpen(true)}
-                className="px-2.5 py-1 rounded-lg text-xs text-white"
-                style={{ backgroundColor: 'var(--primary)' }}
+                className="md3-btn md3-btn--tonal text-xs"
               >
                 + دور
               </button>
@@ -759,61 +743,50 @@ export default function PermissionsPage() {
                   key={role.id}
                   onClick={() => setSelectedRoleId(role.id)}
                   aria-label={`اختيار دور ${roleLabel(role.id, role.name)}`}
-                  className="w-full text-start px-3 py-2.5 rounded-xl border transition-all"
-                  style={
-                    active
-                      ? { backgroundColor: 'var(--primary)', borderColor: 'var(--primary)', color: '#fff' }
-                      : { backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }
-                  }
+                  aria-pressed={active}
+                  className={`w-full text-start px-3 py-2.5 rounded-md3-md border transition-colors ${active ? 'bg-primary text-on-primary border-primary' : 'bg-surface-container-lowest text-on-surface border-outline-variant hover:bg-surface-container-high'}`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="text-sm font-medium truncate">{roleLabel(role.id, role.name)}</span>
                     {role.is_system && (
                       <span
-                        className="text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
-                        style={
-                          active
-                            ? { backgroundColor: 'rgba(255,255,255,0.2)', color: '#fff' }
-                            : { backgroundColor: 'var(--card)', color: 'var(--text-muted)' }
-                        }
+                        className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${active ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface-variant'}`}
                       >
                         نظامي
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] mt-0.5" style={{ color: active ? 'rgba(255,255,255,0.75)' : 'var(--text-muted)' }}>
+                  <p className={`text-xs mt-0.5 ${active ? 'text-on-primary' : 'text-on-surface-variant'}`}>
                     {role.users_count} حساب · {summarize(role.permissions, sections)}
                   </p>
                 </button>
               );
             })}
-            <p className="text-[11px] px-1 pt-2 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs px-1 pt-2 leading-relaxed text-on-surface-variant">
               الأدوار النظامية محمية من الحذف. يمكن إنشاء أدوار مخصصة وربطها بالموظفين.
             </p>
           </div>
 
-          <div className="rounded-2xl border p-4 space-y-4" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+          <div className="md3-card md3-card--outlined p-4 space-y-4">
             {!selectedRole ? (
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>اختر دورًا لعرض صلاحياته.</p>
+              <p className="text-sm text-on-surface-variant">اختر دورًا لعرض صلاحياته.</p>
             ) : (
               <>
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex-1 min-w-[200px]">
-                    <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>اسم الدور</label>
+                    <label className="text-sm font-medium block mb-1 text-on-surface-variant">اسم الدور</label>
                     <div className="flex gap-2">
                       <input
                         value={roleNameDraft}
                         onChange={(event) => setRoleNameDraft(event.target.value)}
                         disabled={selectedRole.is_system}
-                        className={inputClass}
-                        style={inputStyle}
+                        className="md3-field flex-1"
                       />
                       {!selectedRole.is_system && (
                         <button
                           onClick={renameRole}
                           disabled={roleNameSaving || roleNameDraft.trim() === selectedRole.name}
-                          className="px-3 py-2 rounded-xl text-sm text-white disabled:opacity-40"
-                          style={{ backgroundColor: 'var(--primary)' }}
+                          className="md3-btn md3-btn--filled"
                         >
                           حفظ الاسم
                         </button>
@@ -822,14 +795,14 @@ export default function PermissionsPage() {
                   </div>
                   <div className="flex gap-2">
                     {selectedRole.is_system && (
-                      <span className="text-xs px-3 py-2 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+                      <span className="text-sm px-3 py-2 rounded-md3-sm bg-surface-container-low text-on-surface-variant">
                         {selectedRole.id === 1 ? 'المدير يملك كل الصلاحيات دائمًا' : 'دور نظامي — الاسم غير قابل للتعديل'}
                       </span>
                     )}
                     {!selectedRole.is_system && (
                       <button
                         onClick={() => setDeleteRoleTarget(selectedRole)}
-                        className="px-3 py-2 rounded-xl text-sm font-medium bg-red-50 text-red-600 hover:bg-red-100"
+                        className="md3-btn md3-btn--text text-error"
                       >
                         حذف الدور
                       </button>
@@ -837,13 +810,13 @@ export default function PermissionsPage() {
                   </div>
                 </div>
 
-                <div className="rounded-xl p-3 text-xs leading-relaxed" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+                <div className="rounded-md3-sm p-3 text-sm leading-relaxed bg-surface-container-low text-on-surface-variant">
                   صلاحيات الدور تُطبق على كل حساب مرتبط به. يمكنك تجاوزها لحساب معيّن من تبويب «الحسابات» ← «الصلاحيات».
                   إدارة الحسابات والإعدادات محصورة بمدير النظام ولا يمكن منحها لأي دور.
                 </div>
 
                 {selectedRole.id === 1 ? (
-                  <div className="rounded-xl p-4 text-sm" style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}>
+                  <div className="rounded-md3-sm p-4 text-sm bg-primary-container text-on-primary-container">
                     ✅ دور «مدير النظام» يملك وصولًا كاملًا لكل الأقسام، بما فيها الحسابات والإعدادات. لا يمكن تقييده.
                   </div>
                 ) : (
@@ -859,8 +832,7 @@ export default function PermissionsPage() {
                       <button
                         onClick={saveRolePermissions}
                         disabled={savingRole}
-                        className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-                        style={{ backgroundColor: 'var(--primary)' }}
+                        className="w-full md3-btn md3-btn--filled"
                       >
                         {savingRole ? 'جارٍ الحفظ...' : 'حفظ صلاحيات الدور'}
                       </button>
@@ -876,53 +848,52 @@ export default function PermissionsPage() {
       {/* ─── Login data ───────────────────────────────────────── */}
       {tab === 'logins' && (
         <div className="space-y-4 animate-fade-in">
-          <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-            <h2 className="font-bold mb-1" style={{ color: 'var(--text)' }}>بيانات الدخول</h2>
-            <p className="text-xs mb-3" style={{ color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4">
+            <h2 className="text-base font-semibold mb-1 text-on-surface">بيانات الدخول</h2>
+            <p className="text-sm mb-3 text-on-surface-variant">
               البريد الإلكتروني أو رقم الهاتف يُستخدمان لتسجيل الدخول. كلمات المرور مشفّرة ولا يمكن عرضها — يمكنك إعادة تعيينها فقط.
             </p>
-            <div className="overflow-x-auto">
+            <div className="overflow-auto max-h-[70vh] rounded-md3-md border border-outline-variant">
               <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs" style={{ color: 'var(--text-muted)' }}>
-                    <th className="text-start py-2 px-2 font-medium">الحساب</th>
-                    <th className="text-start py-2 px-2 font-medium">البريد الإلكتروني</th>
-                    <th className="text-start py-2 px-2 font-medium">الهاتف</th>
-                    <th className="text-start py-2 px-2 font-medium">الدور</th>
-                    <th className="text-start py-2 px-2 font-medium">آخر دخول</th>
-                    <th className="text-start py-2 px-2 font-medium">تاريخ الإنشاء</th>
-                    <th className="text-start py-2 px-2 font-medium">الحالة</th>
-                    <th className="text-start py-2 px-2 font-medium">كلمة المرور</th>
+                <thead className="sticky top-0 z-10 bg-surface-container-high">
+                  <tr className="text-sm text-on-surface-variant">
+                    <th className="text-start py-3 px-3 font-semibold">الحساب</th>
+                    <th className="text-start py-3 px-3 font-semibold">البريد الإلكتروني</th>
+                    <th className="text-start py-3 px-3 font-semibold">الهاتف</th>
+                    <th className="text-start py-3 px-3 font-semibold">الدور</th>
+                    <th className="text-start py-3 px-3 font-semibold">آخر دخول</th>
+                    <th className="text-start py-3 px-3 font-semibold">تاريخ الإنشاء</th>
+                    <th className="text-start py-3 px-3 font-semibold">الحالة</th>
+                    <th className="text-start py-3 px-3 font-semibold">كلمة المرور</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-sm" style={{ color: 'var(--text-muted)' }}>
+                      <td colSpan={8} className="py-8 text-center text-sm text-on-surface-variant">
                         لا توجد حسابات بعد.
                       </td>
                     </tr>
                   )}
                   {users.map((staff) => (
-                    <tr key={staff.id} className="border-t" style={{ borderColor: 'var(--border)' }}>
-                      <td className="py-2.5 px-2">
-                        <span className="font-medium" style={{ color: 'var(--text)' }}>{staff.name}</span>
+                    <tr key={staff.id} className="border-t border-outline-variant">
+                      <td className="py-3 px-3">
+                        <span className="font-medium text-on-surface">{staff.name}</span>
                       </td>
-                      <td className="py-2.5 px-2" dir="ltr" style={{ color: 'var(--text)' }}>{staff.email}</td>
-                      <td className="py-2.5 px-2" dir="ltr" style={{ color: 'var(--text)' }}>{staff.phone || '—'}</td>
-                      <td className="py-2.5 px-2" style={{ color: 'var(--text)' }}>{roleLabel(staff.role_id, staff.role_name)}</td>
-                      <td className="py-2.5 px-2 text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(staff.last_login)}</td>
-                      <td className="py-2.5 px-2 text-xs" style={{ color: 'var(--text-muted)' }}>{formatDate(staff.created_at)}</td>
-                      <td className="py-2.5 px-2">
-                        <span className="text-xs" style={{ color: Number(staff.is_active) ? '#16a34a' : '#dc2626' }}>
+                      <td className="py-3 px-3 text-on-surface" dir="ltr">{staff.email}</td>
+                      <td className="py-3 px-3 text-on-surface" dir="ltr">{staff.phone || '—'}</td>
+                      <td className="py-3 px-3 text-on-surface">{roleLabel(staff.role_id, staff.role_name)}</td>
+                      <td className="py-3 px-3 text-sm text-on-surface-variant">{formatDate(staff.last_login)}</td>
+                      <td className="py-3 px-3 text-sm text-on-surface-variant">{formatDate(staff.created_at)}</td>
+                      <td className="py-3 px-3">
+                        <span className={`text-xs font-medium ${Number(staff.is_active) ? 'text-success' : 'text-error'}`}>
                           {Number(staff.is_active) ? 'نشط' : 'معطل'}
                         </span>
                       </td>
-                      <td className="py-2.5 px-2">
+                      <td className="py-3 px-3">
                         <button
                           onClick={() => { setPasswordTarget(staff); setNewPassword(''); }}
-                          className="px-2.5 py-1 rounded-lg text-xs font-medium border"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                          className="md3-btn md3-btn--outlined text-xs"
                         >
                           إعادة تعيين
                         </button>
@@ -934,7 +905,7 @@ export default function PermissionsPage() {
             </div>
           </div>
 
-          <div className="rounded-2xl p-4 border text-xs leading-relaxed" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4 text-sm leading-relaxed text-on-surface-variant">
             🔐 نصيحة أمنية: استخدم كلمات مرور قوية (8 أحرف على الأقل مع أرقام ورموز)، وعطّل حساب أي موظف يتوقف عن العمل بدل حذفه،
             لتبقى سجلاته المرتبطة بالطلبات والشهادات محفوظة.
           </div>
@@ -945,37 +916,36 @@ export default function PermissionsPage() {
       <Modal open={addOpen} onClose={() => setAddOpen(false)} title="إنشاء حساب موظف">
         <div className="space-y-3">
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>الاسم الكامل</label>
-            <input className={inputClass} style={inputStyle} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">الاسم الكامل</label>
+            <input className={inputClass} value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>البريد الإلكتروني</label>
-            <input type="email" dir="ltr" className={inputClass} style={inputStyle} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">البريد الإلكتروني</label>
+            <input type="email" dir="ltr" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>رقم الهاتف</label>
-            <input dir="ltr" className={inputClass} style={inputStyle} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">رقم الهاتف</label>
+            <input dir="ltr" className={inputClass} value={form.phone} onChange={(event) => setForm({ ...form, phone: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>كلمة المرور</label>
-            <input type="password" dir="ltr" className={inputClass} style={inputStyle} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">كلمة المرور</label>
+            <input type="password" dir="ltr" className={inputClass} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>الدور</label>
-            <select className={inputClass} style={inputStyle} value={form.role_id} onChange={(event) => setForm({ ...form, role_id: event.target.value })}>
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">الدور</label>
+            <select className={inputClass} value={form.role_id} onChange={(event) => setForm({ ...form, role_id: event.target.value })}>
               {staffRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>{roleLabel(role.id, role.name)}</option>
               ))}
             </select>
           </div>
-          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs leading-relaxed text-on-surface-variant">
             سيحصل الحساب على صلاحيات الدور المختار. يمكنك تخصيصها بعد الإنشاء من زر «الصلاحيات».
           </p>
           <button
             onClick={createAccount}
             disabled={saving}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="w-full md3-btn md3-btn--filled"
           >
             {saving ? 'جارٍ الإنشاء...' : 'إنشاء الحساب'}
           </button>
@@ -986,22 +956,21 @@ export default function PermissionsPage() {
       <Modal open={!!editTarget} onClose={() => setEditTarget(null)} title={`تعديل الحساب: ${editTarget?.name || ''}`}>
         <div className="space-y-3">
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>الاسم الكامل</label>
-            <input className={inputClass} style={inputStyle} value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">الاسم الكامل</label>
+            <input className={inputClass} value={editForm.name} onChange={(event) => setEditForm({ ...editForm, name: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>البريد الإلكتروني</label>
-            <input type="email" dir="ltr" className={inputClass} style={inputStyle} value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">البريد الإلكتروني</label>
+            <input type="email" dir="ltr" className={inputClass} value={editForm.email} onChange={(event) => setEditForm({ ...editForm, email: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>رقم الهاتف</label>
-            <input dir="ltr" className={inputClass} style={inputStyle} value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">رقم الهاتف</label>
+            <input dir="ltr" className={inputClass} value={editForm.phone} onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })} />
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>الدور</label>
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">الدور</label>
             <select
               className={inputClass}
-              style={inputStyle}
               value={editForm.role_id}
               disabled={editTarget?.id === currentUser?.id}
               onChange={(event) => setEditForm({ ...editForm, role_id: event.target.value })}
@@ -1011,18 +980,17 @@ export default function PermissionsPage() {
               ))}
             </select>
             {editTarget?.id === currentUser?.id && (
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>لا يمكنك تغيير دور حسابك الخاص.</p>
+              <p className="text-xs mt-1 text-on-surface-variant">لا يمكنك تغيير دور حسابك الخاص.</p>
             )}
           </div>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>كلمة مرور جديدة (اختياري)</label>
-            <input type="password" dir="ltr" placeholder="اترك الحقل فارغًا للإبقاء على كلمة المرور الحالية" className={inputClass} style={inputStyle} value={editForm.password} onChange={(event) => setEditForm({ ...editForm, password: event.target.value })} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">كلمة مرور جديدة (اختياري)</label>
+            <input type="password" dir="ltr" placeholder="اترك الحقل فارغًا للإبقاء على كلمة المرور الحالية" className={inputClass} value={editForm.password} onChange={(event) => setEditForm({ ...editForm, password: event.target.value })} />
           </div>
           <button
             onClick={saveEdit}
             disabled={saving}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="w-full md3-btn md3-btn--filled"
           >
             {saving ? 'جارٍ الحفظ...' : 'حفظ التعديلات'}
           </button>
@@ -1035,35 +1003,35 @@ export default function PermissionsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <button
               onClick={() => setPermInherit(true)}
-              className="text-start p-3 rounded-xl border transition-all"
-              style={permInherit ? { borderColor: 'var(--primary)', backgroundColor: 'rgba(37,99,235,0.06)' } : { borderColor: 'var(--border)' }}
+              aria-pressed={permInherit}
+              className={`text-start p-3 rounded-md3-md border transition-colors ${permInherit ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-lowest'}`}
             >
-              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>وراثة صلاحيات الدور</p>
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+              <p className={`text-sm font-medium ${permInherit ? 'text-on-primary-container' : 'text-on-surface'}`}>وراثة صلاحيات الدور</p>
+              <p className={`text-xs mt-1 ${permInherit ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
                 يتبع الحساب دور «{permTarget ? roleLabel(permTarget.role_id, permTarget.role_name) : ''}» ويتحدث تلقائيًا عند تعديل الدور.
               </p>
             </button>
             <button
               onClick={() => setPermInherit(false)}
-              className="text-start p-3 rounded-xl border transition-all"
-              style={!permInherit ? { borderColor: 'var(--primary)', backgroundColor: 'rgba(37,99,235,0.06)' } : { borderColor: 'var(--border)' }}
+              aria-pressed={!permInherit}
+              className={`text-start p-3 rounded-md3-md border transition-colors ${!permInherit ? 'border-primary bg-primary-container' : 'border-outline-variant bg-surface-container-lowest'}`}
             >
-              <p className="text-sm font-medium" style={{ color: 'var(--text)' }}>صلاحيات مخصصة لهذا الحساب</p>
-              <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+              <p className={`text-sm font-medium ${!permInherit ? 'text-on-primary-container' : 'text-on-surface'}`}>صلاحيات مخصصة لهذا الحساب</p>
+              <p className={`text-xs mt-1 ${!permInherit ? 'text-on-primary-container' : 'text-on-surface-variant'}`}>
                 تتجاوز صلاحيات الدور لهذا الموظف فقط.
               </p>
             </button>
           </div>
 
           {permTarget && Number(permTarget.role_id) === 1 && (
-            <div className="text-xs rounded-xl px-3 py-2" style={{ backgroundColor: 'rgba(245,158,11,0.12)', color: '#b45309' }}>
+            <div className="text-sm rounded-md3-sm px-3 py-2 bg-warning-container text-on-warning-container">
               هذا الحساب مدير نظام ويملك كل الصلاحيات دائمًا؛ التخصيص لا يقيّده.
             </div>
           )}
 
           {permInherit ? (
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
-              <p className="text-xs mb-2" style={{ color: 'var(--text-muted)' }}>الصلاحيات الموروثة من الدور:</p>
+            <div className="rounded-md3-md p-3 bg-surface-container-low">
+              <p className="text-sm mb-2 text-on-surface-variant">الصلاحيات الموروثة من الدور:</p>
               <PermissionMatrix
                 sections={sections}
                 value={permTarget ? rolePermissionMap(permTarget.role_id) : {}}
@@ -1076,15 +1044,13 @@ export default function PermissionsPage() {
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setPermDraft(permTarget ? { ...rolePermissionMap(permTarget.role_id) } : {})}
-                  className="px-3 py-1.5 rounded-lg text-xs border"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                  className="md3-btn md3-btn--outlined text-xs"
                 >
                   نسخ صلاحيات الدور
                 </button>
                 <button
                   onClick={() => setPermDraft({})}
-                  className="px-3 py-1.5 rounded-lg text-xs border"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text)' }}
+                  className="md3-btn md3-btn--outlined text-xs"
                 >
                   إزالة كل الصلاحيات
                 </button>
@@ -1096,8 +1062,7 @@ export default function PermissionsPage() {
           <button
             onClick={saveUserPermissions}
             disabled={saving}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="w-full md3-btn md3-btn--filled"
           >
             {saving ? 'جارٍ الحفظ...' : 'حفظ الصلاحيات'}
           </button>
@@ -1107,18 +1072,17 @@ export default function PermissionsPage() {
       {/* ─── Reset password ───────────────────────────────────── */}
       <Modal open={!!passwordTarget} onClose={() => { setPasswordTarget(null); setNewPassword(''); }} title={`إعادة تعيين كلمة المرور: ${passwordTarget?.name || ''}`}>
         <div className="space-y-3">
-          <p className="text-xs leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs leading-relaxed text-on-surface-variant">
             سيتم استبدال كلمة المرور الحالية فورًا. أبلغ الموظف بكلمة المرور الجديدة واطلب منه تغييرها من صفحة «حسابي».
           </p>
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>كلمة المرور الجديدة</label>
-            <input type="password" dir="ltr" className={inputClass} style={inputStyle} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">كلمة المرور الجديدة</label>
+            <input type="password" dir="ltr" className={inputClass} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
           </div>
           <button
             onClick={resetPassword}
             disabled={saving}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="w-full md3-btn md3-btn--filled"
           >
             {saving ? 'جارٍ التحديث...' : 'تحديث كلمة المرور'}
           </button>
@@ -1129,17 +1093,16 @@ export default function PermissionsPage() {
       <Modal open={createRoleOpen} onClose={() => setCreateRoleOpen(false)} title="إنشاء دور جديد">
         <div className="space-y-3">
           <div>
-            <label className="text-xs block mb-1" style={{ color: 'var(--text-muted)' }}>اسم الدور</label>
-            <input className={inputClass} style={inputStyle} placeholder="مثال: مشرف مالي" value={newRoleName} onChange={(event) => setNewRoleName(event.target.value)} />
+            <label className="text-sm font-medium block mb-1 text-on-surface-variant">اسم الدور</label>
+            <input className={inputClass} placeholder="مثال: مشرف مالي" value={newRoleName} onChange={(event) => setNewRoleName(event.target.value)} />
           </div>
-          <p className="text-[11px] leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+          <p className="text-xs leading-relaxed text-on-surface-variant">
             يُنشأ الدور بصلاحية عرض لوحة التحكم فقط، ثم حدّد صلاحياته من المصفوفة.
           </p>
           <button
             onClick={createRole}
             disabled={saving}
-            className="w-full py-3 rounded-xl text-white font-medium disabled:opacity-60"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="w-full md3-btn md3-btn--filled"
           >
             {saving ? 'جارٍ الإنشاء...' : 'إنشاء الدور'}
           </button>

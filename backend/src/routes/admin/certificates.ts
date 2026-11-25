@@ -1,34 +1,15 @@
 import { Router, Request, Response } from 'express';
-import crypto from 'crypto';
 import { sql } from '../../db/helpers';
 import { authMiddleware } from '../../middleware/auth';
 import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../../middleware/rbac';
 import { sendNotification } from '../../services/externalNotificationService';
-import { execute } from '../../db/turso-http';
+import {
+  issueCertificate,
+  ensureCertColumns,
+  certHasStatusColumn,
+} from '../../services/certificateService';
 
 const router = Router();
-
-// Lazy migration: ensure certificate status columns exist before any write
-let certColumnsEnsured = false;
-async function ensureCertColumns() {
-  if (certColumnsEnsured) return;
-  const cols = [
-    "ALTER TABLE certificates ADD COLUMN status TEXT DEFAULT 'active'",
-    "ALTER TABLE certificates ADD COLUMN revoked_at DATETIME",
-    "ALTER TABLE certificates ADD COLUMN revoke_reason TEXT",
-  ];
-  for (const stmt of cols) {
-    try { await execute(stmt); } catch { /* column may already exist */ }
-  }
-  certColumnsEnsured = true;
-}
-
-async function certHasStatusColumn(): Promise<boolean> {
-  try {
-    const r = await sql("SELECT status FROM certificates LIMIT 1");
-    return !!r;
-  } catch { return false; }
-}
 
 // ═══════════════════════════════════════════════
 // GET / — List all certificates (with status)
@@ -154,50 +135,15 @@ router.post('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission
     const { user_id, course_id } = req.body;
     if (!user_id || !course_id) return res.status(400).json({ error: 'user_id and course_id required' });
 
-    // Lazy migration: ensure columns exist
-    await ensureCertColumns();
-    const hasCol = await certHasStatusColumn();
-
-    // Check for existing certificate
-    let existing;
-    if (hasCol) {
-      existing = await sql(
-        "SELECT id FROM certificates WHERE user_id=? AND course_id=? AND status='active'",
-        user_id, course_id,
-      );
-    } else {
-      existing = await sql(
-        'SELECT id FROM certificates WHERE user_id=? AND course_id=?',
-        user_id, course_id,
-      );
+    // Shared issuance path (duplicate rule, serial, notification all inside).
+    const result = await issueCertificate(Number(user_id), Number(course_id));
+    if (result.issued) {
+      return res.status(201).json({ id: result.certificate!.id, serial_id: result.certificate!.serial_id });
     }
-    if (existing.rows.length > 0) {
+    if (result.reason === 'duplicate') {
       return res.status(409).json({ error: 'Certificate already issued for this student and course' });
     }
-
-    const serialId = crypto.randomBytes(8).toString('hex').toUpperCase();
-    let result;
-    if (hasCol) {
-      result = await sql(
-        "INSERT INTO certificates (user_id, course_id, serial_id, status) VALUES (?,?,?,?)",
-        user_id, course_id, serialId, 'active',
-      );
-    } else {
-      result = await sql(
-        "INSERT INTO certificates (user_id, course_id, serial_id) VALUES (?,?,?)",
-        user_id, course_id, serialId,
-      );
-    }
-
-    const courseData = await sql('SELECT title_ar FROM courses WHERE id=?', course_id);
-    const courseTitle = courseData.rows.length > 0 ? (courseData.rows[0] as any).title_ar : '';
-
-    await sendNotification(Number(user_id), 'certificate_issued', {
-      courseTitle,
-      serialId,
-    }).catch(e => console.error('[Notify] certificate_issued failed:', e.message));
-
-    res.status(201).json({ id: Number(result.lastInsertRowid), serial_id: serialId });
+    return res.status(500).json({ error: 'Failed to issue certificate' });
   } catch (err: any) {
     console.error('[Admin Certificates] POST / Error:', err.message);
     res.status(500).json({ error: 'Failed to issue certificate' });

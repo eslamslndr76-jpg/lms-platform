@@ -90,7 +90,13 @@ export default function ExportModal({ open, onClose, dataset, title, query, colu
     <Modal open={open} onClose={onClose} title={title || meta?.name || 'تصدير البيانات'}>
       <div className="space-y-4">
         {metaError && (
-          <p className="text-xs rounded-xl px-3 py-2" style={{ backgroundColor: '#fef2f2', color: '#dc2626' }}>
+          <p
+            className="text-xs rounded-[var(--md-sys-shape-corner-small)] px-3 py-2"
+            style={{
+              backgroundColor: 'var(--md-sys-color-error-container)',
+              color: 'var(--md-sys-color-on-error-container)',
+            }}
+          >
             {metaError}
           </p>
         )}
@@ -102,8 +108,12 @@ export default function ExportModal({ open, onClose, dataset, title, query, colu
         )}
 
         <div
-          className="rounded-xl border px-3 py-2 text-xs leading-5"
-          style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text-muted)' }}
+          className="rounded-[var(--md-sys-shape-corner-small)] border px-3 py-2 text-xs leading-5"
+          style={{
+            backgroundColor: 'var(--md-sys-color-surface-container-low)',
+            borderColor: 'var(--md-sys-color-outline-variant)',
+            color: 'var(--md-sys-color-on-surface-variant)',
+          }}
         >
           ملف Excel مُنسّق بهوية المنصة وشعارها، بصف إجماليات تلقائي وفلاتر — قابل للتعديل بالكامل.
           {appliedFilters.length > 0 ? ' سيتم تطبيق الفلاتر الحالية على الملف.' : ' سيتم تصدير كل السجلات.'}
@@ -112,7 +122,7 @@ export default function ExportModal({ open, onClose, dataset, title, query, colu
         {meta && meta.columns.length > 0 && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-medium" style={{ color: 'var(--text)' }}>
+              <span className="text-xs font-medium" style={{ color: 'var(--md-sys-color-on-surface)' }}>
                 الأعمدة ({selected.length}/{meta.columns.length})
               </span>
               <button
@@ -132,15 +142,16 @@ export default function ExportModal({ open, onClose, dataset, title, query, colu
                     key={column.key}
                     type="button"
                     onClick={() => toggleColumn(column.key)}
-                    className="px-2.5 py-1 rounded-lg text-xs border transition-colors"
+                    aria-pressed={active}
+                    className="px-3 py-1.5 rounded-full text-xs font-medium border transition-colors"
                     style={
                       active
                         ? {
-                            backgroundColor: 'var(--primary)',
-                            borderColor: 'var(--primary)',
-                            color: 'var(--primary-contrast, #fff)',
+                            backgroundColor: 'var(--md-sys-color-secondary-container)',
+                            borderColor: 'transparent',
+                            color: 'var(--md-sys-color-on-secondary-container)',
                           }
-                        : { borderColor: 'var(--border)', color: 'var(--text-muted)' }
+                        : { borderColor: 'var(--md-sys-color-outline)', color: 'var(--md-sys-color-on-surface-variant)' }
                     }
                   >
                     {column.header}
@@ -155,36 +166,37 @@ export default function ExportModal({ open, onClose, dataset, title, query, colu
           <button
             onClick={() => run('xlsx')}
             disabled={!!loading || selected.length === 0}
-            className="flex-1 py-3 rounded-xl text-white font-medium text-sm disabled:opacity-50"
-            style={{ backgroundColor: 'var(--primary)' }}
+            className="md3-btn md3-btn--filled flex-1 font-medium text-sm"
           >
-            {loading === 'xlsx' ? 'جاري التحضير...' : '📊 تنزيل Excel'}
+            <span className="material-symbols-outlined text-[18px]" aria-hidden>table_view</span>
+            {loading === 'xlsx' ? 'جاري التحضير...' : 'تنزيل Excel'}
           </button>
           <button
             onClick={() => run('csv')}
             disabled={!!loading || selected.length === 0}
-            className="flex-1 py-3 rounded-xl font-medium text-sm disabled:opacity-50"
-            style={{ backgroundColor: 'var(--bg)', color: 'var(--text)', border: '1px solid var(--border)' }}
+            className="md3-btn md3-btn--outlined flex-1 font-medium text-sm"
           >
-            {loading === 'csv' ? 'جاري التحضير...' : '🧾 CSV'}
+            <span className="material-symbols-outlined text-[18px]" aria-hidden>description</span>
+            {loading === 'csv' ? 'جاري التحضير...' : 'CSV'}
           </button>
         </div>
 
         {selected.length === 0 && (
-          <p className="text-xs text-center" style={{ color: '#dc2626' }}>
+          <p className="text-xs text-center" style={{ color: 'var(--md-sys-color-error)' }}>
             اختر عمودًا واحدًا على الأقل.
           </p>
         )}
 
         {error && (
-          <p className="text-xs text-center" style={{ color: '#dc2626' }}>
+          <p className="text-xs text-center" style={{ color: 'var(--md-sys-color-error)' }}>
             {error}
           </p>
         )}
 
         {done && (
-          <p className="text-xs text-center" style={{ color: '#16a34a' }}>
-            ✅ تم تنزيل: {done}
+          <p className="text-xs text-center" style={{ color: 'var(--md-sys-color-success)' }}>
+            <span className="material-symbols-outlined text-[14px] align-middle" aria-hidden>check_circle</span>
+            {' '}تم تنزيل: {done}
           </p>
         )}
       </div>

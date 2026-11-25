@@ -1,10 +1,11 @@
 'use client';
 
 import { ReactNode } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAdminAuth } from '../lib/auth';
 import Sidebar from '../components/Sidebar';
+import TopAppBar from '../components/TopAppBar';
 import AIAssistant from '../components/AIAssistant';
 
 /** Top-level route → permission section required to open it. */
@@ -25,6 +26,10 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isLogin = pathname === '/login';
+
+  // Drawer + collapse state live here so the main content margin follows.
+  const [navOpen, setNavOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
 
   const segment = pathname?.split('/')[1] || '';
   const requiredSection = SECTION_BY_PATH[segment];
@@ -57,9 +62,18 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
   if (isLogin) return <div style={{ backgroundColor: 'var(--bg)', minHeight: '100vh' }}>{children}</div>;
 
   return (
-    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg)' }}>
-      <Sidebar />
-      <main className="flex-1 p-4 lg:p-6 overflow-x-hidden">
+    <div
+      className="min-h-screen"
+      style={{ backgroundColor: 'var(--bg)', ['--admin-sidebar-w' as any]: collapsed ? '76px' : '280px' }}
+    >
+      <Sidebar
+        open={navOpen}
+        onOpenChange={setNavOpen}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed(c => !c)}
+      />
+      <TopAppBar onMenu={() => setNavOpen(true)} />
+      <main className="admin-main pt-16 p-4 lg:p-6 overflow-x-hidden">
         {children}
       </main>
       <AIAssistant />

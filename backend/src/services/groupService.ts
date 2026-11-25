@@ -1,8 +1,8 @@
-import crypto from 'crypto';
 import { sql } from '../db/helpers';
 import { createNotification } from './notificationService';
 import { sendNotification, notifyGroupStudents as notifyGroupStudentsExt } from './externalNotificationService';
 import { openSurveyWindow, resetSurveyWindow } from './surveyService';
+import { issueCertificate } from './certificateService';
 
 const DAY_NAMES_AR = ['الأحد', 'الإثنين', 'الثلاثاء', 'الأربعاء', 'الخميس', 'الجمعة', 'السبت'];
 
@@ -287,23 +287,15 @@ async function autoIssueCertificates(groupId: number, courseId: number): Promise
       }
     }
 
-    // Issue certificate
-    const serialId = crypto.randomBytes(8).toString('hex').toUpperCase();
-    await sql(
-      'INSERT INTO certificates (user_id, course_id, serial_id) VALUES (?,?,?)',
-      userId, courseId, serialId,
-    );
-
-    // Get course title for notification
-    const courseData = await sql('SELECT title_ar FROM courses WHERE id=?', courseId);
-    const courseTitle = courseData.rows.length > 0 ? (courseData.rows[0] as any).title_ar : '';
-
-    // Send notification
-    await sendNotification(userId, 'certificate_issued', { courseTitle, serialId })
-      .catch(e => console.error('[Notify] certificate_issued failed:', e.message));
+    // Issue certificate (shared path: same duplicate rule, serial, notification)
+    const issueResult = await issueCertificate(userId, courseId);
+    if (!issueResult.issued) {
+      console.log(`[Certificate] Auto-issue skipped for student ${userId} in course ${courseId}: ${issueResult.reason}`);
+      continue;
+    }
 
     issuedCount++;
-    console.log(`[Certificate] Issued certificate ${serialId} for student ${userId} in course ${courseId}`);
+    console.log(`[Certificate] Issued certificate ${issueResult.certificate!.serial_id} for student ${userId} in course ${courseId}`);
   }
 
   console.log(`[Certificate] Auto-issue complete: ${issuedCount} certificates issued for group ${groupId}`);
@@ -416,6 +408,9 @@ export async function completeGroup(
             completed_at=datetime('now'), completed_by=?, instructor_eval_opened_at=datetime('now') WHERE id=?`,
     adminId ?? null, groupId,
   );
+
+  // Completing the group closes any attendance session the admin never stopped.
+  await sql('UPDATE lectures SET attendance_active=0 WHERE group_id=?', groupId);
 
   const studentsResult = await sql('SELECT user_id FROM group_students WHERE group_id=?', groupId);
   const studentIds = studentsResult.rows.map((r: any) => Number(r.user_id));
@@ -958,7 +953,9 @@ export async function getMyGroupLectures(userId: number, groupId: number): Promi
 
   const result = await sql(
     `SELECT l.*, COALESCE(la.attended,0) as attended, la.attended_at as attended_at_time,
-            la.verification_method as attendance_method
+            la.verification_method as attendance_method,
+            CASE WHEN l.attendance_active = 1 AND datetime(l.attendance_expires_at) > datetime('now')
+                 THEN 1 ELSE 0 END AS attendance_active
      FROM lectures l
      LEFT JOIN lecture_attendance la ON la.lecture_id=l.id AND la.user_id=?
      WHERE l.group_id=? ORDER BY l.sort_order ASC, l.id ASC`,
@@ -1211,8 +1208,12 @@ export async function getIncompleteGroups(): Promise<any[]> {
 // ──────────────────────────────────────────────
 
 export async function getGroupLectures(groupId: number): Promise<any[]> {
+  // attendance_active reflects the one true "open" definition (active + not
+  // expired), so admin views show an ended session as closed.
   const result = await sql(
-    'SELECT * FROM lectures WHERE group_id=? ORDER BY sort_order ASC, id ASC',
+    `SELECT l.*, CASE WHEN l.attendance_active = 1 AND datetime(l.attendance_expires_at) > datetime('now')
+                      THEN 1 ELSE 0 END AS attendance_active
+     FROM lectures l WHERE group_id=? ORDER BY sort_order ASC, id ASC`,
     groupId,
   );
   return result.rows.map((r: any) => ({
@@ -1360,7 +1361,7 @@ export async function toggleLectureComplete(groupId: number, lectureId: number):
   }
 
   await sql(
-    'UPDATE lectures SET is_completed=?, completed_at=? WHERE id=?',
+    'UPDATE lectures SET is_completed=?, completed_at=?, attendance_active=0 WHERE id=?',
     newVal, newVal ? new Date().toISOString() : null, lectureId,
   );
   await recalcStatus(groupId);

@@ -1,6 +1,6 @@
 import ExcelJS from 'exceljs';
 import { sql } from '../db/helpers';
-import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
+import { DEFAULT_LOGO_DATA_URL, INSTITUTE_LOGO_DATA_URL } from '../config/brandLogo';
 
 /**
  * Branded Excel exporter.
@@ -30,6 +30,8 @@ export interface ExportColumn {
   width?: number;
   /** Add this column to the totals row (formula-based, editable). */
   total?: 'sum' | 'count';
+  /** Value → status badge rendering (matched on the raw cell value, e.g. attendance status). */
+  badge?: Record<string, { label: string; tone: 'success' | 'danger' | 'neutral' }>;
 }
 
 export interface BrandingInfo {
@@ -55,6 +57,8 @@ export interface BuildOptions {
   exportedByRole?: string;
   /** Extra lines shown in the footer of the data sheet. */
   footerNote?: string;
+  /** Optional label/value pairs rendered above the table (report info block, e.g. course/group header). */
+  infoBlock?: { label: string; value: string }[];
 }
 
 const DEFAULT_BRANDING: BrandingInfo = {
@@ -293,6 +297,13 @@ function columnWidth(column: ExportColumn, rows: Record<string, unknown>[]): num
 
 // ─── Workbook builder ──────────────────────────────────────────────
 
+/** Light fills + readable text colors for status badges (WCAG-safe pairs). */
+const BADGE_STYLE: Record<'success' | 'danger' | 'neutral', { fill: string; color: string }> = {
+  success: { fill: 'FFE7F6EC', color: 'FF166534' },
+  danger: { fill: 'FFFDE8E8', color: 'FF991B1B' },
+  neutral: { fill: 'FFF3F4F6', color: 'FF374151' },
+};
+
 export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffer> {
   const {
     sheetName,
@@ -305,6 +316,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     exportedBy,
     exportedByRole,
     footerNote,
+    infoBlock = [],
   } = options;
 
   const primary = toArgb(branding.primaryColor, '#2563eb');
@@ -340,32 +352,55 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   });
 
   const columnCount = Math.max(columns.length, 1);
-  const lastCol = ws.getColumn(columnCount).letter;
-  ws.columns = columns.map((column) => ({
-    key: column.key,
-    width: columnWidth(column, rows),
-  }));
 
   // ── Header block ──────────────────────────────────────────────
+  // Dual-logo header: the institute (HIMS) logo on the far right and the unit
+  // logo on the far left — the sheet is RTL so column A renders rightmost.
+  // The unit logo lives in a dedicated gutter column past the data columns so
+  // it stays inside the used range when printing. The title block sits between.
   const logo = await parseImage(branding.logoHeader);
-  const logoRows = logo ? 3 : 0;
-  const titleStartColumn = logo ? 2 : 1;
+  const instituteLogo = await parseImage(INSTITUTE_LOGO_DATA_URL);
+  const hasHeaderLogos = Boolean(instituteLogo || logo);
+  const logoRows = hasHeaderLogos ? 3 : 0;
+  const titleStartColumn = hasHeaderLogos ? 2 : 1;
 
-  if (logo) {
-    const targetHeight = 54;
-    const ratio = logo.width && logo.height ? logo.width / logo.height : 1;
-    const height = targetHeight;
-    const width = Math.min(170, Math.max(60, Math.round(height * ratio)));
-    const imageId = workbook.addImage({ base64: logo.base64, extension: logo.extension });
-    ws.addImage(imageId, {
-      tl: { col: 0, row: 0 },
-      ext: { width, height },
-      editAs: 'oneCell',
+  const logoSize = (image: ParsedImage | null) => {
+    if (!image) return null;
+    const ratio = image.width && image.height ? image.width / image.height : 1;
+    const height = 54;
+    return { height, width: Math.min(170, Math.max(60, Math.round(height * ratio))) };
+  };
+  const unitSize = logoSize(logo);
+
+  const unitGutterIndex = unitSize ? columnCount + 1 : columnCount;
+  const lastCol = ws.getColumn(unitGutterIndex).letter;
+  ws.columns = [
+    ...columns.map((column) => ({ key: column.key, width: columnWidth(column, rows) })),
+    ...(unitSize
+      ? [{ width: Math.min(30, Math.max(10, Math.ceil((unitSize.width + 10) / 7))) }]
+      : []),
+  ];
+
+  if (instituteLogo) {
+    const size = logoSize(instituteLogo)!;
+    const imageId = workbook.addImage({
+      base64: instituteLogo.base64,
+      extension: instituteLogo.extension,
     });
+    ws.addImage(imageId, { tl: { col: 0, row: 0 }, ext: size, editAs: 'oneCell' });
+  }
+
+  if (logo && unitSize) {
+    const imageId = workbook.addImage({ base64: logo.base64, extension: logo.extension });
+    // 0-based anchor on the gutter column (leftmost in the RTL view).
+    ws.addImage(imageId, { tl: { col: unitGutterIndex - 1, row: 0 }, ext: unitSize, editAs: 'oneCell' });
+  }
+
+  if (instituteLogo) {
+    ws.mergeCells(`${ws.getColumn(1).letter}1:${ws.getColumn(1).letter}${logoRows}`);
   }
 
   const titleRange = `${ws.getColumn(titleStartColumn).letter}1:${lastCol}1`;
-  if (logo) ws.mergeCells(`${ws.getColumn(1).letter}1:${ws.getColumn(1).letter}${logoRows}`);
 
   ws.mergeCells(titleRange);
   const brandCell = ws.getCell(`${ws.getColumn(titleStartColumn).letter}1`);
@@ -399,10 +434,28 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   metaCell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
   ws.getRow(4).height = 22;
 
-  ws.getRow(5).height = 6;
+  // ── Report info block (optional label/value lines above the table) ──
+  let infoBlockRow = 5;
+  infoBlock.forEach(({ label, value }) => {
+    ws.mergeCells(`A${infoBlockRow}:${lastCol}${infoBlockRow}`);
+    const cell = ws.getCell(`A${infoBlockRow}`);
+    cell.value = {
+      richText: [
+        { text: `${label}: `, font: { name: FONT, size: 9, bold: true, color: { argb: 'FF374151' } } },
+        { text: value, font: { name: FONT, size: 9, color: { argb: 'FF4B5563' } } },
+      ],
+    };
+    cell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primarySoft } };
+    cell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
+    ws.getRow(infoBlockRow).height = 20;
+    infoBlockRow += 1;
+  });
+
+  ws.getRow(infoBlockRow).height = 6;
 
   // ── Table header ──────────────────────────────────────────────
-  const headerRowIndex = 6;
+  const headerRowIndex = infoBlockRow + 1;
   const headerRow = ws.getRow(headerRowIndex);
   columns.forEach((column, index) => {
     const cell = headerRow.getCell(index + 1);
@@ -442,15 +495,26 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
       const row = ws.getRow(firstDataRow + rowIndex);
       columns.forEach((column, columnIndex) => {
         const cell = row.getCell(columnIndex + 1);
-        cell.value = cellValue(record[column.key], column.type);
-        cell.font = { name: FONT, size: 10, color: { argb: 'FF111827' } };
-        cell.alignment = cellAlignment(column.type);
+        // Status badge columns: value → label with a tone fill (text is always
+        // present, so the color is never the only signal).
+        const badge = column.badge?.[String(record[column.key] ?? '')];
+        cell.value = badge ? badge.label : cellValue(record[column.key], column.type);
+        cell.font = badge
+          ? { name: FONT, size: 10, bold: true, color: { argb: BADGE_STYLE[badge.tone].color } }
+          : { name: FONT, size: 10, color: { argb: 'FF111827' } };
+        cell.alignment = cellAlignment(badge ? 'text' : column.type);
         const format = numFmt(column.type);
         if (format) cell.numFmt = format;
         cell.fill = {
           type: 'pattern',
           pattern: 'solid',
-          fgColor: { argb: rowIndex % 2 === 0 ? 'FFFFFFFF' : stripe },
+          fgColor: {
+            argb: badge
+              ? BADGE_STYLE[badge.tone].fill
+              : rowIndex % 2 === 0
+                ? 'FFFFFFFF'
+                : stripe,
+          },
         };
         cell.border = {
           top: { style: 'hair', color: { argb: BORDER } },
@@ -532,19 +596,37 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   });
   info.columns = [{ width: 26 }, { width: 62 }];
 
-  info.mergeCells('A1:B1');
-  const infoTitle = info.getCell('A1');
+  // Dual-logo band: institute (HIMS) right (col A), unit left (col B) — the
+  // sheet is RTL so column A renders rightmost. Title block sits below.
+  if (instituteLogo) {
+    const size = logoSize(instituteLogo)!;
+    const imageId = workbook.addImage({
+      base64: instituteLogo.base64,
+      extension: instituteLogo.extension,
+    });
+    info.addImage(imageId, { tl: { col: 0, row: 0 }, ext: size, editAs: 'oneCell' });
+  }
+  if (logo && unitSize) {
+    const imageId = workbook.addImage({ base64: logo.base64, extension: logo.extension });
+    info.addImage(imageId, { tl: { col: 1, row: 0 }, ext: unitSize, editAs: 'oneCell' });
+  }
+  info.getRow(1).height = 20;
+  info.getRow(2).height = 28;
+  info.getRow(3).height = 18;
+
+  info.mergeCells('A4:B4');
+  const infoTitle = info.getCell('A4');
   infoTitle.value = branding.systemName;
   infoTitle.font = { name: FONT, size: 14, bold: true, color: { argb: primary } };
   infoTitle.alignment = { horizontal: 'right', vertical: 'middle' };
-  info.getRow(1).height = 26;
+  info.getRow(4).height = 26;
 
-  info.mergeCells('A2:B2');
-  const infoSubtitle = info.getCell('A2');
+  info.mergeCells('A5:B5');
+  const infoSubtitle = info.getCell('A5');
   infoSubtitle.value = `${title} — ${branding.sloganAr}`;
   infoSubtitle.font = { name: FONT, size: 10, color: { argb: 'FF6B7280' } };
   infoSubtitle.alignment = { horizontal: 'right', vertical: 'middle' };
-  info.getRow(2).height = 20;
+  info.getRow(5).height = 20;
 
   const infoRows: [string, string][] = [
     ['اسم المنصة', branding.systemName],
@@ -560,7 +642,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     ['إخلاء مسؤولية', DISCLAIMER],
   ];
 
-  let infoCursor = 4;
+  let infoCursor = 7;
   infoRows.forEach(([label, value]) => {
     const labelCell = info.getCell(`A${infoCursor}`);
     const valueCell = info.getCell(`B${infoCursor}`);

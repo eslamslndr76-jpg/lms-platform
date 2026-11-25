@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <defs>
+    <pattern id="lattice" width="120" height="120" patternUnits="userSpaceOnUse">
+      <path d="M60 2 118 60 60 118 2 60Z" fill="none" stroke="#9bb2d3" stroke-width="1.7"/>
+      <path d="M60 17 103 60 60 103 17 60Z" fill="none" stroke="#c7ad69" stroke-width="1.15"/>
+      <path d="M60 2 60 17M118 60 103 60M60 118 60 103M2 60 17 60" stroke="#9bb2d3" stroke-width="1.5"/>
+      <path d="M60 29 72 48 91 60 72 72 60 91 48 72 29 60 48 48Z" fill="none" stroke="#9bb2d3" stroke-width="1.25"/>
+      <path d="M60 36 67 53 84 60 67 67 60 84 53 67 36 60 53 53Z" fill="none" stroke="#c7ad69" stroke-width="1.1"/>
+      <circle cx="60" cy="60" r="5.5" fill="none" stroke="#9bb2d3" stroke-width="1.4"/>
+      <circle cx="60" cy="60" r="2" fill="#c7ad69"/>
+      <circle cx="2" cy="2" r="2.2" fill="#c7ad69"/>
+      <circle cx="118" cy="2" r="2.2" fill="#c7ad69"/>
+      <circle cx="2" cy="118" r="2.2" fill="#c7ad69"/>
+      <circle cx="118" cy="118" r="2.2" fill="#c7ad69"/>
+      <path d="M0 0 17 17M120 0 103 17M0 120 17 103M120 120 103 103" stroke="#b3c5df" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="120" height="120" fill="url(#lattice)"/>
+</svg>

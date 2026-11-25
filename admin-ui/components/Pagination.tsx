@@ -20,31 +20,58 @@ export default function Pagination({ page, total, limit, onChange }: {
   };
 
   return (
-    <div className="flex items-center justify-between mt-4">
-      <span className="text-sm" style={{ color: 'var(--text-muted)' }}>
+    <div className="flex flex-wrap items-center justify-between gap-3 mt-4">
+      <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
         إجمالي {total} نتيجة
       </span>
-      <div className="flex items-center gap-1">
-        <button disabled={page <= 1} onClick={() => onChange(page - 1)}
-          className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 border transition-all hover:opacity-80"
-          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
-          ←
+      <div className="flex items-center gap-1.5">
+        <button
+          disabled={page <= 1}
+          onClick={() => onChange(page - 1)}
+          aria-label="الصفحة السابقة"
+          className="md3-btn md3-btn--icon md3-btn--outlined disabled:opacity-30"
+          style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }}
+        >
+          <span className="material-symbols-outlined text-[20px]">chevron_right</span>
         </button>
         {getPageNumbers().map((p, i) =>
           typeof p === 'string' ? (
-            <span key={`e${i}`} className="px-2 text-xs" style={{ color: 'var(--text-muted)' }}>...</span>
+            <span key={`e${i}`} className="px-1.5 text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>…</span>
           ) : (
-            <button key={p} onClick={() => onChange(p)}
-              className="px-3 py-1.5 text-sm rounded-lg transition-all"
-              style={p === page ? { backgroundColor: 'var(--primary)', color: '#fff' } : { color: 'var(--text)', border: '1px solid var(--border)' }}>
+            <button
+              key={p}
+              onClick={() => onChange(p)}
+              aria-current={p === page ? 'page' : undefined}
+              className="md3-btn"
+              style={
+                p === page
+                  ? {
+                      backgroundColor: 'var(--md-sys-color-primary-container)',
+                      color: 'var(--md-sys-color-on-primary-container)',
+                      fontWeight: 700,
+                      minWidth: 40,
+                      padding: '0 10px',
+                    }
+                  : {
+                      background: 'transparent',
+                      color: 'var(--md-sys-color-on-surface)',
+                      minWidth: 40,
+                      padding: '0 10px',
+                    }
+              }
+            >
               {p}
             </button>
-          )
+          ),
         )}
-        <button disabled={page >= pages} onClick={() => onChange(page + 1)}
-          className="px-3 py-1.5 text-sm rounded-lg disabled:opacity-30 border transition-all hover:opacity-80"
-          style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
-          →
+        <button
+          disabled={page >= pages}
+          onClick={() => onChange(page + 1)}
+          aria-label="الصفحة التالية"
+          className="md3-btn md3-btn--icon md3-btn--outlined disabled:opacity-30"
+          style={{ borderRadius: 'var(--md-sys-shape-corner-small)' }}
+        >
+          <span className="material-symbols-outlined text-[20px]">chevron_left</span>
         </button>
       </div>
     </div>

@@ -262,9 +262,12 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       typeof req.query.columns === 'string' && req.query.columns.trim()
         ? req.query.columns.split(',').map((c) => c.trim()).filter(Boolean)
         : [];
+    // Datasets may narrow their columns per scope (e.g. attendance drops the
+    // course column when exporting a single course — it moves to the info block).
+    const baseColumns = dataset.resolveColumns ? dataset.resolveColumns(params) : dataset.columns;
     const columns = requestedColumns.length
-      ? dataset.columns.filter((c) => requestedColumns.includes(c.key))
-      : dataset.columns;
+      ? baseColumns.filter((c) => requestedColumns.includes(c.key))
+      : baseColumns;
     if (columns.length === 0) {
       return res.status(400).json({ error: 'No valid columns selected' });
     }
@@ -305,6 +308,7 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       exporterIdentity(req),
     ]);
     const footerNote = dataset.buildNote ? await dataset.buildNote(params) : undefined;
+    const infoBlock = dataset.buildInfo ? await dataset.buildInfo(params, rows) : undefined;
 
     const buffer = await buildBrandedWorkbook({
       sheetName: dataset.name,
@@ -317,6 +321,7 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       exportedBy: identity.name,
       exportedByRole: identity.role,
       footerNote,
+      infoBlock,
     });
 
     const filename = safeFilename(

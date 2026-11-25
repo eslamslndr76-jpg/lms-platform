@@ -238,8 +238,9 @@ router.delete(
 router.delete(
   '/:id/hard',
   authMiddleware,
-  requireRole(ADMIN, EMPLOYEE),
-  requireUserPermission('write'),
+  // Hard delete wipes orders/receipts/certificates (financial records) —
+  // admins only, matching the certificate hard-delete rule.
+  requireRole(ADMIN),
   async (req: Request, res: Response) => {
     try {
       const id = Number(req.params.id);

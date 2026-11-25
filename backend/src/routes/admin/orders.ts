@@ -5,7 +5,7 @@ import { authMiddleware } from '../../middleware/auth';
 import { requireRole, requirePermission, ADMIN, EMPLOYEE } from '../../middleware/rbac';
 import * as groupService from '../../services/groupService';
 import { sendNotification } from '../../services/externalNotificationService';
-import { attachOrderDetails, getOrderCourseTitles, removeCoursesFromCart } from '../../services/orderService';
+import { attachOrderDetails, expireStaleBookings, getOrderCourseTitles, removeCoursesFromCart } from '../../services/orderService';
 
 const router = Router();
 
@@ -41,6 +41,10 @@ async function courseTitlesForIds(ids: number[]): Promise<Map<number, string>> {
 // ─────────────────────────────────────────────────────────────
 router.get('/', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('orders', 'read'), async (req: Request, res: Response) => {
   try {
+    // Lazy sweep (the 6-hour interval never runs on a warm production instance).
+    await expireStaleBookings().catch((e: any) =>
+      console.error('Booking expiry lazy sweep failed:', e?.message || e),
+    );
     const status = req.query.status as string | undefined;
     const search = req.query.search as string | undefined;
     const courseId = req.query.courseId as string | undefined;

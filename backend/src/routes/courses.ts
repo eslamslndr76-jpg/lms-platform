@@ -57,7 +57,17 @@ router.get('/:id', optionalAuth, async (req: Request, res: Response) => {
       req.params.id,
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Course not found' });
-    const course = { ...result.rows[0], is_active: Number(result.rows[0].is_active), enable_mobile_sticky_cta: Number(result.rows[0].enable_mobile_sticky_cta ?? 1), auto_assign: Number(result.rows[0].auto_assign ?? 1), prevent_overlap: Number(result.rows[0].prevent_overlap ?? 1) };
+    // Convert every boolean flag like the list endpoint above — libSQL may
+    // return them as strings and clients compare with strict equality.
+    const course = {
+      ...result.rows[0],
+      is_active: Number(result.rows[0].is_active),
+      featured: Number(result.rows[0].featured || 0),
+      enable_direct_purchase: Number(result.rows[0].enable_direct_purchase ?? 1),
+      enable_mobile_sticky_cta: Number(result.rows[0].enable_mobile_sticky_cta ?? 1),
+      auto_assign: Number(result.rows[0].auto_assign ?? 1),
+      prevent_overlap: Number(result.rows[0].prevent_overlap ?? 1),
+    };
 
     // Active group fill info for student UI
     const groupFill = await sql(

@@ -1,5 +1,6 @@
 import {
   AlignmentType,
+  BorderStyle,
   Document,
   HeadingLevel,
   ImageRun,
@@ -13,7 +14,7 @@ import {
 } from 'docx';
 import type { GroupReport } from './reportService';
 import { sql } from '../db/helpers';
-import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
+import { DEFAULT_LOGO_DATA_URL, INSTITUTE_LOGO_DATA_URL } from '../config/brandLogo';
 
 /**
  * Word renderer for the group report (edit-plan.md §8).
@@ -325,6 +326,76 @@ async function brandingLogo(): Promise<Buffer | null> {
   }
 }
 
+/** Institute (HIMS) logo as a buffer: static asset, always available. */
+function instituteLogoBuffer(): Buffer | null {
+  const match = /^data:image\/(png|jpe?g|gif);base64,(.+)$/i.exec(INSTITUTE_LOGO_DATA_URL);
+  if (!match) return null;
+  const buffer = Buffer.from(match[2], 'base64');
+  return buffer.length > 0 ? buffer : null;
+}
+
+/**
+ * Dual-logo page header shared by every Word document the system produces:
+ * the institute (HIMS) logo on the far right and the unit logo on the far
+ * left (visuallyRightToLeft renders the first cell on the right). Borderless
+ * full-width table; returns null only when neither logo can be embedded.
+ */
+export async function dualLogoHeaderTable(): Promise<Table | null> {
+  const institute = instituteLogoBuffer();
+  const unit = await brandingLogo();
+  if (!institute && !unit) return null;
+
+  const run = (buf: Buffer, mimetype: string) => {
+    const type = imageType(buf, mimetype);
+    if (!type) return null;
+    return new ImageRun({ type, data: buf, transformation: scaledTransform(buf, 150, 60) });
+  };
+
+  const instituteRun = institute ? run(institute, 'image/png') : null;
+  const unitRun = unit ? run(unit, 'image/png') : null;
+  if (!instituteRun && !unitRun) return null;
+
+  const noneBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  return new Table({
+    width: { size: 100, type: WidthType.PERCENTAGE },
+    visuallyRightToLeft: true,
+    borders: {
+      top: noneBorder,
+      bottom: noneBorder,
+      left: noneBorder,
+      right: noneBorder,
+      insideHorizontal: noneBorder,
+      insideVertical: noneBorder,
+    },
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                bidirectional: true,
+                alignment: AlignmentType.RIGHT,
+                children: instituteRun ? [instituteRun] : [],
+              }),
+            ],
+          }),
+          new TableCell({
+            width: { size: 50, type: WidthType.PERCENTAGE },
+            children: [
+              new Paragraph({
+                bidirectional: true,
+                alignment: AlignmentType.LEFT,
+                children: unitRun ? [unitRun] : [],
+              }),
+            ],
+          }),
+        ],
+      }),
+    ],
+  });
+}
+
 export async function buildGroupReportWord(
   report: GroupReport,
   images: UploadedImage[] = [],
@@ -354,23 +425,10 @@ export async function buildGroupReportWord(
     rtl('', { spacing: 160 }),
   ];
 
-  // Brand logo on top of the report (keeps its aspect ratio, centred).
-  const logo = await brandingLogo();
-  const logoType = logo ? imageType(logo, 'image/png') : null;
-  if (logo && logoType) {
-    children.unshift(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 120 },
-        children: [
-          new ImageRun({
-            type: logoType,
-            data: logo,
-            transformation: scaledTransform(logo, 150, 100),
-          }),
-        ],
-      }),
-    );
+  // Dual-logo header on top of the report: institute (HIMS) right, unit left.
+  const headerTable = await dualLogoHeaderTable();
+  if (headerTable) {
+    children.unshift(headerTable);
   }
 
   // أولاً: معلومات عامة

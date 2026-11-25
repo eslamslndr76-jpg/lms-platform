@@ -91,10 +91,11 @@ router.post('/forgot-password', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Invalid email address' });
     }
 
-    // Check user exists
+    // Check user exists — respond generically so registered/unregistered
+    // addresses cannot be enumerated.
     const user = await sql('SELECT id FROM users WHERE email=?', email);
     if (user.rows.length === 0) {
-      return res.status(404).json({ error: 'البريد الإلكتروني غير مسجل' });
+      return res.json({ success: true, message: 'OTP sent successfully' });
     }
 
     const result = await extNotificationService.sendOTP(email, 'password_reset');
@@ -201,10 +202,14 @@ router.post('/telegram/unlink', authMiddleware, async (req: Request, res: Respon
 router.post('/telegram/webhook', async (req: Request, res: Response) => {
   try {
     // Authenticate the caller: Telegram echoes back the secret_token that was
-    // registered via setWebhook. Without this check anyone could POST a forged
-    // /start payload and hijack another user's Telegram notifications.
+    // registered via setWebhook. Fail CLOSED when no secret is configured —
+    // an open endpoint here would let anyone link any chat to any account.
     const expectedSecret = getTelegramWebhookSecret();
-    if (expectedSecret) {
+    if (!expectedSecret) {
+      console.error('[Telegram Webhook] Rejected: no webhook secret configured (set TELEGRAM_WEBHOOK_SECRET or the bot token).');
+      return res.status(503).json({ ok: false, error: 'Webhook not configured' });
+    }
+    {
       const provided = req.headers['x-telegram-bot-api-secret-token'];
       if (provided !== expectedSecret) {
         console.warn('[Telegram Webhook] Rejected request with invalid secret token');

@@ -2,85 +2,177 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
 import { useAdminAuth } from '../lib/auth';
-import { useDarkMode } from './DarkModeProvider';
 import { useBranding } from './BrandingProvider';
-import NotificationBell from './NotificationBell';
 
 const allSections = [
-  { href: '/', label: 'لوحة التحكم', section: 'dashboard', icon: '📊' },
-  { href: '/courses', label: 'الكورسات', section: 'courses', icon: '📚' },
-  { href: '/proposals', label: 'مقترحات الكورسات', section: 'proposals', icon: '📝' },
-  { href: '/orders', label: 'الطلبات', section: 'orders', icon: '📋' },
-  { href: '/students', label: 'الطلاب', section: 'students', icon: '👥' },
-  { href: '/certificates', label: 'الشهادات', section: 'certificates', icon: '🎓' },
-  { href: '/financials', label: 'المالية', section: 'financials', icon: '💰' },
-  { href: '/permissions', label: 'المستخدمون والصلاحيات', section: 'employees', icon: '🔐' },
-  { href: '/settings', label: 'الإعدادات', section: 'settings', icon: '⚙️' },
+  { href: '/', label: 'لوحة التحكم', section: 'dashboard', icon: 'dashboard' },
+  { href: '/courses', label: 'الكورسات', section: 'courses', icon: 'menu_book' },
+  { href: '/proposals', label: 'مقترحات الكورسات', section: 'proposals', icon: 'description' },
+  { href: '/orders', label: 'الطلبات', section: 'orders', icon: 'receipt_long' },
+  { href: '/students', label: 'الطلاب', section: 'students', icon: 'groups' },
+  { href: '/certificates', label: 'الشهادات', section: 'certificates', icon: 'workspace_premium' },
+  { href: '/financials', label: 'المالية', section: 'financials', icon: 'payments' },
+  { href: '/permissions', label: 'المستخدمون والصلاحيات', section: 'employees', icon: 'admin_panel_settings' },
+  { href: '/settings', label: 'الإعدادات', section: 'settings', icon: 'settings' },
 ];
 
-export default function Sidebar() {
+interface SidebarProps {
+  /** Mobile drawer open state (owned by ClientLayout). */
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** Desktop icon-rail collapse (owned by ClientLayout). */
+  collapsed: boolean;
+  onToggleCollapse: () => void;
+}
+
+export default function Sidebar({ open, onOpenChange, collapsed, onToggleCollapse }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout, can } = useAdminAuth();
-  const { dark, toggle: toggleDark } = useDarkMode();
   const { systemName, logoHeader } = useBranding();
-  const [open, setOpen] = useState(false);
+
   const isActive = (href: string) => pathname === href || (href !== '/' && pathname?.startsWith(href + '/'));
+  const roleLabel = user?.role === 'admin' ? 'مدير النظام' : user?.role === 'employee' ? 'موظف' : user?.role;
+
+  const navItem = (item: (typeof allSections)[number], rail: boolean) => {
+    if (!can(item.section)) return null;
+    const active = isActive(item.href!);
+    return (
+      <Link
+        key={item.href}
+        href={item.href!}
+        onClick={() => onOpenChange(false)}
+        title={collapsed ? item.label : undefined}
+        aria-current={active ? 'page' : undefined}
+        className={`flex items-center gap-3 text-sm transition-colors md3-state-layer ${
+          rail ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
+        }`}
+        style={
+          active
+            ? {
+                backgroundColor: 'var(--md-sys-color-secondary-container)',
+                color: 'var(--md-sys-color-on-secondary-container)',
+                fontWeight: 700,
+                width: rail ? 56 : undefined,
+              }
+            : { color: 'var(--md-sys-color-on-surface-variant)', width: rail ? 56 : undefined }
+        }
+      >
+        <span className="material-symbols-outlined text-[22px] shrink-0" aria-hidden>
+          {item.icon}
+        </span>
+        {!rail && <span className="truncate">{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <>
-      <aside className={`fixed top-0 right-0 h-full w-64 z-40 shadow-xl transform transition-transform duration-300 ${open ? 'translate-x-0' : 'translate-x-full'} lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen overflow-y-auto`} style={{ backgroundColor: 'var(--sidebar-bg)' }}>
-        <div className="p-4 border-b flex items-center justify-between" style={{ borderColor: 'var(--border)' }}>
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="rounded-xl p-0.5 shadow-sm border shrink-0" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
-              <img src={logoHeader || '/branding/logo.png'} alt={systemName} className="h-10 sm:h-12" />
-            </div>
-          </div>
-          <button onClick={() => setOpen(false)} className="lg:hidden p-1.5 rounded-xl text-lg hover:bg-[var(--bg)]" style={{ color: 'var(--text)' }}>
-            ✕
+      <aside
+        className={`fixed top-0 right-0 h-full z-40 md3-elevation-1 transform transition-all duration-300 ${
+          open ? 'translate-x-0' : 'translate-x-full'
+        } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen overflow-y-auto`}
+        style={{
+          backgroundColor: 'var(--md-sys-color-surface-container-low)',
+          width: collapsed ? 76 : 280,
+        }}
+        aria-label="التنقل الرئيسي"
+      >
+        {/* Header: logo + collapse toggle */}
+        <div className="px-3 pt-4 pb-3 flex items-center justify-between gap-2">
+          <Link href="/" className="flex items-center gap-2 min-w-0" onClick={() => onOpenChange(false)}>
+            <img
+              src={logoHeader || '/branding/logo.png'}
+              alt={systemName}
+              className={collapsed ? 'h-9 mx-auto' : 'h-11'}
+            />
+          </Link>
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            aria-label={collapsed ? 'توسيع القائمة' : 'طي القائمة'}
+            className="md3-btn md3-btn--icon shrink-0 hidden lg:inline-flex"
+          >
+            <span className="material-symbols-outlined text-[20px]">
+              {collapsed ? 'chevron_left' : 'chevron_right'}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenChange(false)}
+            aria-label="إغلاق القائمة"
+            className="md3-btn md3-btn--icon shrink-0 lg:hidden"
+          >
+            <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-        <div className="px-4 pb-2 -mt-1 flex items-center justify-between gap-2">
-          <p className="text-xs truncate" style={{ color: 'var(--text-muted)' }}>
-            {user?.name} · {user?.role === 'admin' ? 'مدير النظام' : user?.role === 'employee' ? 'موظف' : user?.role}
-          </p>
-          <NotificationBell />
-        </div>
 
-        <nav className="p-2 space-y-1">
-          {allSections.map((item) => {
-            if (!can(item.section)) return null;
-            return (
-              <Link key={item.href} href={item.href!} onClick={() => setOpen(false)}
-                className={`flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all ${isActive(item.href!) ? 'font-medium shadow-sm' : 'hover:bg-[var(--bg)]'}`}
-                style={isActive(item.href!) ? { backgroundColor: 'var(--primary)', color: '#fff' } : { color: 'var(--text)' }}>
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
+        {/* Signed-in user */}
+        {!collapsed && (
+          <div className="px-4 pb-2">
+            <p className="text-sm font-medium truncate" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              {user?.name}
+            </p>
+            <p className="text-xs truncate" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              {roleLabel}
+            </p>
+          </div>
+        )}
+
+        {/* Navigation */}
+        <nav className={`py-2 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`} aria-label="أقسام اللوحة">
+          {allSections.map((item) => navItem(item, collapsed))}
         </nav>
 
-        <div className="p-4 border-t space-y-2" style={{ borderColor: 'var(--border)' }}>
-          <Link href="/account" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm transition-all hover:bg-[var(--bg)]" style={{ color: 'var(--text)' }}>
-            <span>👤</span><span>حسابي</span>
+        {/* Footer: account + logout (dark mode & notifications live in the top app bar) */}
+        <div
+          className={`px-3 py-4 mt-2 border-t space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}
+          style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}
+        >
+          <Link
+            href="/account"
+            onClick={() => onOpenChange(false)}
+            title={collapsed ? 'حسابي' : undefined}
+            className={`flex items-center gap-3 text-sm transition-colors md3-state-layer ${
+              collapsed ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
+            }`}
+            style={{ color: 'var(--md-sys-color-on-surface-variant)', width: collapsed ? 56 : undefined }}
+          >
+            <span className="material-symbols-outlined text-[22px]" aria-hidden>person</span>
+            {!collapsed && <span>حسابي</span>}
           </Link>
-          <button onClick={toggleDark} className="flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm transition-all hover:bg-[var(--bg)]" style={{ color: 'var(--text)' }}>
-            <span>{dark ? '☀️' : '🌙'}</span><span>{dark ? 'وضع فاتح' : 'وضع مظلم'}</span>
-          </button>
-          <button onClick={logout} className="w-full py-2 text-sm rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20" style={{ color: '#ef4444' }}>
-            تسجيل خروج
+          <button
+            onClick={logout}
+            title={collapsed ? 'تسجيل خروج' : undefined}
+            className={`flex items-center gap-3 text-sm w-full transition-colors md3-state-layer ${
+              collapsed ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
+            }`}
+            style={{ color: 'var(--md-sys-color-error)', width: collapsed ? 56 : undefined }}
+          >
+            <span className="material-symbols-outlined text-[22px]" aria-hidden>logout</span>
+            {!collapsed && <span>تسجيل خروج</span>}
           </button>
         </div>
       </aside>
 
+      {/* Mobile: floating open button + scrim */}
       {!open && (
-        <button onClick={() => setOpen(true)} className="lg:hidden fixed bottom-6 right-6 z-50 w-12 h-12 rounded-full shadow-xl flex items-center justify-center text-white text-xl" style={{ backgroundColor: 'var(--primary)' }}>
-          ☰
+        <button
+          onClick={() => onOpenChange(true)}
+          aria-label="فتح القائمة"
+          className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full md3-elevation-2 flex items-center justify-center"
+          style={{ backgroundColor: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)' }}
+        >
+          <span className="material-symbols-outlined text-[26px]" aria-hidden>menu</span>
         </button>
       )}
-      {open && <div className="fixed inset-0 bg-black/20 z-30 lg:hidden" onClick={() => setOpen(false)} />}
+      {open && (
+        <div
+          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          onClick={() => onOpenChange(false)}
+          aria-hidden="true"
+        />
+      )}
     </>
   );
 }

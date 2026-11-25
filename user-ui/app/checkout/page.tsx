@@ -86,8 +86,12 @@ function CheckoutContent() {
     setLoading(true);
     setError('');
     try {
-      const requirements: any = await api('/api/orders/checkout-requirements')
-        .catch(() => ({ missing_fields: [] }));
+      // Never treat a failed requirements check as "nothing missing" — the
+      // student would reach payment with an incomplete profile. null = failure.
+      const requirements: any = await api('/api/orders/checkout-requirements').catch(() => null);
+      if (!requirements) {
+        throw new Error('تعذر فحص بيانات الحساب — تحقق من اتصالك ثم أعد المحاولة');
+      }
       setMissing((requirements?.missing_fields || []).map((f: any) => String(f.key)));
 
       if (isDirect) {

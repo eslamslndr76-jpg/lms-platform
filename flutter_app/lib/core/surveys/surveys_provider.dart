@@ -74,7 +74,11 @@ class SurveysProvider extends ChangeNotifier {
   }
 
   /// Final submission — one response per student, locks afterwards.
-  Future<void> submit({
+  ///
+  /// Returns the certificate the backend issues right after a successful
+  /// submission (`{id, serial_id}`), or null when none was issued. All values
+  /// go through [toInt]/defensive casts because counts arrive as strings.
+  Future<Map<String, dynamic>?> submit({
     required int groupId,
     required Map<String, dynamic> answers,
     bool isAnonymous = false,
@@ -87,6 +91,16 @@ class SurveysProvider extends ChangeNotifier {
       throw _apiError(res, 'تعذر إرسال الاستبيان');
     }
     await fetchMySurveys(silent: true);
+    final data = res.data is Map ? res.data as Map<String, dynamic> : null;
+    final cert = data?['certificate'];
+    if (cert is Map) {
+      final map = Map<String, dynamic>.from(cert);
+      return {
+        'id': toIntOrNull(map['id']),
+        'serial_id': map['serial_id']?.toString() ?? '',
+      };
+    }
+    return null;
   }
 
   /// Extracts the backend's Arabic error message when present.

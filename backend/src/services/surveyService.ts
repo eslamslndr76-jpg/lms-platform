@@ -1,4 +1,5 @@
 import { sql } from '../db/helpers';
+import { issueCertificateIfPaid } from './certificateService';
 import { createNotification } from './notificationService';
 import { sendBulkNotifications } from './externalNotificationService';
 
@@ -7,8 +8,12 @@ import { sendBulkNotifications } from './externalNotificationService';
  *
  * The survey lives at the group level: every student of a completed group can
  * answer it once. A draft is auto-saved so the student can resume on any
- * device; submitting locks the answers for good. Answering is optional and has
- * no relation to certificates.
+ * device; submitting locks the answers for good. Answering is optional.
+ *
+ * Submitting triggers the certificate: when the student has a paid order for
+ * the course, the certificate is issued automatically right after submission
+ * (no attendance minimum) and returned in the submit response. Nothing links
+ * the certificate to the survey response, so anonymous surveys stay anonymous.
  */
 
 // ──────────────────────────────────────────────
@@ -425,7 +430,23 @@ export async function submitSurvey(
   }
 
   const saved = await getResponseRow(groupId, userId);
-  return serializeResponse(saved);
+  const serialized = serializeResponse(saved);
+
+  // Auto-issue the certificate after a successful submission: paid order for
+  // the group's course required, no attendance minimum. Failure is logged and
+  // never fails the submission — manual issuance from the admin panel stays as
+  // the fallback. No survey↔certificate link is stored anywhere.
+  let certificate: { id: number; serial_id: string } | null = null;
+  try {
+    certificate = await issueCertificateIfPaid(userId, Number(ctx.course_id));
+  } catch (err: any) {
+    console.error(
+      `[Certificate] Auto-issue failed after survey submission (user=${userId}, group=${groupId}, course=${ctx.course_id}):`,
+      err?.message || err,
+    );
+  }
+
+  return { ...serialized, certificate };
 }
 
 /**
@@ -555,7 +576,10 @@ export async function getGroupSurveyStats(groupId: number): Promise<any> {
   const helpedTotal = helpedYes + helpedNo;
 
   const responseList = parsedResponses.map(({ row, answers }) => ({
+    // Anonymous responses keep no user_id: the owner's identity is never
+    // exposed, never searchable and never individually exportable.
     is_anonymous: Number(row.is_anonymous) === 1,
+    user_id: Number(row.is_anonymous) === 1 ? null : Number(row.user_id),
     student_name: Number(row.is_anonymous) === 1 ? null : row.student_name,
     submitted_at: row.submitted_at,
     answers,
@@ -585,6 +609,10 @@ export async function getGroupSurveyStats(groupId: number): Promise<any> {
       no: helpedNo,
       yes_percent: helpedTotal > 0 ? Math.round((helpedYes / helpedTotal) * 100) : null,
     },
+    // Scale/notes labels so the admin UI renders each answer exactly as the
+    // survey definition shows it to the student.
+    scale: SURVEY_SCALE,
+    notes_label: NOTES_LABEL,
     responses: responseList,
   };
 }

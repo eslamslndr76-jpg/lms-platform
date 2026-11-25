@@ -97,6 +97,7 @@ export default function SurveyPage() {
   const [saveError, setSaveError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState('');
+  const [issuedCertificate, setIssuedCertificate] = useState<{ id: number; serial_id: string } | null>(null);
 
   const hydrated = useRef(false);
   const dirty = useRef(false);
@@ -189,10 +190,11 @@ export default function SurveyPage() {
     setSubmitting(true);
     setSubmitError('');
     try {
-      await api(`/api/surveys/my/${groupId}/submit`, {
+      const res: any = await api(`/api/surveys/my/${groupId}/submit`, {
         method: 'POST',
         body: JSON.stringify({ answers, is_anonymous: !isAnonymous }),
       });
+      setIssuedCertificate(res?.certificate ?? null);
       dirty.current = false;
       await load();
     } catch (err: any) {
@@ -265,11 +267,25 @@ export default function SurveyPage() {
         </div>
         <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>شكراً لك!</h1>
         <p className="text-sm mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
-          تم إرسال إجابتك في {formatDate(survey.response?.submitted_at || undefined)}.
+          تم استلام استبيانك{survey.response?.submitted_at ? ` في ${formatDate(survey.response.submitted_at)}` : ''}.
         </p>
         <p className="text-sm mb-8" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
           إجابة واحدة لكل طالب، ولا يمكن تعديلها بعد الإرسال.
         </p>
+        {issuedCertificate ? (
+          <div className="max-w-sm mx-auto mb-6 p-5 rounded-2xl border" style={{ borderColor: 'var(--md-sys-color-outline-variant)', backgroundColor: 'var(--md-sys-color-surface-container)' }}>
+            <span className="material-symbols-outlined text-[32px] mb-1" style={{ color: 'var(--md-sys-color-primary)' }}>workspace_premium</span>
+            <p className="text-sm font-bold mb-1" style={{ color: 'var(--md-sys-color-on-surface)' }}>شهادتك جاهزة 🎓</p>
+            <p className="text-xs mb-4" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
+              رقم الشهادة: {issuedCertificate.serial_id}
+            </p>
+            <Link href="/account?tab=certificates"
+              className="inline-flex items-center gap-2 h-12 px-6 rounded-full text-sm font-medium"
+              style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
+              <span className="material-symbols-outlined text-[18px]">workspace_premium</span> افتح شهادتك
+            </Link>
+          </div>
+        ) : null}
         <Link href="/dashboard" className="inline-flex items-center gap-2 h-12 px-6 rounded-full text-sm font-medium"
           style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}>
           <span className="material-symbols-outlined text-[18px]">home</span> العودة للرئيسية

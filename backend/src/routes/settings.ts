@@ -28,7 +28,7 @@ router.put('/branding', authMiddleware, requireRole(ADMIN), async (req: Request,
   }
 });
 
-router.get('/auto-group', authMiddleware, async (_req: Request, res: Response) => {
+router.get('/auto-group', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (_req: Request, res: Response) => {
   try {
     const result = await sql("SELECT value FROM system_settings WHERE key='autoGroupThreshold'");
     if (result.rows.length > 0) return res.json(JSON.parse(result.rows[0].value as string));
@@ -63,8 +63,8 @@ router.get('/app-version', async (_req: Request, res: Response) => {
       return res.json({ apkDirectUrl: '', ...JSON.parse(result.rows[0].value as string) });
     }
     res.json({
-      latestVersion: '1.0.3',
-      buildNumber: 4,
+      latestVersion: '1.0.8',
+      buildNumber: 9,
       forceUpdate: false,
       title: 'تحديث جديد متوفر',
       message: 'يتوفر إصدار جديد من تطبيق الهاتف يتضمن تحسينات بالسرعة والخطوط والشعار الجديد. اضغط للتحديث الآن.',

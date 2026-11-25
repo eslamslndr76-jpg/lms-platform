@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { api } from '../../lib/api';
 import ExportButton from '../../components/ExportButton';
+import Modal from '../../components/Modal';
 
 interface Student {
   id: number;
@@ -215,14 +216,14 @@ export default function CertificatesPage() {
 
   if (loading) return (
     <div className="flex items-center justify-center h-64">
-      <div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
+      <div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--md-sys-color-primary)', borderTopColor: 'transparent' }} />
     </div>
   );
 
   if (error) return (
     <div className="flex flex-col items-center justify-center h-64 gap-4">
-      <p style={{ color: '#dc2626' }}>{error}</p>
-      <button onClick={load} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button>
+      <p style={{ color: 'var(--md-sys-color-on-error-container)' }}>{error}</p>
+      <button onClick={load} className="md3-btn md3-btn--filled">إعادة المحاولة</button>
     </div>
   );
 
@@ -232,43 +233,42 @@ export default function CertificatesPage() {
       {msg && (
         <div className={`px-4 py-3 rounded-xl text-sm animate-slide-up ${
           msgType === 'success'
-            ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
-            : 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+            ? 'msg-ok'
+            : 'msg-err'
         }`}>
           {msgType === 'success' ? '✅' : '❌'} {msg}
         </div>
       )}
 
       {/* Tabs */}
-      <div className="flex items-center gap-2">
-        <button onClick={() => setTab('issue')}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'issue' ? 'text-white' : ''}`}
-          style={tab === 'issue' ? { backgroundColor: 'var(--primary)' } : { backgroundColor: 'var(--card)', color: 'var(--text)' }}>
+      <div className="md3-tabs">
+        <button role="tab" aria-selected={tab === 'issue'} onClick={() => setTab('issue')}
+          className={`md3-tab ${tab === 'issue' ? 'md3-tab--active' : ''}`}>
           📋 إصدار شهادات ({students.length})
         </button>
-        <button onClick={() => setTab('all')}
-          className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${tab === 'all' ? 'text-white' : ''}`}
-          style={tab === 'all' ? { backgroundColor: 'var(--primary)' } : { backgroundColor: 'var(--card)', color: 'var(--text)' }}>
+        <button role="tab" aria-selected={tab === 'all'} onClick={() => setTab('all')}
+          className={`md3-tab ${tab === 'all' ? 'md3-tab--active' : ''}`}>
           🎓 جميع الشهادات ({certs.length})
         </button>
-        <ExportButton
-          dataset="certificates"
-          title="تصدير الشهادات"
-          query={{ status: filterStatus, search: searchQuery }}
-          variant="soft"
-          className="ms-auto"
-        />
+        <div className="ms-auto self-center pb-1">
+          <ExportButton
+            dataset="certificates"
+            title="تصدير الشهادات"
+            query={{ status: filterStatus, search: searchQuery }}
+            variant="soft"
+          />
+        </div>
       </div>
 
       {/* ═══════════════════════════════════════ */}
       {/* TAB: Manual Issue                      */}
       {/* ═══════════════════════════════════════ */}
       {tab === 'issue' && (
-        <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
             <div>
-              <h2 className="text-lg font-bold" style={{ color: 'var(--text)' }}>الطلاب المستحقون للشهادات</h2>
-              <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-lg font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلاب المستحقون للشهادات</h2>
+              <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                 الطلاب الذين دفعوا ولم تُصدر لهم شهادة نشطة بعد
               </p>
             </div>
@@ -277,8 +277,7 @@ export default function CertificatesPage() {
                 value={studentSearch}
                 onChange={e => setStudentSearch(e.target.value)}
                 placeholder="🔍 بحث بالاسم أو الإيميل أو الكورس..."
-                className="px-4 py-2 rounded-xl border text-sm w-full sm:w-72"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                className="md3-field w-full sm:w-72"
               />
             )}
           </div>
@@ -286,43 +285,48 @@ export default function CertificatesPage() {
           {filteredStudents.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-4xl mb-2">{students.length === 0 ? '✅' : '🔍'}</div>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                 {students.length === 0 ? 'لا يوجد طلاب مستحقون للشهادات' : 'لا توجد نتائج تطابق البحث'}
               </p>
             </div>
           ) : (
             <div className="space-y-2">
               {filteredStudents.map((s) => (
-                <div key={`${s.id}-${s.course_id}`} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+                <div key={`${s.id}-${s.course_id}`} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>{s.name}</p>
+                      <p className="font-medium text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{s.name}</p>
                       {s.total > 0 && (
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
-                          s.attendancePercent >= 80 ? 'bg-green-100 text-green-700' :
-                          s.attendancePercent >= 50 ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-red-100 text-red-700'
-                        }`}>
+                        <span className="text-xs px-2.5 py-0.5 rounded-full font-medium"
+                          style={s.attendancePercent >= 80
+                            ? { backgroundColor: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' }
+                            : s.attendancePercent >= 50
+                              ? { backgroundColor: 'var(--md-sys-color-warning-container)', color: 'var(--md-sys-color-on-warning-container)' }
+                              : { backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
                           حضور {s.attendancePercent}%
                         </span>
                       )}
                     </div>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>{s.email} · {s.course_name}</p>
+                    <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{s.email} · {s.course_name}</p>
                     {s.total > 0 && (
                       <div className="flex items-center gap-2 mt-1">
-                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--border)' }}>
+                        <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--md-sys-color-outline-variant)' }}>
                           <div className="h-full rounded-full" style={{
                             width: `${s.attendancePercent}%`,
-                            backgroundColor: s.attendancePercent >= 80 ? '#22c55e' : s.attendancePercent >= 50 ? '#eab308' : '#ef4444'
+                            backgroundColor: s.attendancePercent >= 80
+                              ? 'var(--md-sys-color-success)'
+                              : s.attendancePercent >= 50
+                                ? 'var(--md-sys-color-warning)'
+                                : 'var(--md-sys-color-error)'
                           }} />
                         </div>
-                        <span className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{s.attended}/{s.total}</span>
+                        <span className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{s.attended}/{s.total}</span>
                       </div>
                     )}
                   </div>
                   <button onClick={() => issue(s.id, s.course_id)}
                     disabled={issuing === s.id}
-                    className="px-3 py-1.5 bg-[var(--primary)] text-white rounded-xl text-xs font-medium disabled:opacity-50 mr-3 shrink-0">
+                    className="md3-btn md3-btn--filled text-sm mr-3 shrink-0">
                     {issuing === s.id ? 'جاري...' : '🎓 إصدار شهادة'}
                   </button>
                 </div>
@@ -336,18 +340,18 @@ export default function CertificatesPage() {
       {/* TAB: All Certificates                  */}
       {/* ═══════════════════════════════════════ */}
       {tab === 'all' && (
-        <div className="rounded-2xl p-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
           {/* Stats bar */}
           <div className="flex flex-wrap items-center gap-3 mb-4">
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style={{ backgroundColor: 'var(--bg)', color: 'var(--text)' }}>
+            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface)' }}>
               <span>📊</span>
               <span>الكل: <strong>{certs.length}</strong></span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400">
+            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full " style={{ backgroundColor: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' }}>
               <span>✅</span>
               <span>نشط: <strong>{activeCount}</strong></span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400">
+            <div className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full " style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
               <span>🚫</span>
               <span>مسحوب: <strong>{revokedCount}</strong></span>
             </div>
@@ -360,22 +364,23 @@ export default function CertificatesPage() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="🔍 بحث بالاسم أو الإيميل أو الكورس أو الرقم التسلسلي..."
-                className="w-full px-4 py-2.5 pr-10 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                className="md3-field pr-12"
               />
               {searchQuery && (
-                <button onClick={() => setSearchQuery('')}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-xs opacity-50 hover:opacity-100"
-                  style={{ color: 'var(--text)' }}>
-                  ✕
+                <button
+                  onClick={() => setSearchQuery('')}
+                  aria-label="مسح البحث"
+                  className="absolute left-2 top-1/2 -translate-y-1/2 md3-btn md3-btn--icon"
+                  style={{ width: 32, minWidth: 32, height: 32 }}
+                >
+                  <span className="material-symbols-outlined text-[18px]" aria-hidden>close</span>
                 </button>
               )}
             </div>
             <select
               value={filterStatus}
               onChange={e => setFilterStatus(e.target.value as FilterStatus)}
-              className="px-4 py-2.5 rounded-xl border text-sm cursor-pointer"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="md3-field cursor-pointer"
             >
               <option value="all">📋 الكل ({certs.length})</option>
               <option value="active">✅ نشط ({activeCount})</option>
@@ -385,7 +390,7 @@ export default function CertificatesPage() {
 
           {/* Sort buttons */}
           <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="text-[11px]" style={{ color: 'var(--text-muted)' }}>ترتيب حسب:</span>
+            <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>ترتيب حسب:</span>
             {([
               ['issued_at', '📅 التاريخ'],
               ['student_name', '👤 الطالب'],
@@ -393,10 +398,10 @@ export default function CertificatesPage() {
               ['serial_id', '🔢 الرقم'],
             ] as [SortKey, string][]).map(([key, label]) => (
               <button key={key} onClick={() => toggleSort(key)}
-                className={`text-[11px] px-2.5 py-1 rounded-lg font-medium transition-all ${
-                  sortKey === key ? 'bg-[var(--primary)] text-white' : ''
+                className={`min-h-10 text-sm px-3 py-2 rounded-md3-full font-medium transition-all ${
+                  sortKey === key ? 'chip-active' : ''
                 }`}
-                style={sortKey !== key ? { backgroundColor: 'var(--bg)', color: 'var(--text-muted)' } : {}}>
+                style={sortKey !== key ? { backgroundColor: 'var(--md-sys-color-surface-container)', color: 'var(--md-sys-color-on-surface-variant)' } : {}}>
                 {label} {sortIcon(key)}
               </button>
             ))}
@@ -404,7 +409,7 @@ export default function CertificatesPage() {
 
           {/* Results count */}
           {searchQuery || filterStatus !== 'all' ? (
-            <p className="text-[11px] mb-2" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs mb-2" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               {filteredCerts.length} نتيجة من أصل {certs.length}
             </p>
           ) : null}
@@ -413,7 +418,7 @@ export default function CertificatesPage() {
           {filteredCerts.length === 0 ? (
             <div className="text-center py-8">
               <div className="text-4xl mb-2">📄</div>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>
+              <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                 {certs.length === 0 ? 'لم يتم إصدار أي شهادات بعد' : 'لا توجد نتائج تطابق البحث'}
               </p>
             </div>
@@ -423,40 +428,40 @@ export default function CertificatesPage() {
                 <div key={c.id}
                   className={`p-3 rounded-xl border-l-4 transition-all ${
                     c.status === 'revoked'
-                      ? 'border-l-red-400 opacity-60'
+                      ? 'cert-revoked'
                       : 'border-l-green-400'
                   }`}
-                  style={{ backgroundColor: 'var(--bg)' }}>
+                  style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                   <div className="flex items-center justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>{c.student_name}</p>
+                        <p className="font-medium text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>{c.student_name}</p>
                         {c.status === 'revoked' ? (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400">
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
                             مسحوب
                           </span>
                         ) : (
-                          <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400">
+                          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ backgroundColor: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' }}>
                             نشط
                           </span>
                         )}
                       </div>
-                      <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                         {c.course_name} · {c.student_email}
                       </p>
                       <div className="flex items-center gap-3 mt-1">
-                        <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{c.serial_id}</p>
-                        <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                        <p className="text-xs font-mono" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{c.serial_id}</p>
+                        <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
                           {new Date(c.issued_at).toLocaleDateString('ar-EG')}
                         </p>
                         {c.revoked_at && (
-                          <p className="text-xs text-red-500">
+                          <p className="text-sm" style={{ color: 'var(--md-sys-color-error)' }}>
                             سُحب: {new Date(c.revoked_at).toLocaleDateString('ar-EG')}
                           </p>
                         )}
                       </div>
                       {c.revoke_reason && (
-                        <p className="text-[11px] mt-1 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800">
+                        <p className="text-xs mt-1 px-2 py-1 rounded-lg " style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}>
                           📝 {c.revoke_reason}
                         </p>
                       )}
@@ -466,19 +471,19 @@ export default function CertificatesPage() {
                     <div className="flex items-center gap-1.5 shrink-0">
                         {c.status === 'active' ? (
                         <button onClick={() => setRevokeModal({ certId: c.id, name: c.student_name })}
-                          className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                          className="md3-btn shrink-0" style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
                           title="سحب الشهادة">
                           🚫 سحب
                         </button>
                       ) : (
                         <>
                           <button onClick={() => restore(c.id)}
-                            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-100 dark:hover:bg-green-900/40 transition-colors"
+                            className="md3-btn shrink-0" style={{ backgroundColor: 'var(--md-sys-color-success-container)', color: 'var(--md-sys-color-on-success-container)' }}
                             title="استعادة الشهادة">
                             ✅ استعادة
                           </button>
                           <button onClick={() => deleteCert(c.id)}
-                            className="px-3 py-1.5 rounded-lg text-[11px] font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
+                            className="md3-btn shrink-0" style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
                             title="حذف نهائي">
                             🗑️
                           </button>
@@ -494,29 +499,29 @@ export default function CertificatesPage() {
       )}
 
       {/* ── Revoke Reason Modal ── */}
-      {revokeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-          onClick={() => { setRevokeModal(null); setRevokeReason(''); }}>
-          <div className="w-full max-w-md mx-4 p-6 rounded-2xl shadow-2xl border"
-            style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}
-            onClick={e => e.stopPropagation()}>
-            <h3 className="text-lg font-bold mb-1" style={{ color: 'var(--text)' }}>🚫 سحب الشهادة</h3>
-            <p className="text-sm mb-4" style={{ color: 'var(--text-muted)' }}>
+      <Modal
+        open={!!revokeModal}
+        onClose={() => { setRevokeModal(null); setRevokeReason(''); }}
+        title="🚫 سحب الشهادة"
+        size="md"
+      >
+        {revokeModal && (
+          <>
+            <p className="text-sm mb-4" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               هل أنت متأكد من سحب شهادة <strong>{revokeModal.name}</strong>؟
             </p>
 
-            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
-              ملاحظات السبب <span className="text-xs" style={{ color: 'var(--text-muted)' }}>(اختياري)</span>
+            <label className="block text-sm font-medium mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+              ملاحظات السبب <span className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>(اختياري)</span>
             </label>
             <textarea
               rows={3}
               value={revokeReason}
               onChange={e => setRevokeReason(e.target.value)}
               placeholder="مثال: تم اكتشاف تلاعب في الحضور..."
-              className="w-full px-3 py-2 rounded-xl border text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="md3-field resize-none"
             />
-            <p className="text-[11px] mt-1" style={{ color: 'var(--text-muted)' }}>
+            <p className="text-xs mt-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>
               هذه الملاحظات ستظهر للطالب في داشبورده وصفحة التحقق
             </p>
 
@@ -524,19 +529,18 @@ export default function CertificatesPage() {
               <button
                 disabled={revoking}
                 onClick={() => revoke(revokeModal.certId, revokeReason)}
-                className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 transition-colors">
+                className="md3-btn md3-btn--danger flex-1">
                 {revoking ? '⏳ جاري السحب...' : '🚫 تأكيد السحب'}
               </button>
               <button
                 onClick={() => { setRevokeModal(null); setRevokeReason(''); }}
-                className="px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                className="md3-btn md3-btn--outlined flex-1">
                 إلغاء
               </button>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </Modal>
     </div>
   );
 }

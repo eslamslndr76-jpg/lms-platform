@@ -132,40 +132,80 @@ export default function StudentsPage() {
     setDeleting(false);
   };
 
-  if (loading && students.length === 0) return <div className="space-y-4"><div className="flex items-center justify-between"><h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الطلاب</h1></div><div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}><Skeleton rows={8} cols={5} /></div></div>;
-  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={load} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
+  if (loading && students.length === 0) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلاب</h1>
+        <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
+          <Skeleton rows={8} cols={5} />
+        </div>
+      </div>
+    );
+  }
+  if (error) {
+    return (
+      <div
+        className="p-6 rounded-[var(--md-sys-shape-corner-medium)] flex flex-col items-center gap-3 text-center"
+        style={{ backgroundColor: 'var(--md-sys-color-error-container)', color: 'var(--md-sys-color-on-error-container)' }}
+      >
+        <span className="material-symbols-outlined text-[28px]" aria-hidden>error</span>
+        <p className="text-sm">{error}</p>
+        <button onClick={load} className="md3-btn md3-btn--filled text-sm">إعادة المحاولة</button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الطلاب</h1>
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلاب</h1>
         <div className="flex gap-2">
-          <button onClick={() => setAddModal(true)} className="px-4 py-2 rounded-xl text-white text-sm font-medium" style={{ backgroundColor: 'var(--primary)' }}>
+          <button onClick={() => setAddModal(true)} className="px-4 py-2 rounded-xl text-on-primary text-sm font-medium" style={{ backgroundColor: 'var(--md-sys-color-primary)' }}>
             + إضافة طالب
           </button>
           <ExportButton dataset="students" title="تصدير الطلاب" />
         </div>
       </div>
 
-      <div className="rounded-2xl p-4 border" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)' }}>
+      <section className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
         <DataTable
           columns={[
             { key: 'name', label: 'الاسم' },
             { key: 'email', label: 'البريد' },
             { key: 'phone', label: 'الهاتف', render: (v: string) => v || '-' },
-            { key: 'is_active', label: 'الحالة', render: (v: any) => Number(v) ? '🟢 نشط' : '🔴 غير نشط' },
+            { key: 'is_active', label: 'الحالة', render: (v: any) => (
+              <span className="inline-flex items-center gap-1.5 text-sm">
+                <span className="material-symbols-outlined text-[16px]" aria-hidden
+                  style={{ color: Number(v) ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)' }}>
+                  {Number(v) ? 'check_circle' : 'cancel'}
+                </span>
+                {Number(v) ? 'نشط' : 'غير نشط'}
+              </span>
+            ) },
             { key: 'created_at', label: 'تاريخ التسجيل', render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
             { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
-              <div className="flex gap-1" onClick={e => e.stopPropagation()}>
-                <button onClick={() => startEdit(row)}
-                  className="px-2 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-600 hover:bg-blue-100">تعديل</button>
-                <button onClick={() => setConfirmToggle(row)}
-                  className="px-2 py-1 rounded-lg text-xs font-medium"
-                  style={{ backgroundColor: Number(row.is_active) ? '#fef2f2' : '#f0fdf4', color: Number(row.is_active) ? '#dc2626' : '#16a34a' }}>
+              <div className="flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => startEdit(row)}
+                  className="md3-btn md3-btn--text text-xs"
+                  style={{ minHeight: 32, padding: '0 10px' }}
+                >
+                  تعديل
+                </button>
+                <button
+                  onClick={() => setConfirmToggle(row)}
+                  className="md3-btn md3-btn--text text-xs"
+                  style={{ minHeight: 32, padding: '0 10px' }}
+                >
                   {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
                 </button>
-                <button onClick={() => setConfirmDelete(row)}
-                  className="px-2 py-1 rounded-lg text-xs font-medium bg-red-50 text-red-600 hover:bg-red-100">حذف</button>
+                <button
+                  onClick={() => setConfirmDelete(row)}
+                  className="md3-btn md3-btn--text text-xs"
+                  style={{ minHeight: 32, padding: '0 10px', color: 'var(--md-sys-color-error)' }}
+                >
+                  حذف
+                </button>
               </div>
             )},
           ]}
@@ -173,79 +213,88 @@ export default function StudentsPage() {
           onRowClick={openDetail}
         />
         <Pagination page={page} total={total} limit={limit} onChange={setPage} />
-      </div>
+      </section>
 
       <Modal open={detailModal} onClose={() => { setDetailModal(false); setSelectedStudent(null); }} title={selectedStudent?.name || 'بيانات الطالب'} size="lg">
         {selectedStudent && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>البريد</span>
-                <span style={{ color: 'var(--text)' }}>{selectedStudent.email}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>البريد</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.email}</span>
               </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الهاتف</span>
-                <span style={{ color: 'var(--text)' }}>{selectedStudent.phone || '-'}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>الهاتف</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.phone || '-'}</span>
               </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</span>
-                <span>{Number(selectedStudent.is_active) ? '🟢 نشط' : '🔴 غير نشط'}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>الحالة</span>
+                <span className="inline-flex items-center gap-1.5 text-sm">
+                  <span className="material-symbols-outlined text-[16px]" aria-hidden
+                    style={{ color: Number(selectedStudent.is_active) ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)' }}>
+                    {Number(selectedStudent.is_active) ? 'check_circle' : 'cancel'}
+                  </span>
+                  {Number(selectedStudent.is_active) ? 'نشط' : 'غير نشط'}
+                </span>
               </div>
-              <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                <span className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>تاريخ التسجيل</span>
-                <span style={{ color: 'var(--text)' }}>{new Date(selectedStudent.created_at).toLocaleDateString('ar-EG')}</span>
+              <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+                <span className="block text-xs mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>تاريخ التسجيل</span>
+                <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{new Date(selectedStudent.created_at).toLocaleDateString('ar-EG')}</span>
               </div>
             </div>
 
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
-              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>📋 المعلومات الشخصية الإضافية</h4>
+            <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+              <h4 className="font-bold text-sm mb-2 flex items-center gap-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>
+                <span className="material-symbols-outlined text-[18px]" aria-hidden>id_card</span>
+                المعلومات الشخصية الإضافية
+              </h4>
               <div className="grid grid-cols-2 gap-3 text-sm">
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🆔 الرقم القومى</span>
-                  <span dir="ltr" style={{ color: 'var(--text)' }}>{selectedStudent.national_id || '-'}</span>
+                <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>🆔 الرقم القومى</span>
+                  <span dir="ltr" style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.national_id || '-'}</span>
                 </div>
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🎂 تاريخ الميلاد</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedStudent.birth_date || '-'}</span>
+                <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>🎂 تاريخ الميلاد</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.birth_date || '-'}</span>
                 </div>
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>👤 النوع</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedStudent.gender || '-'}</span>
+                <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>👤 النوع</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.gender || '-'}</span>
                 </div>
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🗺️ المحافظة</span>
-                  <span style={{ color: 'var(--text)' }}>{selectedStudent.governorate || '-'}</span>
+                <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>🗺️ المحافظة</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.governorate || '-'}</span>
                 </div>
-                <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                  <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>📚 مسجل بجامعة</span>
-                  <span style={{ color: 'var(--text)' }}>{Number(selectedStudent.is_enrolled) ? 'نعم' : 'لا'}</span>
+                <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                  <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>📚 مسجل بجامعة</span>
+                  <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{Number(selectedStudent.is_enrolled) ? 'نعم' : 'لا'}</span>
                 </div>
                 {Number(selectedStudent.is_enrolled) && (
                   <>
-                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                      <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🏛️ اسم الجامعة</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedStudent.university_name || '-'}</span>
+                    <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                      <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>🏛️ اسم الجامعة</span>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.university_name || '-'}</span>
                     </div>
-                    <div className="p-2 rounded-lg" style={{ backgroundColor: 'var(--card)' }}>
-                      <span className="block text-xs mb-0.5" style={{ color: 'var(--text-muted)' }}>🔢 الكود الجامعى</span>
-                      <span style={{ color: 'var(--text)' }}>{selectedStudent.university_code || '-'}</span>
+                    <div className="p-2" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                      <span className="block text-xs mb-0.5" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>🔢 الكود الجامعى</span>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{selectedStudent.university_code || '-'}</span>
                     </div>
                   </>
                 )}
               </div>
             </div>
 
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
-              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>الطلبات ({selectedStudent.orders?.length || 0})</h4>
+            <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>الطلبات ({selectedStudent.orders?.length || 0})</h4>
               {selectedStudent.orders?.length === 0 ? (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>لا توجد طلبات</p>
+                <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>لا توجد طلبات</p>
               ) : (
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {selectedStudent.orders?.map((o: any) => (
-                    <div key={o.id} className="flex items-center justify-between p-2 rounded-lg text-xs" style={{ backgroundColor: 'var(--card)' }}>
-                      <span style={{ color: 'var(--text)' }}>{o.title_ar}</span>
+                    <div key={o.id} className="flex items-center justify-between p-2 text-sm" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', borderRadius: 'var(--md-sys-shape-corner-extra-small)' }}>
+                      <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{o.title_ar}</span>
                       <div className="flex items-center gap-2">
-                        <span style={{ color: 'var(--text-muted)' }}>{o.amount} ج.م</span>
+                        <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{o.amount} ج.م</span>
                         <StatusBadge status={o.status} />
                       </div>
                     </div>
@@ -254,14 +303,14 @@ export default function StudentsPage() {
               )}
             </div>
 
-            <div className="rounded-xl p-3" style={{ backgroundColor: 'var(--bg)' }}>
-              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--text)' }}>المجموعات ({selectedStudent.groups?.length || 0})</h4>
+            <div className="p-3" style={{ backgroundColor: 'var(--md-sys-color-surface-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
+              <h4 className="font-bold text-sm mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>المجموعات ({selectedStudent.groups?.length || 0})</h4>
               {selectedStudent.groups?.length === 0 ? (
-                <p className="text-xs" style={{ color: 'var(--text-muted)' }}>لا توجد مجموعات</p>
+                <p className="text-sm" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>لا توجد مجموعات</p>
               ) : (
                 <div className="flex flex-wrap gap-1">
                   {selectedStudent.groups?.map((g: any) => (
-                    <span key={g.id} className="px-2 py-1 rounded-lg text-xs" style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}>
+                    <span key={g.id} className="px-2.5 py-1 rounded-full text-xs" style={{ backgroundColor: 'var(--md-sys-color-surface-container-lowest)', color: 'var(--md-sys-color-on-surface)' }}>
                       {g.name} ({g.course_name})
                     </span>
                   ))}
@@ -269,9 +318,21 @@ export default function StudentsPage() {
               )}
             </div>
 
-            <div className="flex gap-2 pt-2 border-t" style={{ borderColor: 'var(--border)' }}>
-              <button onClick={() => { setDetailModal(false); startEdit(selectedStudent); }} className="flex-1 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: 'var(--primary)' }}>✏️ تعديل البيانات</button>
-              <button onClick={() => { setDetailModal(false); setConfirmDelete(selectedStudent); }} className="px-3 py-2.5 rounded-xl text-sm font-medium text-white" style={{ backgroundColor: '#dc2626' }}>🗑️ حذف</button>
+            <div className="flex flex-wrap gap-2 pt-3 border-t" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+              <button
+                onClick={() => { setDetailModal(false); startEdit(selectedStudent); }}
+                className="md3-btn md3-btn--filled flex-1 text-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden>edit</span>
+                تعديل البيانات
+              </button>
+              <button
+                onClick={() => { setDetailModal(false); setConfirmDelete(selectedStudent); }}
+                className="md3-btn md3-btn--danger text-sm"
+              >
+                <span className="material-symbols-outlined text-[18px]" aria-hidden>delete</span>
+                حذف
+              </button>
             </div>
           </div>
         )}
@@ -281,49 +342,49 @@ export default function StudentsPage() {
         <div className="space-y-3">
           <input placeholder="الاسم" value={editForm.name}
             onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="البريد الإلكتروني" type="email" value={editForm.email}
             onChange={e => setEditForm({ ...editForm, email: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="رقم الهاتف" value={editForm.phone}
             onChange={e => setEditForm({ ...editForm, phone: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="كلمة المرور (اترك فارغاً إن لم ترد التغيير)" type="password" value={editForm.password}
             onChange={e => setEditForm({ ...editForm, password: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>📋 بيانات إضافية</p>
+            className="md3-field" />
+          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+            <p className="text-sm font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>بيانات إضافية</p>
             <div className="grid grid-cols-2 gap-2">
               <input placeholder="الرقم القومى" value={editForm.nationalId} maxLength={14}
                 onChange={e => setEditForm({ ...editForm, nationalId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm font-mono" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field font-mono" />
               <input placeholder="تاريخ الميلاد" value={editForm.birthDate}
                 onChange={e => setEditForm({ ...editForm, birthDate: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="النوع" value={editForm.gender}
                 onChange={e => setEditForm({ ...editForm, gender: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="المحافظة" value={editForm.governorate}
                 onChange={e => setEditForm({ ...editForm, governorate: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <label className="flex items-center gap-2 mt-2 cursor-pointer">
               <input type="checkbox" checked={editForm.isEnrolled} onChange={e => setEditForm({ ...editForm, isEnrolled: e.target.checked })}
-                className="w-4 h-4 rounded" style={{ accentColor: 'var(--primary)' }} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>مسجل بجامعة أو معهد</span>
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--md-sys-color-primary)' }} />
+              <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>مسجل بجامعة أو معهد</span>
             </label>
             {editForm.isEnrolled && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <input placeholder="اسم الجامعة" value={editForm.universityName}
                   onChange={e => setEditForm({ ...editForm, universityName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
                 <input placeholder="الكود الجامعى" value={editForm.universityCode}
                   onChange={e => setEditForm({ ...editForm, universityCode: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
             )}
           </div>
-          <button onClick={saveEdit} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+          <button onClick={saveEdit} className="md3-btn md3-btn--filled w-full font-medium">حفظ التعديلات</button>
         </div>
       </Modal>
 
@@ -331,49 +392,49 @@ export default function StudentsPage() {
         <div className="space-y-3">
           <input placeholder="الاسم" value={addForm.name}
             onChange={e => setAddForm({ ...addForm, name: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="البريد الإلكتروني" type="email" value={addForm.email}
             onChange={e => setAddForm({ ...addForm, email: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="كلمة المرور" type="password" value={addForm.password}
             onChange={e => setAddForm({ ...addForm, password: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+            className="md3-field" />
           <input placeholder="رقم الهاتف" value={addForm.phone}
             onChange={e => setAddForm({ ...addForm, phone: e.target.value })}
-            className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--border)' }}>
-            <p className="text-xs font-bold mb-2" style={{ color: 'var(--text-muted)' }}>📋 بيانات إضافية (اختياري)</p>
+            className="md3-field" />
+          <div className="border-t pt-3 mt-1" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
+            <p className="text-sm font-bold mb-2" style={{ color: 'var(--md-sys-color-on-surface)' }}>بيانات إضافية (اختياري)</p>
             <div className="grid grid-cols-2 gap-2">
               <input placeholder="الرقم القومى" value={addForm.nationalId} maxLength={14}
                 onChange={e => setAddForm({ ...addForm, nationalId: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm font-mono" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field font-mono" />
               <input placeholder="تاريخ الميلاد" value={addForm.birthDate}
                 onChange={e => setAddForm({ ...addForm, birthDate: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="النوع" value={addForm.gender}
                 onChange={e => setAddForm({ ...addForm, gender: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="المحافظة" value={addForm.governorate}
                 onChange={e => setAddForm({ ...addForm, governorate: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <label className="flex items-center gap-2 mt-2 cursor-pointer">
               <input type="checkbox" checked={addForm.isEnrolled} onChange={e => setAddForm({ ...addForm, isEnrolled: e.target.checked })}
-                className="w-4 h-4 rounded" style={{ accentColor: 'var(--primary)' }} />
-              <span className="text-xs" style={{ color: 'var(--text-muted)' }}>مسجل بجامعة أو معهد</span>
+                className="w-4 h-4 rounded" style={{ accentColor: 'var(--md-sys-color-primary)' }} />
+              <span className="text-sm" style={{ color: 'var(--md-sys-color-on-surface)' }}>مسجل بجامعة أو معهد</span>
             </label>
             {addForm.isEnrolled && (
               <div className="grid grid-cols-2 gap-2 mt-2">
                 <input placeholder="اسم الجامعة" value={addForm.universityName}
                   onChange={e => setAddForm({ ...addForm, universityName: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
                 <input placeholder="الكود الجامعى" value={addForm.universityCode}
                   onChange={e => setAddForm({ ...addForm, universityCode: e.target.value })}
-                  className="w-full px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
             )}
           </div>
-          <button onClick={addStudent} className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">إضافة</button>
+          <button onClick={addStudent} className="md3-btn md3-btn--filled w-full font-medium">إضافة</button>
         </div>
       </Modal>
 

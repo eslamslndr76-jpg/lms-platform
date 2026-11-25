@@ -192,7 +192,7 @@ router.get('/:id/report', authMiddleware, requireRole(ADMIN, EMPLOYEE), async (r
 });
 
 // POST /api/groups/:id/report/word — Word report; optional photos (max 8) are used in memory only
-router.post('/:id/report/word', (req: Request, res: Response) => {
+router.post('/:id/report/word', requireRole(ADMIN, EMPLOYEE), (req: Request, res: Response) => {
   reportUpload.array('images', 8)(req, res, async (uploadError: any) => {
     if (uploadError) {
       return res.status(400).json({ error: uploadError?.message || 'فشل رفع الصور' });

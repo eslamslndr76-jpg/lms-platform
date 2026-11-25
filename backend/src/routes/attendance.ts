@@ -12,6 +12,26 @@ const router = Router();
 
 const CODE_TTL = 15;
 
+// ── "Session is open" — ONE definition used everywhere ──────────
+// attendance_active = 1 AND the expiry time hasn't passed. SQLite's datetime()
+// normalizes both stored formats ('YYYY-MM-DD HH:MM:SS' from datetime('now')
+// and ISO '...Z' from older toISOString writes) into comparable UTC strings,
+// so the comparison is never a raw string diff.
+const ATTENDANCE_OPEN_SQL =
+  "attendance_active = 1 AND datetime(attendance_expires_at) > datetime('now')";
+
+/** Lazy cleanup: flip expired sessions off whenever they are read. */
+async function closeExpiredSessions(): Promise<void> {
+  try {
+    await sql(
+      `UPDATE lectures SET attendance_active = 0
+       WHERE attendance_active = 1 AND datetime(attendance_expires_at) <= datetime('now')`,
+    );
+  } catch (err: any) {
+    console.error('[Attendance] lazy close of expired sessions failed:', err?.message || err);
+  }
+}
+
 function generateCode(lectureId: number, seed: string, timestamp: number): string {
   const period = Math.floor(timestamp / CODE_TTL);
   const hash = createHash('sha256').update(`${lectureId}:${seed}:${period}`).digest('hex');
@@ -38,13 +58,14 @@ router.post('/:lectureId/start', authMiddleware, requireRole(ADMIN, EMPLOYEE), r
     }
 
     const seed = randomBytes(16).toString('hex');
-    const now = new Date();
-    const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000);
 
+    // Single date format at write time (SQLite UTC), so the open/expired check
+    // in /current, /mark and /poll compares like with like.
     await sql(
-      `UPDATE lectures SET attendance_active=1, attendance_seed=?, attendance_started_at=datetime('now'), attendance_expires_at=? WHERE id=?`,
-      seed, expiresAt.toISOString(), lectureId,
+      `UPDATE lectures SET attendance_active=1, attendance_seed=?, attendance_started_at=datetime('now'), attendance_expires_at=datetime('now', '+2 hours') WHERE id=?`,
+      seed, lectureId,
     );
+    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000);
 
     // Notify all students in the group
 const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
@@ -91,15 +112,28 @@ const topicText = lecRow.topic ? ` (${lecRow.topic})` : '';
 });
 
 // GET /api/attendance/:lectureId/current - Get current code + QR data
-router.get('/:lectureId/current', authMiddleware, async (req: Request, res: Response) => {
+// Staff-only: this endpoint hands out the live QR code, so students never
+// fetch it (they scan the code the admin projects).
+router.get('/:lectureId/current', authMiddleware, requireRole(ADMIN, EMPLOYEE), requirePermission('groups', 'read'), async (req: Request, res: Response) => {
   try {
     const lectureId = Number(req.params.lectureId);
-    const result = await sql('SELECT attendance_active, attendance_seed, attendance_expires_at FROM lectures WHERE id=?', lectureId);
+    const result = await sql(
+      `SELECT attendance_active, attendance_seed,
+              CASE WHEN ${ATTENDANCE_OPEN_SQL} THEN 1 ELSE 0 END AS is_open
+       FROM lectures WHERE id=?`,
+      lectureId,
+    );
     if (result.rows.length === 0) return res.status(404).json({ error: 'المحاضرة غير موجودة' });
 
     const row = result.rows[0] as any;
-    if (!row.attendance_active || Number(row.attendance_active) === 0) {
-      return res.status(400).json({ error: 'تسجيل الحضور غير نشط', code: '', qrData: '', expiresIn: 0 });
+    if (!Number(row.attendance_active) || !Number(row.is_open)) {
+      // Expired sessions are closed lazily here, so admin views reflect reality.
+      await closeExpiredSessions();
+      const expired = Number(row.attendance_active) === 1;
+      return res.status(400).json({
+        error: expired ? 'انتهى وقت تسجيل الحضور' : 'تسجيل الحضور غير نشط',
+        code: '', qrData: '', expiresIn: 0, expired,
+      });
     }
 
     const seed = row.attendance_seed as string;
@@ -137,7 +171,9 @@ router.post('/mark', authMiddleware, requireRole(STUDENT), async (req: Request, 
     }
 
     const lecture = await sql(
-      'SELECT l.*, g.course_id FROM lectures l JOIN groups g ON l.group_id=g.id WHERE l.id=?',
+      `SELECT l.*, g.course_id,
+              CASE WHEN ${ATTENDANCE_OPEN_SQL.replace(/attendance_active/g, 'l.attendance_active').replace(/attendance_expires_at/g, 'l.attendance_expires_at')} THEN 1 ELSE 0 END AS attendance_is_open
+       FROM lectures l JOIN groups g ON l.group_id=g.id WHERE l.id=?`,
       lectureId,
     );
     if (lecture.rows.length === 0) {
@@ -150,6 +186,10 @@ router.post('/mark', authMiddleware, requireRole(STUDENT), async (req: Request, 
 
     if (!isActive || !seed) {
       return res.status(400).json({ success: false, error: 'تسجيل الحضور غير متاح حالياً' });
+    }
+    if (!Number(row.attendance_is_open)) {
+      await closeExpiredSessions();
+      return res.status(400).json({ success: false, error: 'انتهى وقت تسجيل الحضور' });
     }
 
     // Check student is in the group
@@ -219,12 +259,14 @@ router.get('/poll', authMiddleware, requireRole(STUDENT), async (req: Request, r
   try {
     const userId = req.user!.userId;
 
+    // Expired sessions read as closed (and get flipped off lazily).
+    await closeExpiredSessions();
     const result = await sql(
       `SELECT l.id as lectureId, l.topic, l.group_id as groupId, g.name as groupName
        FROM lectures l
        JOIN groups g ON l.group_id=g.id
        JOIN group_students gs ON gs.group_id=g.id AND gs.user_id=?
-       WHERE l.attendance_active=1
+       WHERE ${ATTENDANCE_OPEN_SQL.replace(/attendance_active/g, 'l.attendance_active').replace(/attendance_expires_at/g, 'l.attendance_expires_at')}
        AND l.id NOT IN (
          SELECT lecture_id FROM lecture_attendance WHERE user_id=? AND attended=1
        )`,

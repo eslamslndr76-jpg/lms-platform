@@ -407,19 +407,23 @@ export async function sendOTP(identifier: string, purpose: string = 'verificatio
     identifier,
   );
   if (recentOtp.rows.length > 0) {
-    const last = new Date((recentOtp.rows[0] as any).created_at).getTime();
-    if (Date.now() - last < 60000) {
+    // SQLite CURRENT_TIMESTAMP is UTC but has no zone marker — parsing it raw
+    // makes Node read it as local time and the per-minute limit never fires.
+    const raw = String((recentOtp.rows[0] as any).created_at).trim();
+    const normalized = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(raw) ? `${raw.replace(' ', 'T')}Z` : raw;
+    const last = new Date(normalized).getTime();
+    if (!Number.isNaN(last) && Date.now() - last < 60000) {
       return { success: false, error: 'تم إرسال رمز مؤخراً. انتظر دقيقة ثم حاول مرة أخرى.' };
     }
   }
 
   const otp = generateOtp();
-  const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000).toISOString();
 
-  // Store OTP
+  // Store OTP — expiry written in the same SQLite format verifyOTP compares
+  // against (datetime('now')), never a mixed ISO string.
   await sql(
-    'INSERT INTO otp_codes (identifier, code, purpose, expires_at) VALUES (?,?,?,?)',
-    identifier, otp, purpose, expiresAt,
+    "INSERT INTO otp_codes (identifier, code, purpose, expires_at) VALUES (?,?,?,datetime('now', ?))",
+    identifier, otp, purpose, `+${OTP_TTL_MINUTES} minutes`,
   );
 
   // Send via all available channels

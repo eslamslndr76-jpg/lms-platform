@@ -6,8 +6,26 @@ import Modal from '../../components/Modal';
 import ErrorBoundary from '../../components/ErrorBoundary';
 import { compressAndEncode } from '../../lib/imageUtils';
 
+type SettingsTab = 'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey' | 'announcement' | 'reports' | 'payments' | 'appversion';
+
+// Material 3 section navigation: tab strip on desktop, dropdown on mobile.
+const TABS: { key: SettingsTab; label: string; icon: string }[] = [
+  { key: 'branding', label: 'العلامة التجارية', icon: 'palette' },
+  { key: 'payments', label: 'طرق الدفع', icon: 'credit_card' },
+  { key: 'categories', label: 'التصنيفات', icon: 'category' },
+  { key: 'places', label: 'الأماكن', icon: 'location_on' },
+  { key: 'ai', label: 'الذكاء الاصطناعي', icon: 'smart_toy' },
+  { key: 'autogroup', label: 'التجميع التلقائي', icon: 'groups' },
+  { key: 'notification', label: 'الإشعارات', icon: 'notifications' },
+  { key: 'certificates', label: 'الشهادات', icon: 'workspace_premium' },
+  { key: 'survey', label: 'الاستبيان', icon: 'star' },
+  { key: 'announcement', label: 'الإعلانات', icon: 'campaign' },
+  { key: 'reports', label: 'التقارير', icon: 'description' },
+  { key: 'appversion', label: 'إصدار التطبيق', icon: 'phone_android' },
+];
+
 export default function SettingsPage() {
-  const [tab, setTab] = useState<'branding' | 'categories' | 'places' | 'ai' | 'autogroup' | 'notification' | 'certificates' | 'survey' | 'announcement' | 'reports' | 'payments' | 'appversion'>('branding');
+  const [tab, setTab] = useState<SettingsTab>('branding');
   const [branding, setBranding] = useState({
     systemName: '', sloganAr: '', sloganEn: '', primaryColor: '#2563eb',
     secondaryColor: '#059669', logoHeader: '', logoFooter: '', favicon: '', messageFooter: '',
@@ -101,8 +119,8 @@ export default function SettingsPage() {
 
   // Mobile app version + update broadcast
   const [versionForm, setVersionForm] = useState({
-    latestVersion: '1.0.2',
-    buildNumber: 3,
+    latestVersion: '1.0.8',
+    buildNumber: 9,
     forceUpdate: false,
     title: 'تحديث جديد متوفر',
     message: 'يتوفر إصدار جديد من تطبيق الهاتف، اضغط للتحديث الآن.',
@@ -865,58 +883,84 @@ export default function SettingsPage() {
     setTimeout(() => setMsg(''), 3000);
   };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} /></div>;
-  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p style={{ color: '#dc2626' }}>{error}</p><button onClick={retry} className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">إعادة المحاولة</button></div>;
+  if (loading) return <div className="flex items-center justify-center h-64" role="status" aria-label="جاري التحميل"><div className="animate-spin h-8 w-8 border-4 rounded-full" style={{ borderColor: 'var(--md-sys-color-primary)', borderTopColor: 'transparent' }} /></div>;
+  if (error) return <div className="flex flex-col items-center justify-center h-64 gap-4"><p className="msg-err px-4 py-3 rounded-md3-sm text-sm">{error}</p><button onClick={retry} className="md3-btn md3-btn--filled">إعادة المحاولة</button></div>;
 
   return <ErrorBoundary>
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold" style={{ color: 'var(--text)' }}>الإعدادات</h1>
+      <div>
+        <h1 className="text-2xl font-bold text-on-surface">الإعدادات</h1>
+        <p className="text-sm mt-1 text-on-surface-variant">كل إعدادات المنصة في مكان واحد: الهوية، الدفع، الشهادات، الإشعارات، الاستبيان والتقارير.</p>
+      </div>
 
-      {msg && <div className="px-4 py-3 rounded-xl text-sm animate-slide-up bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400">{msg}</div>}
+      {msg && <div className="px-4 py-3 rounded-md3-md text-sm animate-slide-up msg-ok">{msg}</div>}
 
-      <div className="flex gap-2 overflow-x-auto">
-        {(['branding', 'payments', 'categories', 'places', 'ai', 'autogroup', 'notification', 'certificates', 'survey', 'announcement', 'reports', 'appversion'] as const).map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className={`px-5 py-2.5 rounded-xl text-sm whitespace-nowrap ${tab === t ? 'bg-[var(--primary)] text-white' : 'border'}`}
-            style={tab === t ? {} : { backgroundColor: 'var(--card)', color: 'var(--text-muted)', borderColor: 'var(--border)' }}>
-            {t === 'branding' ? 'العلامة التجارية' : t === 'payments' ? '💳 طرق الدفع' : t === 'categories' ? 'التصنيفات' : t === 'places' ? '📍 الأماكن' : t === 'ai' ? 'الذكاء الاصطناعي' : t === 'autogroup' ? 'التجميع التلقائي' : t === 'notification' ? '🔔 الإشعارات' : t === 'certificates' ? '🎓 الشهادات' : t === 'survey' ? '⭐ الاستبيان' : t === 'announcement' ? '📣 الإعلانات' : t === 'reports' ? '📄 التقارير' : '📱 إصدار التطبيق'}
-          </button>
-        ))}
+      <div className="hidden lg:block">
+        <div className="md3-tabs" role="tablist" aria-label="أقسام الإعدادات">
+          {TABS.map(t => (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              aria-selected={tab === t.key}
+              onClick={() => setTab(t.key)}
+              className={`md3-tab ${tab === t.key ? 'md3-tab--active' : ''}`}
+            >
+              <span className="material-symbols-outlined text-[18px]" aria-hidden>{t.icon}</span>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="lg:hidden">
+        <label htmlFor="settings-section" className="block text-sm font-medium mb-1 text-on-surface-variant">القسم</label>
+        <select
+          id="settings-section"
+          value={tab}
+          onChange={e => setTab(e.target.value as SettingsTab)}
+          className="md3-field"
+        >
+          {TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+        </select>
       </div>
 
       {/* Branding */}
       {tab === 'branding' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-on-surface">🎨 العلامة التجارية</h2>
+            <p className="text-sm mt-1 text-on-surface-variant">اسم النظام والشعارات والألوان التي تظهر في المنصة والرسائل والتطبيق.</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم النظام</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">اسم النظام</label>
               <input value={branding.systemName}
                 onChange={e => setBranding({ ...branding, systemName: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>شعار (عربي)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">شعار (عربي)</label>
               <input value={branding.sloganAr}
                 onChange={e => setBranding({ ...branding, sloganAr: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>Slogan (EN)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">Slogan (EN)</label>
               <input value={branding.sloganEn}
                 onChange={e => setBranding({ ...branding, sloganEn: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اللون الأساسي</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">اللون الأساسي</label>
               <input type="color" value={branding.primaryColor}
                 onChange={e => setBranding({ ...branding, primaryColor: e.target.value })}
-                className="w-full h-10 rounded-xl border cursor-pointer" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }} />
+                className="md3-field h-10 p-1 cursor-pointer" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اللون الثانوي</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">اللون الثانوي</label>
               <input type="color" value={branding.secondaryColor}
                 onChange={e => setBranding({ ...branding, secondaryColor: e.target.value })}
-                className="w-full h-10 rounded-xl border cursor-pointer" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)' }} />
+                className="md3-field h-10 p-1 cursor-pointer" />
             </div>
             <ImageUploadField label="شعار Header" value={branding.logoHeader}
               onChange={v => setBranding(prev => ({ ...prev, logoHeader: v }))} />
@@ -926,20 +970,20 @@ export default function SettingsPage() {
               onChange={v => setBranding(prev => ({ ...prev, favicon: v }))} />
           </div>
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص التذييل التلقائي (للرسائل)</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">نص التذييل التلقائي (للرسائل)</label>
             <textarea value={branding.messageFooter}
               onChange={e => setBranding({ ...branding, messageFooter: e.target.value })}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm h-20" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field" />
           </div>
           <button onClick={saveBranding} disabled={saving}
-            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            className="md3-btn md3-btn--filled">
             {saving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
           </button>
 
-          <div className="mt-6 p-4 border rounded-2xl">
+          <div className="mt-6 p-4 rounded-md3-md border border-outline-variant">
             <h3 className="font-bold text-sm mb-3">معاينة حية</h3>
             <div className="space-y-2">
-              <div className="flex items-center gap-3 p-3 rounded-xl" style={{ backgroundColor: branding.primaryColor }}>
+              <div className="flex items-center gap-3 p-3 rounded-md3-md" style={{ backgroundColor: branding.primaryColor }}>
                 {branding.logoHeader && <img src={branding.logoHeader} className="h-8 w-8 rounded-lg object-cover" alt="" />}
                 <span className="text-white font-bold">{branding.systemName || 'اسم النظام'}</span>
               </div>
@@ -951,25 +995,25 @@ export default function SettingsPage() {
 
       {/* Categories */}
       {tab === 'categories' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-bold" style={{ color: 'var(--text)' }}>التصنيفات</h2>
+            <h2 className="text-base font-semibold text-on-surface">التصنيفات</h2>
             <button onClick={() => setCatModal(true)}
-              className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة</button>
+              className="md3-btn md3-btn--filled">+ إضافة</button>
           </div>
           <div className="space-y-2">
-            {categories.length === 0 && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد تصنيفات</p>}
+            {categories.length === 0 && <p className="text-sm text-on-surface-variant">لا توجد تصنيفات</p>}
             {categories.map((c: any) => (
-              <div key={c.id} className="flex items-center justify-between p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+              <div key={c.id} className="flex items-center justify-between p-3 rounded-md3-md bg-surface-container-low">
                 <div>
-                  <span className="font-medium" style={{ color: 'var(--text)' }}>{c.name_ar}</span>
-                  <span className="text-sm mr-2" style={{ color: 'var(--text-muted)' }}>{c.name_en}</span>
+                  <span className="font-medium text-on-surface">{c.name_ar}</span>
+                  <span className="text-sm mr-2 text-on-surface-variant">{c.name_en}</span>
                 </div>
                 <div className="flex gap-2">
                   <button onClick={() => startEditCategory(c)}
-                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600">تعديل</button>
+                    className="md3-btn md3-btn--text text-xs">تعديل</button>
                   <button onClick={() => deleteCategory(c.id)}
-                    className="text-red-500 text-xs">حذف</button>
+                    className="md3-btn md3-btn--text text-error">حذف</button>
                 </div>
               </div>
             ))}
@@ -979,12 +1023,12 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <input placeholder="الاسم (عربي)" value={catForm.name_ar}
                 onChange={e => setCatForm({ ...catForm, name_ar: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="English name" value={catForm.name_en}
                 onChange={e => setCatForm({ ...catForm, name_en: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <button onClick={saveCategory}
-                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ</button>
+                className="w-full md3-btn md3-btn--filled">حفظ</button>
             </div>
           </Modal>
 
@@ -992,12 +1036,12 @@ export default function SettingsPage() {
             <div className="space-y-3">
               <input placeholder="الاسم (عربي)" value={editCatForm.name_ar}
                 onChange={e => setEditCatForm({ ...editCatForm, name_ar: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <input placeholder="English name" value={editCatForm.name_en}
                 onChange={e => setEditCatForm({ ...editCatForm, name_en: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
               <button onClick={saveEditCategory}
-                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium">حفظ التعديلات</button>
+                className="w-full md3-btn md3-btn--filled">حفظ التعديلات</button>
             </div>
           </Modal>
         </div>
@@ -1005,22 +1049,22 @@ export default function SettingsPage() {
 
       {/* Payment methods */}
       {tab === 'payments' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
-          <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
+          <div className="p-3 rounded-md3-md bg-surface-container-low">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
-                <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>⏳ مدة الحجز قبل الدفع</p>
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                <p className="font-medium text-sm text-on-surface">⏳ مدة الحجز قبل الدفع</p>
+                <p className="text-xs mt-1 text-on-surface-variant">
                   الحجز غير المدفوع (بانتظار الدفع) يُلغى تلقائياً بعد هذه المدة، ويصبح بإمكان الطالب الحجز من جديد. الطلبات قيد المراجعة لا تُلغى تلقائياً.
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <input type="number" min={1} max={720} value={bookingHours}
                   onChange={e => setBookingHours(Number(e.target.value))}
-                  className="w-24 px-3 py-2 rounded-xl border text-sm" style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                <span className="text-xs" style={{ color: 'var(--text-muted)' }}>ساعة</span>
+                  className="md3-field !w-24 text-center tabular-nums" />
+                <span className="text-xs text-on-surface-variant">ساعة</span>
                 <button onClick={saveBookingWindow} disabled={bookingSaving}
-                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm disabled:opacity-50">
+                  className="md3-btn md3-btn--filled">
                   {bookingSaving ? 'جارٍ الحفظ...' : 'حفظ'}
                 </button>
               </div>
@@ -1028,43 +1072,42 @@ export default function SettingsPage() {
           </div>
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>💳 طرق الدفع</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-base font-semibold text-on-surface">💳 طرق الدفع</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">
                 الطرق التي يراها الطالب عند الدفع مع رقم التحويل والتعليمات. الطريقة الرقمية بلا رقم لا تظهر للطلاب.
               </p>
             </div>
             <div className="flex gap-2">
               <button onClick={loadPaymentMethods} disabled={paymentsLoading}
-                className="px-4 py-2 rounded-xl text-sm border disabled:opacity-50"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                className="md3-btn md3-btn--outlined">
                 {paymentsLoading ? 'جاري التحديث...' : '🔄 تحديث'}
               </button>
               <button onClick={openAddPayment}
-                className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة طريقة</button>
+                className="md3-btn md3-btn--filled">+ إضافة طريقة</button>
             </div>
           </div>
 
           {paymentMethods.length === 0 && !paymentsLoading && (
-            <div className="text-center py-10 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <div className="text-center py-10 rounded-md3-md bg-surface-container-low">
               <p className="text-3xl mb-2">💳</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد طرق دفع بعد. أضف أول طريقة ليستخدمها الطلاب.</p>
+              <p className="text-sm text-on-surface-variant">لا توجد طرق دفع بعد. أضف أول طريقة ليستخدمها الطلاب.</p>
             </div>
           )}
 
           <div className="space-y-2">
             {paymentMethods.map((method: any, index: number) => (
-              <div key={method.id} className="p-3 rounded-xl space-y-2" style={{ backgroundColor: 'var(--bg)' }}>
+              <div key={method.id} className="p-3 rounded-md3-md space-y-2 bg-surface-container-low">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-3 min-w-0">
                     <span className="text-xl">{method.kind === 'cash' ? '🏦' : '💳'}</span>
                     <div className="min-w-0">
-                      <p className="font-medium truncate" style={{ color: 'var(--text)' }}>
+                      <p className="font-medium truncate text-on-surface">
                         {method.label}
-                        <span className="text-[11px] mx-2 px-2 py-0.5 rounded-lg" style={{ backgroundColor: 'var(--card)', color: 'var(--text-muted)' }}>
+                        <span className="text-xs mx-2 px-2 py-0.5 rounded-lg bg-surface-container-highest text-on-surface-variant">
                           {method.kind === 'cash' ? 'كاش' : 'تحويل'} · {method.key}
                         </span>
                       </p>
-                      <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                      <p className="text-xs mt-0.5 text-on-surface-variant">
                         {method.account_number
                           ? `رقم التحويل: ${method.account_number}${method.account_name ? ` — ${method.account_name}` : ''}`
                           : method.kind === 'cash'
@@ -1075,110 +1118,107 @@ export default function SettingsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className={`text-[11px] px-2 py-1 rounded-lg ${method.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+                    <span className={`text-xs px-2 py-1 rounded-lg ${method.is_active ? 'bg-success-container text-on-success-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
                       {method.is_active ? 'مفعّلة' : 'معطّلة'}
                     </span>
                     <button onClick={() => movePayment(index, -1)} disabled={index === 0}
-                      className="text-xs px-2 py-1 rounded-lg border disabled:opacity-30"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }} title="تحريك لأعلى">▲</button>
+                      className="md3-btn md3-btn--icon text-xs" title="تحريك لأعلى">▲</button>
                     <button onClick={() => movePayment(index, 1)} disabled={index === paymentMethods.length - 1}
-                      className="text-xs px-2 py-1 rounded-lg border disabled:opacity-30"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text)' }} title="تحريك لأسفل">▼</button>
+                      className="md3-btn md3-btn--icon text-xs" title="تحريك لأسفل">▼</button>
                     <button onClick={() => startEditPayment(method)}
-                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">تعديل</button>
+                      className="md3-btn md3-btn--text text-xs">تعديل</button>
                     <button onClick={() => togglePaymentActive(method)}
-                      className="text-xs px-2 py-1 rounded-lg border"
-                      style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                      className="md3-btn md3-btn--outlined text-xs">
                       {method.is_active ? 'تعطيل' : 'تفعيل'}
                     </button>
-                    <button onClick={() => deletePayment(method)} className="text-red-500 text-xs px-1">حذف</button>
+                    <button onClick={() => deletePayment(method)} className="md3-btn md3-btn--text text-error">حذف</button>
                   </div>
                 </div>
                 {method.account_number && (
                   <div className="flex items-center gap-2">
-                    <code dir="ltr" className="text-xs px-2 py-1 rounded-lg" style={{ backgroundColor: 'var(--card)', color: 'var(--text)' }}>
+                    <code dir="ltr" className="text-xs px-2 py-1 rounded-md3-sm bg-surface-container-highest text-on-surface tabular-nums">
                       {method.account_number}
                     </code>
                     <button onClick={() => copyAccountNumber(method.account_number)}
-                      className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">نسخ</button>
+                      className="md3-btn md3-btn--text text-xs">نسخ</button>
                   </div>
                 )}
                 {method.instructions && (
-                  <p className="text-xs whitespace-pre-line" style={{ color: 'var(--text-muted)' }}>{method.instructions}</p>
+                  <p className="text-xs whitespace-pre-line text-on-surface-variant">{method.instructions}</p>
                 )}
               </div>
             ))}
           </div>
 
-          <p className="text-xs p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <p className="text-xs p-3 rounded-md3-md bg-surface-container-low text-on-surface-variant">
             ℹ️ الطريقة المستخدمة في طلبات سابقة لا تُحذف نهائياً — تُعطَّل فقط ويبقى سجل الطلبات سليماً.
           </p>
 
           <Modal open={paymentModal} onClose={() => { setPaymentModal(false); setPaymentId(null); }} title={paymentId ? 'تعديل طريقة الدفع' : 'إضافة طريقة دفع'}>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الاسم المعروض *</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">الاسم المعروض *</label>
                 <input placeholder="مثال: محفظة إلكترونية" value={paymentForm.label}
                   onChange={e => setPaymentForm({ ...paymentForm, label: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>المفتاح (إنجليزي) *</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">المفتاح (إنجليزي) *</label>
                 <input dir="ltr" placeholder="wallet" value={paymentForm.key}
                   onChange={e => setPaymentForm({ ...paymentForm, key: e.target.value.toLowerCase() })}
                   disabled={paymentId !== null && Number(paymentMethods.find((m: any) => m.id === paymentId)?.orders_count) > 0}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm disabled:opacity-60" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  className="md3-field" />
+                <p className="text-xs mt-1 text-on-surface-variant">
                   يُخزَّن في الطلبات، ولا يُغيَّر بعد استخدامه في أي طلب.
                 </p>
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>النوع</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">النوع</label>
                 <select value={paymentForm.kind} onChange={e => setPaymentForm({ ...paymentForm, kind: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                  className="md3-field">
                   <option value="digital">تحويل رقمي (يحتاج إيصال)</option>
                   <option value="cash">كاش في الخزنة</option>
                 </select>
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم التحويل / الحساب</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">رقم التحويل / الحساب</label>
                 <input dir="ltr" placeholder="010xxxxxxxx" value={paymentForm.account_number}
                   onChange={e => setPaymentForm({ ...paymentForm, account_number: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  className="md3-field" />
+                <p className="text-xs mt-1 text-on-surface-variant">
                   الطريقة الرقمية بلا رقم لا تظهر للطلاب حتى تضيفه.
                 </p>
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم الحساب (اختياري)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">اسم الحساب (اختياري)</label>
                 <input placeholder="مثال: وحدة التدريب والتطوير" value={paymentForm.account_name}
                   onChange={e => setPaymentForm({ ...paymentForm, account_name: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>تعليمات تظهر للطالب</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">تعليمات تظهر للطالب</label>
                 <textarea placeholder="حوّل المبلغ ثم ارفع صورة الإيصال..." value={paymentForm.instructions}
                   onChange={e => setPaymentForm({ ...paymentForm, instructions: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm h-20" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الترتيب</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">الترتيب</label>
                   <input type="number" min="0" value={paymentForm.sort_order}
                     onChange={e => setPaymentForm({ ...paymentForm, sort_order: Number(e.target.value) })}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                    className="md3-field" />
                 </div>
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحالة</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">الحالة</label>
                   <select value={paymentForm.is_active} onChange={e => setPaymentForm({ ...paymentForm, is_active: Number(e.target.value) })}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                    className="md3-field">
                     <option value={1}>مفعّلة</option>
                     <option value={0}>معطّلة</option>
                   </select>
                 </div>
               </div>
               <button onClick={savePayment} disabled={paymentSaving}
-                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium disabled:opacity-50">
+                className="w-full md3-btn md3-btn--filled">
                 {paymentSaving ? 'جاري الحفظ...' : 'حفظ'}
               </button>
             </div>
@@ -1188,81 +1228,79 @@ export default function SettingsPage() {
 
       {/* Places (rooms) */}
       {tab === 'places' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📍 الأماكن (القاعات)</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>أضف أماكن التدريب وحدد سعتها. تُستخدم الأماكن في المجموعات الأوفلاين فقط، والسعة حد أقصى صارم للتسكين.</p>
+              <h2 className="text-base font-semibold text-on-surface">📍 الأماكن (القاعات)</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">أضف أماكن التدريب وحدد سعتها. تُستخدم الأماكن في المجموعات الأوفلاين فقط، والسعة حد أقصى صارم للتسكين.</p>
             </div>
             <div className="flex gap-2">
               <button onClick={loadPlaces} disabled={placesLoading}
-                className="px-4 py-2 rounded-xl text-sm border disabled:opacity-50"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                className="md3-btn md3-btn--outlined">
                 {placesLoading ? 'جاري التحديث...' : '🔄 تحديث'}
               </button>
               <button onClick={openAddPlace}
-                className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm">+ إضافة مكان</button>
+                className="md3-btn md3-btn--filled">+ إضافة مكان</button>
             </div>
           </div>
 
           {places.length === 0 && !placesLoading && (
-            <div className="text-center py-10 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+            <div className="text-center py-10 rounded-md3-md bg-surface-container-low">
               <p className="text-3xl mb-2">🏫</p>
-              <p className="text-sm" style={{ color: 'var(--text-muted)' }}>لا توجد أماكن بعد. أضف أول مكان لتبدأ ربط المجموعات الأوفلاين به.</p>
+              <p className="text-sm text-on-surface-variant">لا توجد أماكن بعد. أضف أول مكان لتبدأ ربط المجموعات الأوفلاين به.</p>
             </div>
           )}
 
           <div className="space-y-2">
             {places.map((place: any) => (
-              <div key={place.id} className="flex items-center justify-between gap-3 p-3 rounded-xl flex-wrap" style={{ backgroundColor: 'var(--bg)' }}>
+              <div key={place.id} className="flex items-center justify-between gap-3 p-3 rounded-md3-md flex-wrap bg-surface-container-low">
                 <div className="flex items-center gap-3 min-w-0">
                   <span className="text-xl">📍</span>
                   <div className="min-w-0">
-                    <p className="font-medium truncate" style={{ color: 'var(--text)' }}>{place.name}</p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>
+                    <p className="font-medium truncate text-on-surface">{place.name}</p>
+                    <p className="text-xs mt-0.5 text-on-surface-variant">
                       السعة: {place.capacity} طالب
                       {place.groups_count > 0 ? ` • مستخدم في ${place.groups_count} مجموعة` : ' • غير مستخدم'}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-[11px] px-2 py-1 rounded-lg ${place.is_active ? 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'}`}>
+                  <span className={`text-xs px-2 py-1 rounded-lg ${place.is_active ? 'bg-success-container text-on-success-container' : 'bg-surface-container-highest text-on-surface-variant'}`}>
                     {place.is_active ? 'مفعّل' : 'معطّل'}
                   </span>
                   <button onClick={() => startEditPlace(place)}
-                    className="text-xs px-2 py-1 rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-300">تعديل</button>
+                    className="md3-btn md3-btn--text text-xs">تعديل</button>
                   <button onClick={() => togglePlaceActive(place)}
-                    className="text-xs px-2 py-1 rounded-lg border"
-                    style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                    className="md3-btn md3-btn--outlined text-xs">
                     {place.is_active ? 'تعطيل' : 'تفعيل'}
                   </button>
                   <button onClick={() => deletePlace(place)}
-                    className="text-red-500 text-xs px-1">حذف</button>
+                    className="md3-btn md3-btn--text text-error">حذف</button>
                 </div>
               </div>
             ))}
           </div>
 
-          <p className="text-xs p-3 rounded-xl" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <p className="text-xs p-3 rounded-md3-md bg-surface-container-low text-on-surface-variant">
             ℹ️ المكان المستخدم في مجموعات سابقة لا يُحذف نهائياً — يُعطَّل فقط ليختفي من قائمة المجموعات الجديدة ويبقى في المجموعات القديمة.
           </p>
 
           <Modal open={placeModal} onClose={() => { setPlaceModal(false); setPlaceId(null); }} title={placeId ? 'تعديل المكان' : 'إضافة مكان جديد'}>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم المكان</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">اسم المكان</label>
                 <input placeholder="مثال: قاعة التدريب الكبرى" value={placeForm.name}
                   onChange={e => setPlaceForm({ ...placeForm, name: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للعدد (السعة)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">الحد الأقصى للعدد (السعة)</label>
                 <input type="number" min="1" inputMode="numeric" placeholder="مثال: 30" value={placeForm.capacity}
                   onChange={e => setPlaceForm({ ...placeForm, capacity: e.target.value })}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <button onClick={savePlace} disabled={placeSaving}
-                className="w-full py-3 bg-[var(--primary)] text-white rounded-xl font-medium disabled:opacity-50">
+                className="w-full md3-btn md3-btn--filled">
                 {placeSaving ? 'جاري الحفظ...' : 'حفظ'}
               </button>
             </div>
@@ -1272,17 +1310,17 @@ export default function SettingsPage() {
 
       {/* Auto-Group Threshold */}
       {tab === 'autogroup' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
-          <h2 className="font-bold" style={{ color: 'var(--text)' }}>التجميع التلقائي</h2>
-          <p className="text-sm" style={{ color: 'var(--text-muted)' }}>عند تأكيد دفع الطالب، يتم وضعه تلقائياً في مجموعة. هنا يمكنك تحديد الحد الأدنى لعدد الطلاب لكل مجموعة قبل إنشاء مجموعة جديدة.</p>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
+          <h2 className="text-base font-semibold text-on-surface">التجميع التلقائي</h2>
+          <p className="text-sm text-on-surface-variant">عند تأكيد دفع الطالب، يتم وضعه تلقائياً في مجموعة. هنا يمكنك تحديد الحد الأدنى لعدد الطلاب لكل مجموعة قبل إنشاء مجموعة جديدة.</p>
           <div>
-            <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>الحد الأقصى للطلاب في كل مجموعة</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">الحد الأقصى للطلاب في كل مجموعة</label>
             <input type="number" min="1" value={threshold}
               onChange={e => setThreshold(Number(e.target.value))}
-              className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field" />
           </div>
           <button onClick={saveThreshold} disabled={thresholdSaving}
-            className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+            className="md3-btn md3-btn--filled">
             {thresholdSaving ? 'جاري الحفظ...' : 'حفظ الإعدادات'}
           </button>
         </div>
@@ -1292,43 +1330,42 @@ export default function SettingsPage() {
       {tab === 'notification' && (
         <div className="space-y-4">
           {/* SMTP Settings */}
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📧 إعدادات البريد الإلكتروني (SMTP)</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>إعدادات الخادم لإرسال الإشعارات والرموز عبر البريد الإلكتروني.</p>
+              <h2 className="text-base font-semibold text-on-surface">📧 إعدادات البريد الإلكتروني (SMTP)</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">إعدادات الخادم لإرسال الإشعارات والرموز عبر البريد الإلكتروني.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>اسم المستخدم (البريد)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">اسم المستخدم (البريد)</label>
                 <input value={notifForm.smtpUser} onChange={e => setNotifForm(p => ({ ...p, smtpUser: e.target.value }))}
                   placeholder="your-email@gmail.com"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>كلمة المرور (App Password)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">كلمة المرور (App Password)</label>
                 <input type="password" value={notifForm.smtpPass} onChange={e => setNotifForm(p => ({ ...p, smtpPass: e.target.value }))}
                   placeholder="••••••••••"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div className="md:col-span-2">
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الاسم المعروض (From)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">الاسم المعروض (From)</label>
                 <input value={notifForm.smtpFrom} onChange={e => setNotifForm(p => ({ ...p, smtpFrom: e.target.value }))}
                   placeholder="&quot;وحدة التدريب و التطوير&quot; &lt;your-email@gmail.com&gt;"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
             </div>
             <div className="flex items-center gap-3 pt-2">
               <button onClick={saveNotification} disabled={notifSaving}
-                className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                className="md3-btn md3-btn--filled">
                 {notifSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
               </button>
               <button onClick={testEmail} disabled={notifTesting === 'email'}
-                className="px-4 py-2.5 rounded-xl text-sm border font-medium disabled:opacity-50"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                className="md3-btn md3-btn--outlined">
                 {notifTesting === 'email' ? 'جاري الإرسال...' : '📧 اختبار الإيميل'}
               </button>
             </div>
-            <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            <div className="p-3 rounded-md3-md text-xs bg-surface-container-low text-on-surface-variant">
               <p><strong>للحصول على App Password (Gmail):</strong></p>
               <ul className="mt-1 space-y-1 list-disc list-inside">
                 <li>افتح حساب Google → Security → 2-Step Verification (فعّلها)</li>
@@ -1339,37 +1376,36 @@ export default function SettingsPage() {
           </div>
 
           {/* Telegram Settings */}
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📱 إعدادات تيليجرام (Telegram Bot)</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>إعدادات بوت تيليجرام لإرسال الإشعارات والرموز. أنشئ بوت عبر @BotFather على تيليجرام.</p>
+              <h2 className="text-base font-semibold text-on-surface">📱 إعدادات تيليجرام (Telegram Bot)</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">إعدادات بوت تيليجرام لإرسال الإشعارات والرموز. أنشئ بوت عبر @BotFather على تيليجرام.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Bot Token</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">Bot Token</label>
                 <input type="password" value={notifForm.telegramBotToken} onChange={e => setNotifForm(p => ({ ...p, telegramBotToken: e.target.value }))}
                   placeholder="1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>Bot Username</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">Bot Username</label>
                 <input value={notifForm.telegramBotUsername} onChange={e => setNotifForm(p => ({ ...p, telegramBotUsername: e.target.value }))}
                   placeholder="MyBot_username"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm" style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
             </div>
             <div className="flex items-center gap-3 pt-2">
               <button onClick={saveNotification} disabled={notifSaving}
-                className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                className="md3-btn md3-btn--filled">
                 {notifSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
               </button>
               <button onClick={testTelegram} disabled={notifTesting === 'telegram'}
-                className="px-4 py-2.5 rounded-xl text-sm border font-medium disabled:opacity-50"
-                style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+                className="md3-btn md3-btn--outlined">
                 {notifTesting === 'telegram' ? 'جاري الفحص...' : '📱 اختبار تيليجرام'}
               </button>
             </div>
-            <div className="p-3 rounded-xl text-xs" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+            <div className="p-3 rounded-md3-md text-xs bg-surface-container-low text-on-surface-variant">
               <p><strong>لإنشاء بوت تيليجرام:</strong></p>
               <ul className="mt-1 space-y-1 list-disc list-inside">
                 <li>افتح تيليجرام → ابحث عن @BotFather → /newbot</li>
@@ -1386,55 +1422,67 @@ export default function SettingsPage() {
       {tab === 'certificates' && (
         <div className="space-y-4">
           {/* Auto-Issue Settings */}
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>🎓 إعدادات الإصدار التلقائي</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تحكم في شروط إصدار الشهادات التلقائية عند اكتمال المجموعة.</p>
+              <h2 className="text-base font-semibold text-on-surface">🎓 إعدادات الإصدار التلقائي</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">تحكم في شروط إصدار الشهادات التلقائية عند اكتمال المجموعة.</p>
             </div>
 
             <div className="space-y-4">
               {/* Auto Issue Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+              <div className="flex items-center justify-between p-4 rounded-md3-md bg-surface-container-low">
                 <div>
-                  <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>الإصدار التلقائي</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>إصدار شهادة تلقائياً عند اكتمال جميع المحاضرات في المجموعة</p>
+                  <p className="font-medium text-sm text-on-surface">الإصدار التلقائي</p>
+                  <p className="text-xs text-on-surface-variant">إصدار شهادة تلقائياً عند اكتمال جميع المحاضرات في المجموعة</p>
                 </div>
                 <button onClick={() => setCertSettings(p => ({ ...p, autoIssue: !p.autoIssue }))}
-                  className={`w-12 h-6 rounded-full relative transition-colors ${certSettings.autoIssue ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${certSettings.autoIssue ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                  type="button" role="switch" aria-checked={certSettings.autoIssue} aria-label="الإصدار التلقائي"
+                  className="inline-flex items-center justify-center min-h-[40px] min-w-[56px] shrink-0">
+                  <span className={`relative inline-block w-12 h-6 rounded-full transition-colors ${certSettings.autoIssue ? 'bg-primary' : 'bg-outline-variant'}`}>
+                    <span
+                      className="absolute top-0.5 w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-all"
+                      style={{ insetInlineStart: certSettings.autoIssue ? '26px' : '2px' }}
+                    />
+                  </span>
                 </button>
               </div>
 
               {/* Require Attendance Toggle */}
-              <div className="flex items-center justify-between p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
+              <div className="flex items-center justify-between p-4 rounded-md3-md bg-surface-container-low">
                 <div>
-                  <p className="font-medium text-sm" style={{ color: 'var(--text)' }}>الحضور个人ي مطلوب</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>اشتراط حضور الطالب个人ياً (بالـ QR) للحصول على الشهادة</p>
+                  <p className="font-medium text-sm text-on-surface">الحضور الشخصي مطلوب</p>
+                  <p className="text-xs text-on-surface-variant">اشتراط حضور الطالب شخصياً (بالـ QR) للحصول على الشهادة</p>
                 </div>
                 <button onClick={() => setCertSettings(p => ({ ...p, requireAttendance: !p.requireAttendance }))}
-                  className={`w-12 h-6 rounded-full relative transition-colors ${certSettings.requireAttendance ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
-                  <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${certSettings.requireAttendance ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                  type="button" role="switch" aria-checked={certSettings.requireAttendance} aria-label="الحضور الشخصي مطلوب"
+                  className="inline-flex items-center justify-center min-h-[40px] min-w-[56px] shrink-0">
+                  <span className={`relative inline-block w-12 h-6 rounded-full transition-colors ${certSettings.requireAttendance ? 'bg-primary' : 'bg-outline-variant'}`}>
+                    <span
+                      className="absolute top-0.5 w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-all"
+                      style={{ insetInlineStart: certSettings.requireAttendance ? '26px' : '2px' }}
+                    />
+                  </span>
                 </button>
               </div>
 
               {/* Min Attendance Percentage */}
               {certSettings.requireAttendance && (
-                <div className="p-4 rounded-xl" style={{ backgroundColor: 'var(--bg)' }}>
-                  <label className="block text-sm font-medium mb-2" style={{ color: 'var(--text)' }}>
-                    الحد الأدنى لنسبة الحضور个人ي
+                <div className="p-4 rounded-md3-md bg-surface-container-low">
+                  <label className="block text-sm font-medium mb-2 text-on-surface">
+                    الحد الأدنى لنسبة الحضور الشخصي
                   </label>
                   <div className="flex items-center gap-3">
                     <input type="range" min="0" max="100" step="5"
                       value={certSettings.minAttendancePercent}
                       onChange={e => setCertSettings(p => ({ ...p, minAttendancePercent: Number(e.target.value) }))}
                       className="flex-1 h-2 rounded-full appearance-none cursor-pointer"
-                      style={{ backgroundColor: 'var(--border)' }} />
-                    <span className="text-lg font-bold min-w-[50px] text-center" style={{ color: 'var(--primary)' }}>
+                      style={{ backgroundColor: 'var(--md-sys-color-outline-variant)', accentColor: 'var(--md-sys-color-primary)' }} />
+                    <span className="text-lg font-bold min-w-[50px] text-center text-primary">
                       {certSettings.minAttendancePercent}%
                     </span>
                   </div>
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
-                    الطالب لازم يكون حضر على الأقل {certSettings.minAttendancePercent}% من المحاضرات个人ياً
+                  <p className="text-xs mt-1 text-on-surface-variant">
+                    الطالب لازم يكون حضر على الأقل {certSettings.minAttendancePercent}% من المحاضرات شخصياً
                   </p>
                 </div>
               )}
@@ -1442,61 +1490,56 @@ export default function SettingsPage() {
           </div>
 
           {/* Certificate Design Settings */}
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>🎨 تصميم الشهادة</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>تخصيص النصوص والتوقيعات التي تظهر في الشهادة.</p>
+              <h2 className="text-base font-semibold text-on-surface">🎨 تصميم الشهادة</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">تخصيص النصوص والتوقيعات التي تظهر في الشهادة.</p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان الشهادة (عربي)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">عنوان الشهادة (عربي)</label>
                 <input value={certSettings.certificateTitle}
                   onChange={e => setCertSettings(p => ({ ...p, certificateTitle: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان الشهادة (إنجليزي)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">عنوان الشهادة (إنجليزي)</label>
                 <input value={certSettings.certificateTitleEn}
                   onChange={e => setCertSettings(p => ({ ...p, certificateTitleEn: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم المدير (للتوقيع)</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">اسم المدير (للتوقيع)</label>
                 <input value={certSettings.directorName}
                   onChange={e => setCertSettings(p => ({ ...p, directorName: e.target.value }))}
                   placeholder="أحمد حسن"
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
               <div>
-                <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>منصب المدير</label>
+                <label className="block text-sm mb-1 text-on-surface-variant">منصب المدير</label>
                 <input value={certSettings.directorTitle}
                   onChange={e => setCertSettings(p => ({ ...p, directorTitle: e.target.value }))}
-                  className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                  style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                  className="md3-field" />
               </div>
             </div>
 
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص التذييل القانوني</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">نص التذييل القانوني</label>
               <textarea value={certSettings.footerText}
                 onChange={e => setCertSettings(p => ({ ...p, footerText: e.target.value }))}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm h-20"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
 
             <button onClick={saveCertificateSettings} disabled={certSaving}
-              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              className="md3-btn md3-btn--filled">
               {certSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
             </button>
           </div>
 
           {/* Info Box */}
-          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
-            <div className="p-4 rounded-xl text-sm" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4">
+            <div className="p-4 rounded-md3-md text-sm bg-surface-container-low text-on-surface-variant">
               <p><strong>📋 ملاحظات مهمة:</strong></p>
               <ul className="mt-2 space-y-1 list-disc list-inside">
                 <li>الإصدار التلقائي يعمل عند اكتمال جميع المحاضرات في المجموعة (.Admin يضغط "إتمام" على كل محاضرة)</li>
@@ -1512,10 +1555,10 @@ export default function SettingsPage() {
       {/* Survey Settings */}
       {tab === 'survey' && (
         <div className="space-y-4">
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>⭐ إعدادات استبيان الطالب</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-base font-semibold text-on-surface">⭐ إعدادات استبيان الطالب</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">
                 يُفتح الاستبيان تلقائياً بعد إنهاء المجموعة، ويُرسل تذكيران فقط للطلاب الذين لم يجيبوا.
               </p>
             </div>
@@ -1527,40 +1570,37 @@ export default function SettingsPage() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>مدة فتح الاستبيان (أيام)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">مدة فتح الاستبيان (أيام)</label>
                   <input type="number" min={1} max={365} value={surveySettings.openDays}
                     onChange={e => setSurveySettings(p => ({ ...p, openDays: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>يُغلق تلقائياً بعدها — يمكن للأدمن تمديدها لكل مجموعة.</p>
+                    className="md3-field" />
+                  <p className="text-xs mt-1 text-on-surface-variant">يُغلق تلقائياً بعدها — يمكن للأدمن تمديدها لكل مجموعة.</p>
                 </div>
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>التذكير الأول بعد (أيام)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">التذكير الأول بعد (أيام)</label>
                   <input type="number" min={0} max={60} value={surveySettings.reminder1Days}
                     onChange={e => setSurveySettings(p => ({ ...p, reminder1Days: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>يُرسل لغير المجيبين فقط.</p>
+                    className="md3-field" />
+                  <p className="text-xs mt-1 text-on-surface-variant">يُرسل لغير المجيبين فقط.</p>
                 </div>
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>التذكير الثاني بعد (أيام)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">التذكير الثاني بعد (أيام)</label>
                   <input type="number" min={1} max={120} value={surveySettings.reminder2Days}
                     onChange={e => setSurveySettings(p => ({ ...p, reminder2Days: Number(e.target.value) }))}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
-                  <p className="text-xs mt-1" style={{ color: 'var(--text-muted)' }}>لا يُرسل أي تذكير بعد التذكير الثاني.</p>
+                    className="md3-field" />
+                  <p className="text-xs mt-1 text-on-surface-variant">لا يُرسل أي تذكير بعد التذكير الثاني.</p>
                 </div>
               </div>
             )}
 
             <button onClick={saveSurveySettings} disabled={surveySaving || surveyLoading}
-              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              className="md3-btn md3-btn--filled">
               {surveySaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
             </button>
           </div>
 
-          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
-            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4">
+            <div className="p-4 rounded-md3-md text-sm space-y-1 bg-surface-container-low text-on-surface-variant">
               <p><strong>📋 كيف يعمل الاستبيان؟</strong></p>
               <ul className="mt-2 space-y-1 list-disc list-inside">
                 <li>يُفتح بعد إنهاء المجموعة، ويُرسل إشعار فوري «قيّم دورتك» لكل الطلاب.</li>
@@ -1578,10 +1618,10 @@ export default function SettingsPage() {
       {/* Announcement Settings (edit-plan.md §7) */}
       {tab === 'announcement' && (
         <div className="space-y-4">
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📣 إعلانات الكورسات الجديدة</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-base font-semibold text-on-surface">📣 إعلانات الكورسات الجديدة</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">
                 الإعلان يُبنى تلقائياً من بيانات الكورس، ويمكن إرساله يدوياً من صفحة أي كورس بعد مراجعته.
               </p>
             </div>
@@ -1591,7 +1631,7 @@ export default function SettingsPage() {
                 <div className="animate-spin h-6 w-6 border-4 rounded-full" style={{ borderColor: 'var(--primary)', borderTopColor: 'transparent' }} />
               </div>
             ) : (
-              <label className="flex items-start gap-3 p-4 rounded-xl cursor-pointer" style={{ backgroundColor: 'var(--bg)' }}>
+              <label className="flex items-start gap-3 p-4 rounded-md3-md cursor-pointer bg-surface-container-low">
                 <input
                   type="checkbox"
                   checked={announcementSettings.autoEnabled}
@@ -1599,10 +1639,10 @@ export default function SettingsPage() {
                   className="mt-1"
                 />
                 <span>
-                  <span className="block text-sm font-medium" style={{ color: 'var(--text)' }}>
+                  <span className="block text-sm font-medium text-on-surface">
                     إرسال تلقائي عند نشر الكورس
                   </span>
-                  <span className="block text-xs mt-1" style={{ color: 'var(--text-muted)' }}>
+                  <span className="block text-xs mt-1 text-on-surface-variant">
                     يُرسل مرة واحدة فقط لكل كورس عند تفعيله وفتحه للتسجيل — لا عند حفظه كمسودة. الزر اليدوي يبقى متاحاً دائماً.
                   </span>
                 </span>
@@ -1610,13 +1650,13 @@ export default function SettingsPage() {
             )}
 
             <button onClick={saveAnnouncementSettings} disabled={announcementSaving || announcementLoading}
-              className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+              className="md3-btn md3-btn--filled">
               {announcementSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
             </button>
           </div>
 
-          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
-            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4">
+            <div className="p-4 rounded-md3-md text-sm space-y-1 bg-surface-container-low text-on-surface-variant">
               <p><strong>📬 كيف يصل الإعلان؟</strong></p>
               <ul className="mt-2 space-y-1 list-disc list-inside">
                 <li>إشعار داخل المنصة + بريد إلكتروني لكل حساب نشط — دائماً.</li>
@@ -1632,10 +1672,10 @@ export default function SettingsPage() {
       {/* Report Settings (edit-plan.md §8) */}
       {tab === 'reports' && (
         <div className="space-y-4">
-          <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-5 space-y-4">
             <div>
-              <h2 className="font-bold" style={{ color: 'var(--text)' }}>📄 إعدادات تقرير المجموعة</h2>
-              <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+              <h2 className="text-base font-semibold text-on-surface">📄 إعدادات تقرير المجموعة</h2>
+              <p className="text-sm mt-1 text-on-surface-variant">
                 النصوص الثابتة التي تظهر في تقرير Word، والقيم الافتراضية لبيانات التقرير في كل مجموعة.
               </p>
             </div>
@@ -1648,68 +1688,62 @@ export default function SettingsPage() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>اسم منسق الدورة</label>
+                    <label className="block text-sm mb-1 text-on-surface-variant">اسم منسق الدورة</label>
                     <input value={reportSettings.coordinatorName}
                       onChange={e => setReportSettings({ ...reportSettings, coordinatorName: e.target.value })}
                       maxLength={200}
-                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      className="md3-field" />
                   </div>
                   <div>
-                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>منسق/منظم/رعاة الدورة</label>
+                    <label className="block text-sm mb-1 text-on-surface-variant">منسق/منظم/رعاة الدورة</label>
                     <input value={reportSettings.organizerText}
                       onChange={e => setReportSettings({ ...reportSettings, organizerText: e.target.value })}
                       maxLength={300}
-                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      className="md3-field" />
                   </div>
                   <div className="md:col-span-2">
-                    <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نوع النشاط الافتراضي</label>
+                    <label className="block text-sm mb-1 text-on-surface-variant">نوع النشاط الافتراضي</label>
                     <input value={reportSettings.defaultActivityType}
                       onChange={e => setReportSettings({ ...reportSettings, defaultActivityType: e.target.value })}
                       maxLength={300}
-                      className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                      style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                      className="md3-field" />
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص الشهادات (القسم السابع)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">نص الشهادات (القسم السابع)</label>
                   <textarea value={reportSettings.certificateText}
                     onChange={e => setReportSettings({ ...reportSettings, certificateText: e.target.value })}
                     rows={3} maxLength={2000}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                    className="md3-field" />
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص الملاحظات العامة الافتراضي (القسم الثامن)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">نص الملاحظات العامة الافتراضي (القسم الثامن)</label>
                   <textarea value={reportSettings.defaultNotes}
                     onChange={e => setReportSettings({ ...reportSettings, defaultNotes: e.target.value })}
                     rows={3} maxLength={4000}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                    className="md3-field" />
                 </div>
 
                 <div>
-                  <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص التوصيات الافتراضي (القسم التاسع)</label>
+                  <label className="block text-sm mb-1 text-on-surface-variant">نص التوصيات الافتراضي (القسم التاسع)</label>
                   <textarea value={reportSettings.defaultRecommendations}
                     onChange={e => setReportSettings({ ...reportSettings, defaultRecommendations: e.target.value })}
                     rows={3} maxLength={4000}
-                    className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                    style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                    className="md3-field" />
                 </div>
 
                 <button onClick={saveReportSettings} disabled={reportSaving}
-                  className="px-6 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium disabled:opacity-50">
+                  className="md3-btn md3-btn--filled">
                   {reportSaving ? 'جاري الحفظ...' : '💾 حفظ الإعدادات'}
                 </button>
               </>
             )}
           </div>
 
-          <div className="rounded-2xl p-4 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
-            <div className="p-4 rounded-xl text-sm space-y-1" style={{ backgroundColor: 'var(--bg)', color: 'var(--text-muted)' }}>
+          <div className="md3-card md3-card--outlined p-4">
+            <div className="p-4 rounded-md3-md text-sm space-y-1 bg-surface-container-low text-on-surface-variant">
               <p><strong>📋 كيف يُبنى تقرير المجموعة؟</strong></p>
               <ul className="mt-2 space-y-1 list-disc list-inside">
                 <li>يُولَّد من أحدث بيانات الكورس والمجموعة والمحاضرات والطلاب وقت الضغط — لا يُحفظ ملف قديم.</li>
@@ -1726,62 +1760,56 @@ export default function SettingsPage() {
       {/* AI Providers */}
       {/* Mobile app version + update broadcast */}
       {tab === 'appversion' && (
-        <div className="rounded-2xl p-6 shadow-sm space-y-4" style={{ backgroundColor: 'var(--card)' }}>
+        <div className="md3-card md3-card--outlined p-5 space-y-4">
           <div>
-            <h2 className="font-bold" style={{ color: 'var(--text)' }}>📱 إصدار تطبيق الهاتف</h2>
-            <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+            <h2 className="text-base font-semibold text-on-surface">📱 إصدار تطبيق الهاتف</h2>
+            <p className="text-sm mt-1 text-on-surface-variant">
               عند حفظ رقم إصدار (build) أحدث يُرسَل إشعار التحديث تلقائياً لكل مستخدمي التطبيق (طلبة ومحاضرين)، ويمكنك أيضاً إرساله يدوياً في أي وقت.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم الإصدار (مثل 1.0.3)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">رقم الإصدار (مثل 1.0.3)</label>
               <input value={versionForm.latestVersion}
                 onChange={e => setVersionForm({ ...versionForm, latestVersion: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رقم البناء (Build Number)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">رقم البناء (Build Number)</label>
               <input type="number" min={1} value={versionForm.buildNumber}
                 onChange={e => setVersionForm({ ...versionForm, buildNumber: Number(e.target.value) })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>عنوان إشعار التحديث</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">عنوان إشعار التحديث</label>
               <input value={versionForm.title}
                 onChange={e => setVersionForm({ ...versionForm, title: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>نص إشعار التحديث</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">نص إشعار التحديث</label>
               <textarea value={versionForm.message}
                 onChange={e => setVersionForm({ ...versionForm, message: e.target.value })}
                 rows={3} maxLength={500}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm resize-y"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رابط صفحة التنزيل</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">رابط صفحة التنزيل</label>
               <input value={versionForm.downloadUrl}
                 onChange={e => setVersionForm({ ...versionForm, downloadUrl: e.target.value })}
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
             <div>
-              <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>رابط APK مباشر (اختياري)</label>
+              <label className="block text-sm mb-1 text-on-surface-variant">رابط APK مباشر (اختياري)</label>
               <input value={versionForm.apkDirectUrl}
                 onChange={e => setVersionForm({ ...versionForm, apkDirectUrl: e.target.value })}
                 placeholder="اتركه فارغاً لاستخدام رابط صفحة التنزيل"
-                className="w-full px-4 py-2.5 rounded-xl border text-sm"
-                style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                className="md3-field" />
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer" style={{ color: 'var(--text)' }}>
+          <label className="flex items-center gap-2 text-sm cursor-pointer text-on-surface">
             <input type="checkbox" checked={versionForm.forceUpdate}
               onChange={e => setVersionForm({ ...versionForm, forceUpdate: e.target.checked })}
               className="w-4 h-4 accent-[var(--primary)]" />
@@ -1790,12 +1818,11 @@ export default function SettingsPage() {
 
           <div className="flex items-center gap-3 flex-wrap">
             <button onClick={saveAppVersion} disabled={versionSaving}
-              className="px-5 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm disabled:opacity-50">
+              className="md3-btn md3-btn--filled">
               {versionSaving ? 'جارٍ الحفظ...' : '💾 حفظ الإصدار'}
             </button>
             <button onClick={broadcastAppVersionNow} disabled={versionBroadcasting}
-              className="px-5 py-2.5 rounded-xl text-sm border disabled:opacity-50"
-              style={{ borderColor: 'var(--border)', color: 'var(--text)' }}>
+              className="md3-btn md3-btn--outlined">
               {versionBroadcasting ? 'جارٍ الإرسال...' : '📣 إشعار المستخدمين بالتحديث'}
             </button>
           </div>
@@ -1804,82 +1831,88 @@ export default function SettingsPage() {
 
       {tab === 'ai' && (
         <div className="space-y-4">
-          <div className="rounded-2xl p-6 shadow-sm" style={{ backgroundColor: 'var(--card)' }}>
+          <div className="md3-card md3-card--outlined p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
-                <h2 className="font-bold" style={{ color: 'var(--text)' }}>مزوّدات الذكاء الاصطناعي</h2>
-                <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>
+                <h2 className="text-base font-semibold text-on-surface">مزوّدات الذكاء الاصطناعي</h2>
+                <p className="text-sm mt-1 text-on-surface-variant">
                   أضف مزوّداً واملأ البيانات. التغيير محلي (Draft) — اضغط "💾 حفظ" لإرسال التعديلات.
                 </p>
               </div>
               <div className="flex gap-2">
                 <button onClick={resetAll} disabled={!isDirty}
-                  className="px-3 py-2 rounded-xl text-sm border disabled:opacity-30"
-                  style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                  className="md3-btn md3-btn--outlined">
                   ↩ تراجع
                 </button>
                 <button onClick={saveAll} disabled={!isDirty || savingAi}
-                  className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap ${isDirty ? 'bg-[var(--primary)] text-white' : 'border opacity-40'}`}>
+                  className={`md3-btn ${isDirty ? 'md3-btn--filled' : 'md3-btn--outlined'}`}>
                   {savingAi ? 'جاري...' : '💾 حفظ'}
                 </button>
                 <button onClick={openAddModal}
-                  className="px-4 py-2 bg-[var(--primary)] text-white rounded-xl text-sm whitespace-nowrap">+ إضافة مزوّد</button>
+                  className="md3-btn md3-btn--filled whitespace-nowrap">+ إضافة مزوّد</button>
               </div>
             </div>
 
             {isDirty && (
-              <div className="px-3 py-2 mb-3 rounded-xl text-xs" style={{ backgroundColor: '#fef3c7', color: '#92400e' }}>
+              <div className="px-3 py-2 mb-3 rounded-md3-sm text-sm" style={{ backgroundColor: 'var(--md-sys-color-warning-container)', color: 'var(--md-sys-color-on-warning-container)' }}>
                 ⚠ توجد تغييرات غير محفوظة. اضغط "💾 حفظ" لتطبيقها.
               </div>
             )}
 
             {providers.length === 0 && (
-              <p className="text-sm py-6 text-center" style={{ color: 'var(--text-muted)' }}>لا توجد مزوّدات — اضغط "+ إضافة مزوّد"</p>
+              <p className="text-sm py-6 text-center text-on-surface-variant">لا توجد مزوّدات — اضغط "+ إضافة مزوّد"</p>
             )}
 
             <div className="space-y-3">
               {providers.map((p, i) => (
-                <div key={p.id} className="rounded-xl p-4 transition-colors"
+                <div key={p.id} className="rounded-md3-md p-4 transition-colors border"
                   style={{
-                    backgroundColor: 'var(--bg)',
-                    border: p.enabled ? '1px solid var(--primary)' : '1px solid var(--border)',
-                    opacity: p.enabled ? 1 : 0.6,
+                    backgroundColor: p.enabled ? 'var(--md-sys-color-surface-container-low)' : 'var(--md-sys-color-surface-container)',
+                    borderColor: p.enabled ? 'var(--md-sys-color-primary)' : 'var(--md-sys-color-outline-variant)',
                   }}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <button onClick={() => toggleDraft(p.id)}
-                        className={`w-10 h-6 rounded-full relative transition-colors ${p.enabled ? 'bg-[var(--primary)]' : 'bg-gray-300'}`}>
-                        <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${p.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        type="button" role="switch" aria-checked={p.enabled} aria-label={`تفعيل ${p.name}`}
+                        className="inline-flex items-center justify-center min-h-[40px] min-w-[48px] shrink-0">
+                        <span className={`relative inline-block w-10 h-6 rounded-full transition-colors ${p.enabled ? 'bg-primary' : 'bg-outline-variant'}`}>
+                          <span
+                            className="absolute top-0.5 w-5 h-5 bg-surface-container-lowest rounded-full shadow transition-all"
+                            style={{ insetInlineStart: p.enabled ? '18px' : '2px' }}
+                          />
+                        </span>
                       </button>
                       <div>
-                        <span className="font-bold text-sm" style={{ color: 'var(--text)' }}>
+                        <span className="text-sm font-semibold text-on-surface">
                           {p.type === 'gemini' ? '🧠' : p.type === 'openai' ? '🔵' : p.type === 'anthropic' ? '🟢' : '⚙'} {p.name}
                         </span>
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
                       <button onClick={() => moveDraft(i, -1)} disabled={i === 0}
-                        className="w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-30 hover:opacity-70">↑</button>
+                        type="button" aria-label="تحريك لأعلى"
+                        className="md3-btn md3-btn--icon text-xs">↑</button>
                       <button onClick={() => moveDraft(i, 1)} disabled={i === providers.length - 1}
-                        className="w-6 h-6 flex items-center justify-center rounded text-xs disabled:opacity-30 hover:opacity-70">↓</button>
+                        type="button" aria-label="تحريك لأسفل"
+                        className="md3-btn md3-btn--icon text-xs">↓</button>
                       <button onClick={() => removeDraft(p.id)}
-                        className="w-6 h-6 flex items-center justify-center rounded text-xs hover:opacity-70" style={{ color: '#dc2626' }}>🗑</button>
+                        type="button" aria-label={`حذف ${p.name}`}
+                        className="md3-btn md3-btn--icon text-xs text-error">🗑</button>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     <div>
-                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API Key</label>
+                      <label className="block text-sm mb-1 text-on-surface-variant">API Key</label>
                       <input type="password" value={p.apiKey}
                         onChange={e => updateDraft(p.id, 'apiKey', e.target.value)}
                         placeholder={PROVIDER_DEFAULTS[p.type as keyof typeof PROVIDER_DEFAULTS]?.placeholder || '...'}
-                        className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
-                        style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}
+                        className="md3-field w-full font-mono ltr"
                         onFocus={e => e.target.type = 'text'}
                         onBlur={e => { e.target.type = 'password'; if (e.target.value) fetchModelsFor({ ...providers.find(x => x.id === p.id), apiKey: e.target.value }); }} />
                     </div>
                     <div>
-                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API URL</label>
+                      <label className="block text-sm mb-1 text-on-surface-variant">API URL</label>
                       <div className="flex gap-1">
                         <input value={p.apiUrl}
                           onChange={e => {
@@ -1891,17 +1924,15 @@ export default function SettingsPage() {
                               updateDraft(p.id, 'name', def.name);
                             }
                           }}
-                          className="flex-1 px-3 py-2 rounded-lg border text-sm font-mono ltr"
-                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+                          className="md3-field flex-1 font-mono ltr" />
                       </div>
                     </div>
                     <div>
-                      <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>الموديل</label>
+                      <label className="block text-sm mb-1 text-on-surface-variant">الموديل</label>
                       <div className="flex gap-1">
                         <select value={p.selectedModel}
                           onChange={e => updateDraft(p.id, 'selectedModel', e.target.value)}
-                          className="flex-1 px-3 py-2 rounded-lg border text-sm"
-                          style={{ backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+                          className="md3-field flex-1">
                           {p.models?.map((m: string) => (
                             <option key={m} value={m}>{m}</option>
                           ))}
@@ -1910,20 +1941,19 @@ export default function SettingsPage() {
                           )}
                         </select>
                         <button onClick={() => fetchModelsFor(p)}
-                          className="px-2 py-2 rounded-lg text-xs border"
-                          style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>🔍</button>
+                          className="md3-btn md3-btn--icon"
+                          aria-label="جلب الموديلات" title="جلب الموديلات">🔍</button>
                       </div>
                     </div>
                     <div className="flex items-end gap-2">
                       <button onClick={() => testProvider(p)}
-                        className="flex-1 px-3 py-2 rounded-lg text-sm border transition-colors hover:opacity-80"
-                        style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+                        className="md3-btn md3-btn--outlined flex-1">
                         🧪 اختبار الاتصال
                       </button>
                     </div>
                   </div>
                   {p.type === 'openai-compat' && (
-                    <p className="text-xs mt-2" style={{ color: 'var(--text-muted)' }}>
+                    <p className="text-xs mt-2 text-on-surface-variant">
                       💡 للمزوّدات المحلية (Ollama, LM Studio) أو Azure OpenAI
                     </p>
                   )}
@@ -1938,27 +1968,24 @@ export default function SettingsPage() {
       <Modal open={addModal} onClose={() => setAddModal(false)} title="إضافة مزوّد جديد">
         <div className="space-y-3">
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>📋 لصق أمر CURL (اختياري — يكشف النوع تلقائياً)</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">📋 لصق أمر CURL (اختياري — يكشف النوع تلقائياً)</label>
             <textarea value={addForm.curlInput}
               onChange={e => setAddForm(prev => ({ ...prev, curlInput: e.target.value }))}
               placeholder="curl 'https://generativelanguage.googleapis.com/...' -H 'X-goog-api-key: AIzaSy...'"
-              className="w-full h-20 px-3 py-2 rounded-xl border text-xs font-mono ltr leading-relaxed"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field h-20 font-mono ltr leading-relaxed resize-y" />
             <button onClick={applyCurlToForm}
-              className="w-full mt-1 py-1.5 rounded-lg text-xs border"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+              className="w-full mt-2 md3-btn md3-btn--outlined">
               🔄 تحليل CURL وتعبئة الحقول
             </button>
           </div>
 
-          <div className="border-t" style={{ borderColor: 'var(--border)' }} />
+          <div className="border-t border-outline-variant" />
 
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>نوع المزوّد</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">نوع المزوّد</label>
             <select value={addForm.type}
               onChange={e => updateAddForm('type', e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              className="md3-field w-full">
               {Object.entries(PROVIDER_DEFAULTS).map(([k, v]) => (
                 <option key={k} value={k}>{v.name}</option>
               ))}
@@ -1966,7 +1993,7 @@ export default function SettingsPage() {
           </div>
 
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API Key</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">API Key</label>
             <input type="password" value={addForm.apiKey}
               onChange={e => {
                 setAddForm(prev => ({ ...prev, apiKey: e.target.value }));
@@ -1974,28 +2001,25 @@ export default function SettingsPage() {
                 if (t !== addForm.type) updateAddForm('type', t);
               }}
               placeholder={PROVIDER_DEFAULTS[addForm.type as keyof typeof PROVIDER_DEFAULTS]?.placeholder || '...'}
-              className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}
+              className="md3-field font-mono ltr"
               onFocus={e => e.target.type = 'text'}
               onBlur={e => { e.target.type = 'password'; if (e.target.value) autoFetchAddForm(addForm.type, e.target.value, addForm.apiUrl); }} />
           </div>
 
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>API URL</label>
+            <label className="block text-sm mb-1 text-on-surface-variant">API URL</label>
             <input value={addForm.apiUrl}
               onChange={e => setAddForm(prev => ({ ...prev, apiUrl: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg border text-sm font-mono ltr"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }} />
+              className="md3-field font-mono ltr" />
           </div>
 
           <div>
-            <label className="block text-xs mb-1" style={{ color: 'var(--text-muted)' }}>
-              الموديل {addFetching && <span className="inline-block mr-1 text-[10px]">جاري الجلب...</span>}
+            <label className="block text-sm mb-1 text-on-surface-variant">
+              الموديل {addFetching && <span className="inline-block mr-1 text-xs">جاري الجلب...</span>}
             </label>
             <select value={addForm.selectedModel}
               onChange={e => setAddForm(prev => ({ ...prev, selectedModel: e.target.value }))}
-              className="w-full px-3 py-2 rounded-lg border text-sm"
-              style={{ backgroundColor: 'var(--bg)', borderColor: 'var(--border)', color: 'var(--text)' }}>
+              className="md3-field w-full">
               {addForm.models.map((m: string) => (
                 <option key={m} value={m}>{m}</option>
               ))}
@@ -2004,10 +2028,9 @@ export default function SettingsPage() {
 
           <div className="flex gap-2 pt-2">
             <button onClick={confirmAddProvider}
-              className="flex-1 py-2.5 bg-[var(--primary)] text-white rounded-xl text-sm font-medium">إضافة</button>
+              className="flex-1 md3-btn md3-btn--filled">إضافة</button>
             <button onClick={() => setAddModal(false)}
-              className="px-4 py-2.5 rounded-xl text-sm border"
-              style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>إلغاء</button>
+              className="md3-btn md3-btn--outlined">إلغاء</button>
           </div>
         </div>
       </Modal>
@@ -2032,25 +2055,25 @@ function ImageUploadField({ label, value, onChange }: { label: string; value: st
 
   return (
     <div>
-      <label className="block text-sm mb-1" style={{ color: 'var(--text-muted)' }}>{label}</label>
+      <label className="block text-sm mb-1 text-on-surface-variant">{label}</label>
       <div className="flex items-center gap-3">
         <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} className="hidden" />
         {value ? (
-          <div className="relative w-14 h-14 rounded-xl overflow-hidden border flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
+          <div className="relative w-14 h-14 rounded-md3-sm overflow-hidden border border-outline-variant flex-shrink-0">
             <img src={value} alt={label} className="w-full h-full object-cover" />
           </div>
         ) : (
-          <div className="w-14 h-14 rounded-xl border flex items-center justify-center text-xs flex-shrink-0" style={{ borderColor: 'var(--border)', color: 'var(--text-muted)' }}>
+          <div className="w-14 h-14 rounded-md3-sm border border-outline-variant flex items-center justify-center text-xs text-on-surface-variant flex-shrink-0">
             لا توجد
           </div>
         )}
         <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
-          className="px-3 py-2 rounded-xl text-xs text-white disabled:opacity-50" style={{ backgroundColor: 'var(--primary)' }}>
+          className="md3-btn md3-btn--tonal text-xs">
           {uploading ? 'جاري...' : 'اختيار صورة'}
         </button>
         {value && (
           <button type="button" onClick={() => onChange('')}
-            className="px-3 py-2 rounded-xl text-xs border" style={{ borderColor: 'var(--border)', color: '#dc2626' }}>
+            className="md3-btn md3-btn--text text-error">
             حذف
           </button>
         )}
