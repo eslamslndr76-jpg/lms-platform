@@ -73,7 +73,7 @@ export default function ClientLayout({ children }: { children: ReactNode }) {
         onToggleCollapse={() => setCollapsed(c => !c)}
       />
       <TopAppBar onMenu={() => setNavOpen(true)} />
-      <main className="admin-main pt-16 p-4 lg:p-6 overflow-x-hidden">
+      <main className="admin-main px-4 pt-20 pb-24 lg:px-6 lg:pt-[88px] overflow-x-hidden">
         {children}
       </main>
       <AIAssistant />

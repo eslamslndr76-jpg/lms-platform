@@ -42,7 +42,8 @@ export default function Sidebar({ open, onOpenChange, collapsed, onToggleCollaps
         key={item.href}
         href={item.href!}
         onClick={() => onOpenChange(false)}
-        title={collapsed ? item.label : undefined}
+        title={rail ? item.label : undefined}
+        aria-label={rail ? item.label : undefined}
         aria-current={active ? 'page' : undefined}
         className={`flex items-center gap-3 text-sm transition-colors md3-state-layer ${
           rail ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
@@ -69,9 +70,9 @@ export default function Sidebar({ open, onOpenChange, collapsed, onToggleCollaps
   return (
     <>
       <aside
-        className={`fixed top-0 right-0 h-full z-40 md3-elevation-1 transform transition-all duration-300 ${
+        className={`fixed top-0 right-0 h-screen z-40 md3-elevation-1 transform transition-all duration-300 overflow-x-hidden ${
           open ? 'translate-x-0' : 'translate-x-full'
-        } lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen overflow-y-auto`}
+        } lg:translate-x-0 overflow-y-auto`}
         style={{
           backgroundColor: 'var(--md-sys-color-surface-container-low)',
           width: collapsed ? 76 : 280,
@@ -79,12 +80,12 @@ export default function Sidebar({ open, onOpenChange, collapsed, onToggleCollaps
         aria-label="التنقل الرئيسي"
       >
         {/* Header: logo + collapse toggle */}
-        <div className="px-3 pt-4 pb-3 flex items-center justify-between gap-2">
-          <Link href="/" className="flex items-center gap-2 min-w-0" onClick={() => onOpenChange(false)}>
+        <div className={`px-3 pt-4 pb-3 flex gap-2 ${collapsed ? 'flex-col items-center' : 'flex-row items-center justify-between'}`}>
+          <Link href="/" className="flex items-center gap-2 min-w-0 overflow-hidden" onClick={() => onOpenChange(false)}>
             <img
               src={logoHeader || '/branding/logo.png'}
               alt={systemName}
-              className={collapsed ? 'h-9 mx-auto' : 'h-11'}
+              className={collapsed ? 'h-9 w-auto max-w-[60px] object-contain mx-auto' : 'h-11'}
             />
           </Link>
           <button
@@ -120,55 +121,48 @@ export default function Sidebar({ open, onOpenChange, collapsed, onToggleCollaps
         )}
 
         {/* Navigation */}
+        {/* rail=true only on desktop when collapsed; mobile drawer always shows labels */}
         <nav className={`py-2 space-y-1 ${collapsed ? 'px-2' : 'px-3'}`} aria-label="أقسام اللوحة">
-          {allSections.map((item) => navItem(item, collapsed))}
+          {allSections.map((item) => navItem(item, collapsed && !open))}
         </nav>
 
         {/* Footer: account + logout (dark mode & notifications live in the top app bar) */}
         <div
-          className={`px-3 py-4 mt-2 border-t space-y-1 ${collapsed ? 'px-2' : 'px-3'}`}
+          className={`py-4 mt-2 border-t space-y-1 ${collapsed && !open ? 'px-2' : 'px-3'}`}
           style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}
         >
           <Link
             href="/account"
             onClick={() => onOpenChange(false)}
-            title={collapsed ? 'حسابي' : undefined}
+            title={collapsed && !open ? 'حسابي' : undefined}
+            aria-label={collapsed && !open ? 'حسابي' : undefined}
             className={`flex items-center gap-3 text-sm transition-colors md3-state-layer ${
-              collapsed ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
+              collapsed && !open ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
             }`}
-            style={{ color: 'var(--md-sys-color-on-surface-variant)', width: collapsed ? 56 : undefined }}
+            style={{ color: 'var(--md-sys-color-on-surface-variant)', width: collapsed && !open ? 56 : undefined }}
           >
             <span className="material-symbols-outlined text-[22px]" aria-hidden>person</span>
-            {!collapsed && <span>حسابي</span>}
+            {(!collapsed || open) && <span>حسابي</span>}
           </Link>
           <button
             onClick={logout}
-            title={collapsed ? 'تسجيل خروج' : undefined}
+            title={collapsed && !open ? 'تسجيل خروج' : undefined}
+            aria-label={collapsed && !open ? 'تسجيل خروج' : undefined}
             className={`flex items-center gap-3 text-sm w-full transition-colors md3-state-layer ${
-              collapsed ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
+              collapsed && !open ? 'justify-center h-12 w-12 mx-auto rounded-full' : 'rounded-full px-4 h-12'
             }`}
-            style={{ color: 'var(--md-sys-color-error)', width: collapsed ? 56 : undefined }}
+            style={{ color: 'var(--md-sys-color-error)', width: collapsed && !open ? 56 : undefined }}
           >
             <span className="material-symbols-outlined text-[22px]" aria-hidden>logout</span>
-            {!collapsed && <span>تسجيل خروج</span>}
+            {(!collapsed || open) && <span>تسجيل خروج</span>}
           </button>
         </div>
       </aside>
 
-      {/* Mobile: floating open button + scrim */}
-      {!open && (
-        <button
-          onClick={() => onOpenChange(true)}
-          aria-label="فتح القائمة"
-          className="lg:hidden fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full md3-elevation-2 flex items-center justify-center"
-          style={{ backgroundColor: 'var(--md-sys-color-primary-container)', color: 'var(--md-sys-color-on-primary-container)' }}
-        >
-          <span className="material-symbols-outlined text-[26px]" aria-hidden>menu</span>
-        </button>
-      )}
+      {/* Mobile scrim */}
       {open && (
         <div
-          className="fixed inset-0 bg-black/40 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/40 z-[35] lg:hidden"
           onClick={() => onOpenChange(false)}
           aria-hidden="true"
         />

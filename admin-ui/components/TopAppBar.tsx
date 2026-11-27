@@ -29,7 +29,7 @@ export default function TopAppBar({ onMenu }: { onMenu: () => void }) {
 
   return (
     <header
-      className="fixed top-0 right-0 left-0 h-16 z-30 flex items-center gap-2 px-3 sm:px-5 border-b"
+      className="admin-topbar fixed top-0 left-0 h-16 z-30 flex items-center gap-2 px-3 sm:px-5 border-b"
       style={{
         backgroundColor: 'var(--md-sys-color-surface-container-lowest)',
         borderColor: 'var(--md-sys-color-outline-variant)',

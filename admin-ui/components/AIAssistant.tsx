@@ -243,7 +243,7 @@ export default function AIAssistant() {
       <button
         onClick={() => setOpen(!open)}
         aria-label={open ? 'إغلاق المساعد الذكي' : 'فتح المساعد الذكي'}
-        className="fixed bottom-5 left-5 z-50 w-14 h-14 rounded-full md3-elevation-2 flex items-center justify-center hover:brightness-110 transition-transform"
+        className="fixed bottom-5 left-5 z-[45] w-14 h-14 rounded-full md3-elevation-2 flex items-center justify-center hover:brightness-110 transition-transform"
         style={{ backgroundColor: 'var(--md-sys-color-primary)', color: 'var(--md-sys-color-on-primary)' }}
       >
         <span className="material-symbols-outlined text-[26px]" aria-hidden="true">
@@ -253,7 +253,7 @@ export default function AIAssistant() {
 
       {open && (
         <div
-          className="fixed bottom-20 left-5 z-50 w-80 sm:w-96 md3-elevation-3 overflow-hidden flex flex-col"
+          className="fixed bottom-20 left-5 z-[45] w-80 sm:w-96 md3-elevation-3 overflow-hidden flex flex-col"
           style={{
             backgroundColor: 'var(--md-sys-color-surface-container-low)',
             borderRadius: 'var(--md-sys-shape-corner-extra-large)',

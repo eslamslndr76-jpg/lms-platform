@@ -377,9 +377,15 @@ html {
 }
 
 /* Ø§Ù„Ù‡Ø§Ù…Ø´ Ø§Ù„Ø¬Ø§Ù†Ø¨ÙŠ Ù„Ù„Ù…Ø­ØªÙˆÙ‰ ÙŠØªØ¨Ø¹ Ø¹Ø±Ø¶ Ø§Ù„Ø¯Ø±Ø¬ Ø¹Ù„Ù‰ Ø§Ù„Ø´Ø§Ø´Ø§Øª Ø§Ù„ÙƒØ¨ÙŠØ±Ø© ÙÙ‚Ø· */
-.admin-main { margin-right: 0; }
+.admin-main { margin-right: 0; transition: margin-right 300ms var(--md-sys-motion-easing-standard, cubic-bezier(0.2,0,0,1)); }
 @media (min-width: 1024px) {
   .admin-main { margin-right: var(--admin-sidebar-w, 280px); }
+}
+
+/* ÇáÔÑíØ ÇáÚáæí: íãÊÏ ãä ÇáíÓÇÑ ÍÊì ÍÇİÉ ÇáÏÑÌ */
+.admin-topbar { right: 0; transition: right 300ms var(--md-sys-motion-easing-standard, cubic-bezier(0.2,0,0,1)); }
+@media (min-width: 1024px) {
+  .admin-topbar { right: var(--admin-sidebar-w, 280px); }
 }
 
 @keyframes shimmer {
