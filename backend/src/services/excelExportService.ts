@@ -6,7 +6,7 @@ import { DEFAULT_LOGO_DATA_URL, INSTITUTE_LOGO_DATA_URL } from '../config/brandL
  * Branded Excel exporter.
  *
  * Every workbook produced here is:
- *  - RTL (Arabic sheet direction) and print-ready (A4 landscape, repeated header)
+ *  - RTL (Arabic sheet direction) and print-ready (A4 landscape)
  *  - branded with the logo + colors configured in Settings → الهوية
  *  - editable: real cells (no images of tables), real numbers/dates, autofilter,
  *    frozen header and a live SUBTOTAL row that recalculates when values change
@@ -423,10 +423,12 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   subtitleCell.alignment = { horizontal: 'right', vertical: 'middle' };
   ws.getRow(3).height = 18;
 
-  // Meta line: filters + count + timestamp
+  // Meta line: filters (omit keys already shown in infoBlock) + count + timestamp
   ws.mergeCells(`A4:${lastCol}4`);
   const metaCell = ws.getCell('A4');
-  const filterText = filters.length ? filters.map((f) => `${f.label}: ${f.value}`).join('  |  ') : 'بدون فلاتر';
+  const infoBlockLabels = new Set(infoBlock.map((x) => x.label));
+  const filteredFilters = filters.filter((f) => !infoBlockLabels.has(f.label));
+  const filterText = filteredFilters.length ? filteredFilters.map((f) => `${f.label}: ${f.value}`).join('  |  ') : 'بدون فلاتر';
   metaCell.value = `عدد السجلات: ${rows.length}   |   ${filterText}   |   تاريخ الإصدار: ${now.toLocaleString('ar-EG')}`;
   metaCell.font = { name: FONT, size: 9, color: { argb: 'FF4B5563' } };
   metaCell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
@@ -476,7 +478,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     from: { row: headerRowIndex, column: 1 },
     to: { row: headerRowIndex, column: columnCount },
   };
-  ws.views = [{ state: 'frozen', ySplit: headerRowIndex, rightToLeft: true, showGridLines: false }];
+  ws.views = [{ rightToLeft: true, showGridLines: false }];
 
   // ── Data rows ─────────────────────────────────────────────────
   const firstDataRow = headerRowIndex + 1;
@@ -566,11 +568,14 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
 
   // ── Notes ─────────────────────────────────────────────────────
   cursor += 1;
+  const hasTotals = totalColumns.length > 0 && rows.length > 0;
+  const disclaimer = branding.messageFooter || DISCLAIMER;
   const notes = [
     footerNote,
-    'يمكن تعديل أي خلية مباشرة في هذا الملف. صف الإجماليات يستخدم دالة SUBTOTAL ويتحدّث تلقائيًا مع القيم أو الفلاتر.',
-    branding.messageFooter,
-    DISCLAIMER,
+    hasTotals
+      ? 'يمكن تعديل أي خلية مباشرة في هذا الملف. صف الإجماليات يستخدم دالة SUBTOTAL ويتحدّث تلقائيًا مع القيم أو الفلاتر.'
+      : 'يمكن تعديل أي خلية مباشرة في هذا الملف.',
+    disclaimer,
   ].filter(Boolean) as string[];
 
   notes.forEach((note) => {
@@ -586,7 +591,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   // ── Print header/footer ───────────────────────────────────────
   ws.headerFooter = {
     oddHeader: `&R&"${FONT},Bold"&10${branding.systemName}&L&"${FONT}"&9${title}`,
-    oddFooter: `&L&"${FONT}"&8${DISCLAIMER}&R&"${FONT}"&8صفحة &P من &N`,
+    oddFooter: `&C&"${FONT}"&8صفحة &P من &N`,
   };
 
   // ── Info sheet ────────────────────────────────────────────────
