@@ -1,6 +1,7 @@
 import ExcelJS from 'exceljs';
 import { sql } from '../db/helpers';
-import { DEFAULT_LOGO_DATA_URL, INSTITUTE_LOGO_DATA_URL } from '../config/brandLogo';
+import { DEFAULT_LOGO_DATA_URL } from '../config/brandLogo';
+import { UNIT_LOGO_B64, INSTITUTE_LOGO_B64 } from '../config/reportLogos';
 
 /**
  * Branded Excel exporter.
@@ -59,6 +60,10 @@ export interface BuildOptions {
   footerNote?: string;
   /** Optional label/value pairs rendered above the table (report info block, e.g. course/group header). */
   infoBlock?: { label: string; value: string }[];
+  /** Show the instructor signature block alongside the unit director signature (per A1, for group/lecture reports). */
+  showInstructorSignature?: boolean;
+  /** Name of instructor to show under the instructor signature label. */
+  instructorName?: string;
 }
 
 const DEFAULT_BRANDING: BrandingInfo = {
@@ -130,78 +135,20 @@ export async function loadBranding(): Promise<BrandingInfo> {
   return DEFAULT_BRANDING;
 }
 
-// ─── Images ────────────────────────────────────────────────────────
+// ─── Merge helper ──────────────────────────────────────────────────
 
-interface ParsedImage {
-  base64: string;
-  extension: 'png' | 'jpeg' | 'gif';
-  width: number;
-  height: number;
-}
-
-/** Read pixel dimensions from the file header so the logo keeps its ratio. */
-function imageSize(buf: Buffer): { width: number; height: number } {
-  // PNG
-  if (buf.length > 24 && buf[0] === 0x89 && buf[1] === 0x50) {
-    return { width: buf.readUInt32BE(16), height: buf.readUInt32BE(20) };
-  }
-  // GIF
-  if (buf.length > 10 && buf[0] === 0x47 && buf[1] === 0x49 && buf[2] === 0x46) {
-    return { width: buf.readUInt16LE(6), height: buf.readUInt16LE(8) };
-  }
-  // JPEG — scan for a SOF marker
-  if (buf.length > 4 && buf[0] === 0xff && buf[1] === 0xd8) {
-    let offset = 2;
-    while (offset + 9 < buf.length) {
-      if (buf[offset] !== 0xff) {
-        offset += 1;
-        continue;
-      }
-      const marker = buf[offset + 1];
-      const size = buf.readUInt16BE(offset + 2);
-      if (marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc) {
-        return { height: buf.readUInt16BE(offset + 5), width: buf.readUInt16BE(offset + 7) };
-      }
-      offset += 2 + size;
-    }
-  }
-  return { width: 0, height: 0 };
-}
-
-async function parseImage(source?: string): Promise<ParsedImage | null> {
-  if (!source) return null;
-  try {
-    let buf: Buffer | null = null;
-    let mime = '';
-
-    if (source.startsWith('data:')) {
-      const match = /^data:([^;]+);base64,(.+)$/i.exec(source);
-      if (!match) return null;
-      mime = match[1];
-      buf = Buffer.from(match[2], 'base64');
-    } else if (/^https?:\/\//i.test(source)) {
-      const res = await fetch(source);
-      if (!res.ok) return null;
-      mime = res.headers.get('content-type') || '';
-      buf = Buffer.from(await res.arrayBuffer());
-    } else if (source.length > 100) {
-      // Raw base64 without a data-URL prefix
-      buf = Buffer.from(source, 'base64');
-    }
-
-    if (!buf || buf.length === 0) return null;
-
-    const extension: ParsedImage['extension'] = /png/i.test(mime)
-      ? 'png'
-      : /gif/i.test(mime)
-        ? 'gif'
-        : 'jpeg';
-
-    const { width, height } = imageSize(buf);
-    return { base64: buf.toString('base64'), extension, width, height };
-  } catch {
-    return null;
-  }
+/** Merge a rectangular range only when it covers more than one cell (ExcelJS safety). */
+function safeMerge(
+  ws: ExcelJS.Worksheet,
+  startCol: number,
+  startRow: number,
+  endCol: number,
+  endRow: number,
+): void {
+  if (startCol === endCol && startRow === endRow) return;
+  const from = `${ws.getColumn(startCol).letter}${startRow}`;
+  const to = `${ws.getColumn(endCol).letter}${endRow}`;
+  ws.mergeCells(`${from}:${to}`);
 }
 
 // ─── Value/type helpers ────────────────────────────────────────────
@@ -317,6 +264,8 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     exportedByRole,
     footerNote,
     infoBlock = [],
+    showInstructorSignature = false,
+    instructorName,
   } = options;
 
   const primary = toArgb(branding.primaryColor, '#2563eb');
@@ -353,79 +302,106 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
 
   const columnCount = Math.max(columns.length, 1);
 
-  // ── Header block ──────────────────────────────────────────────
-  // Dual-logo header: the institute (HIMS) logo on the far right and the unit
-  // logo on the far left — the sheet is RTL so column A renders rightmost.
-  // The unit logo lives in a dedicated gutter column past the data columns so
-  // it stays inside the used range when printing. The title block sits between.
-  const logo = await parseImage(branding.logoHeader);
-  const instituteLogo = await parseImage(INSTITUTE_LOGO_DATA_URL);
-  const hasHeaderLogos = Boolean(instituteLogo || logo);
-  const logoRows = hasHeaderLogos ? 3 : 0;
-  const titleStartColumn = hasHeaderLogos ? 2 : 1;
+  // ── Ensure minimum sheet width for the dual-logo header (D6) ──
+  // Distribute deficit across expandable columns so narrow '#' columns stay compact.
+  const rawColWidths = columns.map((c) => columnWidth(c, rows));
+  const totalWidth = rawColWidths.reduce((s, w) => s + w, 0);
+  if (totalWidth < 110) {
+    const diff = 110 - totalWidth;
+    const expandable = columns
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.key !== 'id' && (!c.width || c.width > 10));
+    const targets = expandable.length > 0 ? expandable.map((x) => x.i) : rawColWidths.map((_, i) => i);
+    const addEach = Math.floor(diff / targets.length);
+    let rem = diff % targets.length;
+    for (const idx of targets) {
+      rawColWidths[idx] += addEach + (rem > 0 ? 1 : 0);
+      if (rem > 0) rem -= 1;
+    }
+  }
 
-  const logoSize = (image: ParsedImage | null) => {
-    if (!image) return null;
-    const ratio = image.width && image.height ? image.width / image.height : 1;
-    const height = 54;
-    return { height, width: Math.min(170, Math.max(60, Math.round(height * ratio))) };
+  // ── Header block (D6) ─────────────────────────────────────────
+  // Fixed report logos (trimmed PNGs embedded at build time, height 110px).
+  const LOGO_HEIGHT_PX = 110; // ≈ 82.5pt
+  const logoSize = (origW: number, origH: number) => {
+    const ratio = origW && origH ? origW / origH : 1;
+    return { height: LOGO_HEIGHT_PX, width: Math.round(LOGO_HEIGHT_PX * ratio) };
   };
-  const unitSize = logoSize(logo);
+  // unit: 478×365, institute: 351×298
+  const unitSz = logoSize(478, 365); // 144×110
+  const instSz = logoSize(351, 298); // 130×110
 
-  const unitGutterIndex = unitSize ? columnCount + 1 : columnCount;
+  // Gutter column for unit logo (leftmost in RTL view = rightmost column index)
+  const unitGutterWidthUnits = Math.max(14, Math.ceil((unitSz.width + 14) / 7));
+  const unitGutterIndex = columnCount + 1;
   const lastCol = ws.getColumn(unitGutterIndex).letter;
+
+  const allWidths = [...rawColWidths, unitGutterWidthUnits];
   ws.columns = [
-    ...columns.map((column) => ({ key: column.key, width: columnWidth(column, rows) })),
-    ...(unitSize
-      ? [{ width: Math.min(30, Math.max(10, Math.ceil((unitSize.width + 10) / 7))) }]
-      : []),
+    ...columns.map((column, i) => ({ key: column.key, width: rawColWidths[i] })),
+    { width: unitGutterWidthUnits },
   ];
 
-  if (instituteLogo) {
-    const size = logoSize(instituteLogo)!;
-    const imageId = workbook.addImage({
-      base64: instituteLogo.base64,
-      extension: instituteLogo.extension,
-    });
-    ws.addImage(imageId, { tl: { col: 0, row: 0 }, ext: size, editAs: 'oneCell' });
+  // Institute logo — anchored at col A (rightmost in RTL), rows 1–4.
+  // Skip enough leading columns so the 130px (~20 width units) logo never overlaps title text.
+  const instLogoMinUnits = Math.ceil((instSz.width + 14) / 7);
+  let titleStartColumn = 1;
+  let rightLogoZoneWidth = 0;
+  const totalDataWidth = rawColWidths.reduce((s, w) => s + w, 0);
+  for (let i = 0; i < columnCount - 1; i++) {
+    if (rightLogoZoneWidth >= instLogoMinUnits) break;
+    if (totalDataWidth - (rightLogoZoneWidth + rawColWidths[i]) < 55) break;
+    rightLogoZoneWidth += rawColWidths[i];
+    titleStartColumn = i + 2;
+  }
+  const titleEndColumn = Math.max(titleStartColumn, unitGutterIndex - 1);
+
+  const instLogoId = workbook.addImage({ base64: INSTITUTE_LOGO_B64, extension: 'png' });
+  ws.addImage(instLogoId, { tl: { col: 0, row: 0 }, ext: instSz, editAs: 'oneCell' });
+  if (titleStartColumn > 1) {
+    safeMerge(ws, 1, 1, titleStartColumn - 1, 4);
   }
 
-  if (logo && unitSize) {
-    const imageId = workbook.addImage({ base64: logo.base64, extension: logo.extension });
-    // 0-based anchor on the gutter column (leftmost in the RTL view).
-    ws.addImage(imageId, { tl: { col: unitGutterIndex - 1, row: 0 }, ext: unitSize, editAs: 'oneCell' });
-  }
+  // Unit logo — anchored at gutter column (leftmost in RTL), rows 1–4
+  const unitLogoId = workbook.addImage({ base64: UNIT_LOGO_B64, extension: 'png' });
+  ws.addImage(unitLogoId, { tl: { col: unitGutterIndex - 1, row: 0 }, ext: unitSz, editAs: 'oneCell' });
+  safeMerge(ws, unitGutterIndex, 1, unitGutterIndex, 4);
 
-  if (instituteLogo) {
-    ws.mergeCells(`${ws.getColumn(1).letter}1:${ws.getColumn(1).letter}${logoRows}`);
-  }
+  const titleStartLetter = ws.getColumn(titleStartColumn).letter;
 
-  const titleRange = `${ws.getColumn(titleStartColumn).letter}1:${lastCol}1`;
+  // Center header block: institute name → unit name → report title → slogan/description
+  // Total height = 24 + 24 + 30 + 20 = 98pt (≥ 90pt / ~131px > 110px logo height)
+  safeMerge(ws, titleStartColumn, 1, titleEndColumn, 1);
+  const instNameCell = ws.getCell(`${titleStartLetter}1`);
+  instNameCell.value = 'المعهد العالي للعلوم الإدارية بالقطامية (HIMS)';
+  instNameCell.font = { name: FONT, size: 12, bold: true, color: { argb: primary } };
+  instNameCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  ws.getRow(1).height = 24;
 
-  ws.mergeCells(titleRange);
-  const brandCell = ws.getCell(`${ws.getColumn(titleStartColumn).letter}1`);
-  brandCell.value = branding.systemName;
-  brandCell.font = { name: FONT, size: 11, bold: true, color: { argb: primary } };
-  brandCell.alignment = { horizontal: 'right', vertical: 'middle' };
-  ws.getRow(1).height = 20;
+  safeMerge(ws, titleStartColumn, 2, titleEndColumn, 2);
+  const unitNameCell = ws.getCell(`${titleStartLetter}2`);
+  unitNameCell.value = branding.systemName;
+  unitNameCell.font = { name: FONT, size: 11, bold: true, color: { argb: secondary } };
+  unitNameCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  ws.getRow(2).height = 24;
 
-  ws.mergeCells(`${ws.getColumn(titleStartColumn).letter}2:${lastCol}2`);
-  const titleCell = ws.getCell(`${ws.getColumn(titleStartColumn).letter}2`);
+  safeMerge(ws, titleStartColumn, 3, titleEndColumn, 3);
+  const titleCell = ws.getCell(`${titleStartLetter}3`);
   titleCell.value = title;
-  titleCell.font = { name: FONT, size: 17, bold: true, color: { argb: 'FF111827' } };
-  titleCell.alignment = { horizontal: 'right', vertical: 'middle' };
-  ws.getRow(2).height = 28;
+  titleCell.font = { name: FONT, size: 16, bold: true, color: { argb: 'FF111827' } };
+  titleCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  ws.getRow(3).height = 30;
 
-  ws.mergeCells(`${ws.getColumn(titleStartColumn).letter}3:${lastCol}3`);
-  const subtitleCell = ws.getCell(`${ws.getColumn(titleStartColumn).letter}3`);
+  safeMerge(ws, titleStartColumn, 4, titleEndColumn, 4);
+  const subtitleCell = ws.getCell(`${titleStartLetter}4`);
   subtitleCell.value = [branding.sloganAr, description].filter(Boolean).join(' · ');
   subtitleCell.font = { name: FONT, size: 9, color: { argb: 'FF6B7280' } };
-  subtitleCell.alignment = { horizontal: 'right', vertical: 'middle' };
-  ws.getRow(3).height = 18;
+  subtitleCell.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  ws.getRow(4).height = 20;
 
   // Meta line: filters (omit keys already shown in infoBlock) + count + timestamp
-  ws.mergeCells(`A4:${lastCol}4`);
-  const metaCell = ws.getCell('A4');
+  safeMerge(ws, 1, 5, unitGutterIndex, 5);
+  const metaCell = ws.getCell('A5');
   const infoBlockLabels = new Set(infoBlock.map((x) => x.label));
   const filteredFilters = filters.filter((f) => !infoBlockLabels.has(f.label));
   const filterText = filteredFilters.length ? filteredFilters.map((f) => `${f.label}: ${f.value}`).join('  |  ') : 'بدون فلاتر';
@@ -434,25 +410,58 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   metaCell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
   metaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primarySoft } };
   metaCell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
-  ws.getRow(4).height = 22;
+  ws.getRow(5).height = 22;
 
-  // ── Report info block (optional label/value lines above the table) ──
-  let infoBlockRow = 5;
-  infoBlock.forEach(({ label, value }) => {
-    ws.mergeCells(`A${infoBlockRow}:${lastCol}${infoBlockRow}`);
-    const cell = ws.getCell(`A${infoBlockRow}`);
+  // Find balanced split column (1..unitGutterIndex-1) so 2-column blocks divide width evenly
+  const totalSheetWidth = allWidths.reduce((s, w) => s + w, 0);
+  const halfWidth = totalSheetWidth / 2;
+  let splitCol = 1;
+  let bestDiff = Infinity;
+  let accW = 0;
+  for (let i = 0; i < unitGutterIndex - 1; i++) {
+    accW += allWidths[i];
+    const diff = Math.abs(accW - halfWidth);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      splitCol = i + 1;
+    }
+  }
+
+  // ── Report info block (2-column metadata grid above the table) ─
+  let infoBlockRow = 6;
+  const styleInfoCell = (cell: ExcelJS.Cell, label: string, value: string) => {
     cell.value = {
       richText: [
         { text: `${label}: `, font: { name: FONT, size: 9, bold: true, color: { argb: 'FF374151' } } },
-        { text: value, font: { name: FONT, size: 9, color: { argb: 'FF4B5563' } } },
+        { text: value, font: { name: FONT, size: 9, color: { argb: 'FF111827' } } },
       ],
     };
-    cell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
+    cell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true, readingOrder: 'rtl' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primarySoft } };
-    cell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
-    ws.getRow(infoBlockRow).height = 20;
+    cell.border = {
+      top: { style: 'thin', color: { argb: BORDER } },
+      bottom: { style: 'thin', color: { argb: BORDER } },
+      left: { style: 'thin', color: { argb: BORDER } },
+      right: { style: 'thin', color: { argb: BORDER } },
+    };
+  };
+
+  for (let i = 0; i < infoBlock.length; i += 2) {
+    const rightItem = infoBlock[i];
+    const leftItem = infoBlock[i + 1];
+    if (leftItem) {
+      safeMerge(ws, 1, infoBlockRow, splitCol, infoBlockRow);
+      styleInfoCell(ws.getCell(`A${infoBlockRow}`), rightItem.label, rightItem.value);
+
+      safeMerge(ws, splitCol + 1, infoBlockRow, unitGutterIndex, infoBlockRow);
+      styleInfoCell(ws.getCell(`${ws.getColumn(splitCol + 1).letter}${infoBlockRow}`), leftItem.label, leftItem.value);
+    } else {
+      safeMerge(ws, 1, infoBlockRow, unitGutterIndex, infoBlockRow);
+      styleInfoCell(ws.getCell(`A${infoBlockRow}`), rightItem.label, rightItem.value);
+    }
+    ws.getRow(infoBlockRow).height = 22;
     infoBlockRow += 1;
-  });
+  }
 
   ws.getRow(infoBlockRow).height = 6;
 
@@ -579,7 +588,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   ].filter(Boolean) as string[];
 
   notes.forEach((note) => {
-    ws.mergeCells(`A${cursor}:${lastCol}${cursor}`);
+    safeMerge(ws, 1, cursor, unitGutterIndex, cursor);
     const cell = ws.getCell(`A${cursor}`);
     cell.value = note;
     cell.font = { name: FONT, size: 9, color: { argb: 'FF6B7280' } };
@@ -587,6 +596,41 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     ws.getRow(cursor).height = 18;
     cursor += 1;
   });
+
+  // ── Signatures (A1: instructor + director for group/lecture reports; director only otherwise) ──
+  cursor += 1;
+  const sigRightEnd = splitCol;
+  const sigLeftStart = splitCol + 1;
+
+  if (showInstructorSignature) {
+    safeMerge(ws, 1, cursor, sigRightEnd, cursor);
+    const instSigLabel = ws.getCell(`A${cursor}`);
+    instSigLabel.value = instructorName ? `توقيع المحاضر (${instructorName})` : 'توقيع المحاضر';
+    instSigLabel.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF1F2937' } };
+    instSigLabel.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+
+    safeMerge(ws, 1, cursor + 1, sigRightEnd, cursor + 1);
+    const instSigLine = ws.getCell(`A${cursor + 1}`);
+    instSigLine.value = '........................................';
+    instSigLine.font = { name: FONT, size: 10, color: { argb: 'FF6B7280' } };
+    instSigLine.alignment = { horizontal: 'center', vertical: 'bottom' };
+  }
+
+  safeMerge(ws, sigLeftStart, cursor, unitGutterIndex, cursor);
+  const dirSigLabel = ws.getCell(`${ws.getColumn(sigLeftStart).letter}${cursor}`);
+  dirSigLabel.value = 'اعتماد مدير الوحدة';
+  dirSigLabel.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF1F2937' } };
+  dirSigLabel.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+
+  safeMerge(ws, sigLeftStart, cursor + 1, unitGutterIndex, cursor + 1);
+  const dirSigLine = ws.getCell(`${ws.getColumn(sigLeftStart).letter}${cursor + 1}`);
+  dirSigLine.value = '........................................';
+  dirSigLine.font = { name: FONT, size: 10, color: { argb: 'FF6B7280' } };
+  dirSigLine.alignment = { horizontal: 'center', vertical: 'bottom' };
+
+  ws.getRow(cursor).height = 22;
+  ws.getRow(cursor + 1).height = 36;
+  cursor += 2;
 
   // ── Print header/footer ───────────────────────────────────────
   ws.headerFooter = {
@@ -598,40 +642,51 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   const info = workbook.addWorksheet('معلومات التقرير', {
     views: [{ rightToLeft: true, showGridLines: false }],
     properties: { tabColor: { argb: secondary } },
+    pageSetup: {
+      paperSize: 9,
+      orientation: 'landscape',
+      fitToPage: true,
+      fitToWidth: 1,
+      fitToHeight: 0,
+      horizontalCentered: true,
+    },
   });
-  info.columns = [{ width: 26 }, { width: 62 }];
+  info.columns = [{ width: 26 }, { width: 62 }, { width: 23 }];
 
-  // Dual-logo band: institute (HIMS) right (col A), unit left (col B) — the
-  // sheet is RTL so column A renders rightmost. Title block sits below.
-  if (instituteLogo) {
-    const size = logoSize(instituteLogo)!;
-    const imageId = workbook.addImage({
-      base64: instituteLogo.base64,
-      extension: instituteLogo.extension,
-    });
-    info.addImage(imageId, { tl: { col: 0, row: 0 }, ext: size, editAs: 'oneCell' });
-  }
-  if (logo && unitSize) {
-    const imageId = workbook.addImage({ base64: logo.base64, extension: logo.extension });
-    info.addImage(imageId, { tl: { col: 1, row: 0 }, ext: unitSize, editAs: 'oneCell' });
-  }
-  info.getRow(1).height = 20;
-  info.getRow(2).height = 28;
-  info.getRow(3).height = 18;
+  // Dual-logo band: institute (HIMS) right (col A), unit left (col C), header text centered in col B.
+  const infoInstId = workbook.addImage({ base64: INSTITUTE_LOGO_B64, extension: 'png' });
+  info.addImage(infoInstId, { tl: { col: 0, row: 0 }, ext: instSz, editAs: 'oneCell' });
+  info.mergeCells('A1:A4');
 
-  info.mergeCells('A4:B4');
-  const infoTitle = info.getCell('A4');
-  infoTitle.value = branding.systemName;
-  infoTitle.font = { name: FONT, size: 14, bold: true, color: { argb: primary } };
-  infoTitle.alignment = { horizontal: 'right', vertical: 'middle' };
-  info.getRow(4).height = 26;
+  const infoUnitId = workbook.addImage({ base64: UNIT_LOGO_B64, extension: 'png' });
+  info.addImage(infoUnitId, { tl: { col: 2, row: 0 }, ext: unitSz, editAs: 'oneCell' });
+  info.mergeCells('C1:C4');
 
-  info.mergeCells('A5:B5');
-  const infoSubtitle = info.getCell('A5');
-  infoSubtitle.value = `${title} — ${branding.sloganAr}`;
-  infoSubtitle.font = { name: FONT, size: 10, color: { argb: 'FF6B7280' } };
-  infoSubtitle.alignment = { horizontal: 'right', vertical: 'middle' };
-  info.getRow(5).height = 20;
+  const infoInstName = info.getCell('B1');
+  infoInstName.value = 'المعهد العالي للعلوم الإدارية بالقطامية (HIMS)';
+  infoInstName.font = { name: FONT, size: 12, bold: true, color: { argb: primary } };
+  infoInstName.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  info.getRow(1).height = 24;
+
+  const infoUnitName = info.getCell('B2');
+  infoUnitName.value = branding.systemName;
+  infoUnitName.font = { name: FONT, size: 11, bold: true, color: { argb: secondary } };
+  infoUnitName.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  info.getRow(2).height = 24;
+
+  const infoTitle = info.getCell('B3');
+  infoTitle.value = title;
+  infoTitle.font = { name: FONT, size: 15, bold: true, color: { argb: 'FF111827' } };
+  infoTitle.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  info.getRow(3).height = 28;
+
+  const infoSubtitle = info.getCell('B4');
+  infoSubtitle.value = branding.sloganAr;
+  infoSubtitle.font = { name: FONT, size: 9, color: { argb: 'FF6B7280' } };
+  infoSubtitle.alignment = { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' };
+  info.getRow(4).height = 20;
+
+  info.getRow(5).height = 8;
 
   const infoRows: [string, string][] = [
     ['اسم المنصة', branding.systemName],
@@ -647,20 +702,21 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     ['إخلاء مسؤولية', DISCLAIMER],
   ];
 
-  let infoCursor = 7;
+  let infoCursor = 6;
   infoRows.forEach(([label, value]) => {
+    info.mergeCells(`B${infoCursor}:C${infoCursor}`);
     const labelCell = info.getCell(`A${infoCursor}`);
     const valueCell = info.getCell(`B${infoCursor}`);
     labelCell.value = label;
     labelCell.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF374151' } };
     labelCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primarySoft } };
     labelCell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
-    labelCell.border = { bottom: { style: 'hair', color: { argb: BORDER } } };
+    labelCell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
 
     valueCell.value = value;
     valueCell.font = { name: FONT, size: 10, color: { argb: 'FF111827' } };
     valueCell.alignment = { horizontal: 'right', vertical: 'middle', wrapText: true, readingOrder: 'rtl' };
-    valueCell.border = { bottom: { style: 'hair', color: { argb: BORDER } } };
+    valueCell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
     info.getRow(infoCursor).height = label === 'الأعمدة' || label === 'إخلاء مسؤولية' ? 34 : 22;
     infoCursor += 1;
   });

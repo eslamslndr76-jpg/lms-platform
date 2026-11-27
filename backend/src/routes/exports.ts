@@ -310,6 +310,28 @@ router.get('/:dataset', async (req: Request, res: Response) => {
     const footerNote = dataset.buildNote ? await dataset.buildNote(params) : undefined;
     const infoBlock = dataset.buildInfo ? await dataset.buildInfo(params, rows) : undefined;
 
+    const showInstructorSignature = Boolean(params.groupId || params.lectureId);
+    let instructorName: string | undefined;
+    if (showInstructorSignature) {
+      const fromInfo = infoBlock?.find((item) => item.label === 'المحاضر')?.value;
+      if (fromInfo && fromInfo !== '—') {
+        instructorName = fromInfo;
+      } else {
+        try {
+          const r = params.lectureId
+            ? await sql(
+                'SELECT g.instructor_name FROM lectures l JOIN groups g ON l.group_id = g.id WHERE l.id = ? LIMIT 1',
+                params.lectureId,
+              )
+            : await sql('SELECT instructor_name FROM groups WHERE id = ? LIMIT 1', params.groupId);
+          const name = (r.rows[0] as any)?.instructor_name;
+          if (name) instructorName = String(name);
+        } catch {
+          /* optional instructor name */
+        }
+      }
+    }
+
     const buffer = await buildBrandedWorkbook({
       sheetName: dataset.name,
       title: dataset.name,
@@ -322,6 +344,8 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       exportedByRole: identity.role,
       footerNote,
       infoBlock,
+      showInstructorSignature,
+      instructorName,
     });
 
     const filename = safeFilename(
