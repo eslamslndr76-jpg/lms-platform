@@ -1143,7 +1143,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
           <Link href="/courses" className="inline-flex items-center gap-1 text-sm mb-1" style={{ color: 'var(--md-sys-color-primary)' }}>→ العودة إلى الكورسات</Link>
           <h1 className="text-2xl font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>{course.title_ar}</h1>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <button onClick={() => void openAnnouncement()}
             className="md3-btn md3-btn--outlined">
             📣 إرسال الإعلان
@@ -1182,7 +1182,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             <h2 className="font-bold" style={{ color: 'var(--md-sys-color-on-surface)' }}>تفاصيل الكورس</h2>
             <button onClick={startEdit} className="md3-btn md3-btn--filled">✏️ تعديل</button>
           </div>
-          <div className="grid grid-cols-2 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
             <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
               <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>الاسم بالعربية</span>
               <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{course.title_ar}</span>
@@ -1359,20 +1359,20 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                     ? <span>📍 {row.place_name}</span>
                     : <span style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>{course?.course_mode === 'offline' ? (row.location || 'غير محدد') : '💻 أونلاين'}</span>
                 )},
-                { key: 'student_count', label: 'عدد الطلاب', render: (v: number, row: any) => {
+                { key: 'student_count', label: 'الطلاب', align: 'center', nowrap: true, render: (v: number, row: any) => {
                   const cap = row.place_capacity != null
                     ? Math.min(Number(row.place_capacity), Number(row.max_students ?? row.place_capacity))
                     : row.max_students;
-                  return `${v || 0}${cap ? ` / ${cap}` : ''} طالب`;
+                  return `${v || 0}${cap ? ` / ${cap}` : ''}`;
                 } },
                 { key: 'schedule_display', label: 'الموعد', render: (v: string) => v || 'لم يتم تحديد الميعاد بعد' },
-                { key: 'status', label: 'الحالة', render: (v: any, row: any) => (
+                { key: 'status', label: 'الحالة', align: 'center', render: (v: any, row: any) => (
                   <div className="flex items-center gap-2">
                     <StatusBadge status={row.status || (Number(row.is_active) ? 'active' : 'cancelled')} />
                     {!row.status && !Number(row.is_active) && <span className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>(قديم)</span>}
                   </div>
                 )},
-                { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
+                { key: 'actions', label: 'الإجراءات', align: 'center', nowrap: true, render: (_: any, row: any) => (
                   <div className="flex gap-1 flex-wrap" onClick={e => e.stopPropagation()}>
                     {isGroupCompleted(row) ? (
                       <button onClick={() => setConfirmReopenGroup(row)}
@@ -1702,7 +1702,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
       {/* ===================== ADD GROUP MODAL ===================== */}
       <Modal open={addGroupModal} onClose={() => setAddGroupModal(false)} title="إضافة مجموعة جديدة" size="lg">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input placeholder="اسم المجموعة" value={groupForm.name}
             onChange={e => setGroupForm({ ...groupForm, name: e.target.value })}
             className="col-span-2 md3-field" />
@@ -1791,7 +1791,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
       {/* ===================== EDIT GROUP MODAL ===================== */}
       <Modal open={editGroupModal} onClose={() => setEditGroupModal(false)} title="تعديل المجموعة" size="lg">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input placeholder="اسم المجموعة" value={editGroupForm.name}
             onChange={e => setEditGroupForm({ ...editGroupForm, name: e.target.value })}
             className="col-span-2 md3-field" />
@@ -1903,7 +1903,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
             </div>
 
             {detailGroupTab === 'info' && (
-              <div className="grid grid-cols-2 gap-4 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
                 <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                   <span className="block text-sm font-medium mb-1.5" style={{ color: 'var(--md-sys-color-on-surface)' }}>اسم المجموعة</span>
                   <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{detailGroup.name}</span>
@@ -2125,7 +2125,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                               {section.avg != null ? `${section.avg} / 5` : 'لا توجد إجابات'}
                             </span>
                           </div>
-                          <table className="w-full text-sm">
+                          <table className="md3-table w-full text-sm">
                             <tbody>
                               {items.map((item: any) => (
                                 <tr key={item.key} className="border-t" style={{ borderColor: 'var(--md-sys-color-outline-variant)' }}>
@@ -2272,7 +2272,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 ) : reportData && (
                   <>
                     {/* ملخص */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
                       <div className="p-3 rounded-xl" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                         <span className="block mb-1" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>الدورة</span>
                         <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{reportData.course?.title_ar}</span>
@@ -2400,7 +2400,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 ) : lectures.length === 0 ? (
                   <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>لا توجد محاضرات مضافة بعد</p>
                 ) : (
-                  <div className="space-y-2 max-h-80 overflow-y-auto">
+                  <div className="space-y-2 overflow-y-auto" style={{ maxHeight: '20rem' }}>
                     {lectures.map((lec: any) => (
                       <div key={lec.id} className="flex items-center justify-between p-3 rounded-xl text-sm" style={{ backgroundColor: 'var(--md-sys-color-surface-container)' }}>
                         <div className="flex items-center gap-3 flex-1">
@@ -2454,7 +2454,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
                 ) : groupStudents.length === 0 ? (
                   <p className="text-xs" style={{ color: 'var(--md-sys-color-on-surface-variant)' }}>لا يوجد طلاب في هذه المجموعة</p>
                 ) : (
-                  <div className="space-y-1 max-h-60 overflow-y-auto">
+                  <div className="space-y-1 overflow-y-auto" style={{ maxHeight: '15rem' }}>
                     {groupStudents.map((s: any) => (
                       <div key={s.id} className="flex items-center justify-between p-2 rounded-lg text-xs" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)' }}>
                         <div>
@@ -2972,7 +2972,7 @@ export default function CourseDetailPage({ params }: { params: { id: string } })
 
                 {/* Attendance summary */}
                 {attendanceSummary && (
-                  <div className="w-full grid grid-cols-3 gap-3 mt-2">
+                  <div className="w-full grid grid-cols-3 sm:grid-cols-3 gap-3 mt-2">
                     <div className="text-center p-3" style={{ backgroundColor: 'var(--md-sys-color-success-container)', borderRadius: 'var(--md-sys-shape-corner-small)' }}>
                       <p className="text-xl font-bold" style={{ color: 'var(--md-sys-color-on-success-container)' }}>{attendanceSummary.present}</p>
                       <p className="text-xs" style={{ color: 'var(--md-sys-color-on-success-container)' }}>حاضر</p>
