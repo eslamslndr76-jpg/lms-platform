@@ -208,11 +208,11 @@ export default function AdminDashboard() {
           </div>
           <DataTable
             columns={[
-              { key: 'id', label: '#' },
+              { key: 'id', label: '#', align: 'center', nowrap: true },
               { key: 'student_name', label: 'الطالب' },
               { key: 'title_ar', label: 'الكورس' },
-              { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
-              { key: 'status', label: 'الحالة', render: (v: string) => <StatusBadge status={v} /> },
+              { key: 'amount', label: 'المبلغ', align: 'center', nowrap: true, render: (v: number) => `${v} ج.م` },
+              { key: 'status', label: 'الحالة', align: 'center', nowrap: true, render: (v: string) => <StatusBadge status={v} /> },
             ]}
             data={stats?.recent || []}
           />

@@ -98,11 +98,11 @@ export default function FinancialsPage() {
           >
             <DataTable
               columns={[
-                { key: 'date', label: 'التاريخ', render: (v: string) => v ? new Date(v).toLocaleDateString('ar-EG') : '—' },
+                { key: 'date', label: 'التاريخ', align: 'center', nowrap: true, render: (v: string) => v ? new Date(v).toLocaleDateString('ar-EG') : '—' },
                 { key: 'student_name', label: 'الطالب' },
                 { key: 'title_ar', label: 'الكورس' },
-                { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
-                { key: 'status', label: 'الحالة', render: (v: string) => <StatusBadge status={v} /> },
+                { key: 'amount', label: 'المبلغ', align: 'center', nowrap: true, render: (v: number) => `${v} ج.م` },
+                { key: 'status', label: 'الحالة', align: 'center', nowrap: true, render: (v: string) => <StatusBadge status={v} /> },
               ]}
               data={financials}
             />

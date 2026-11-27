@@ -171,9 +171,11 @@ export default function StudentsPage() {
         <DataTable
           columns={[
             { key: 'name', label: 'الاسم' },
-            { key: 'email', label: 'البريد' },
-            { key: 'phone', label: 'الهاتف', render: (v: string) => v || '-' },
-            { key: 'is_active', label: 'الحالة', render: (v: any) => (
+            { key: 'email', label: 'البريد', render: (v: string) => (
+              <span className="block max-w-[200px] truncate" dir="ltr" title={v}>{v}</span>
+            ) },
+            { key: 'phone', label: 'الهاتف', align: 'center', nowrap: true, render: (v: string) => v || '-' },
+            { key: 'is_active', label: 'الحالة', align: 'center', nowrap: true, render: (v: any) => (
               <span className="inline-flex items-center gap-1.5 text-sm">
                 <span className="material-symbols-outlined text-[16px]" aria-hidden
                   style={{ color: Number(v) ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)' }}>
@@ -182,27 +184,27 @@ export default function StudentsPage() {
                 {Number(v) ? 'نشط' : 'غير نشط'}
               </span>
             ) },
-            { key: 'created_at', label: 'تاريخ التسجيل', render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
-            { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
-              <div className="flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
+            { key: 'created_at', label: 'تاريخ التسجيل', align: 'center', nowrap: true, render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
+            { key: 'actions', label: 'الإجراءات', align: 'center', nowrap: true, render: (_: any, row: any) => (
+              <div className="flex flex-nowrap justify-center gap-1" onClick={e => e.stopPropagation()}>
                 <button
                   onClick={() => startEdit(row)}
                   className="md3-btn md3-btn--text text-xs"
-                  style={{ minHeight: 32, padding: '0 10px' }}
+                  style={{ minHeight: 32, padding: '0 8px' }}
                 >
                   تعديل
                 </button>
                 <button
                   onClick={() => setConfirmToggle(row)}
                   className="md3-btn md3-btn--text text-xs"
-                  style={{ minHeight: 32, padding: '0 10px' }}
+                  style={{ minHeight: 32, padding: '0 8px' }}
                 >
                   {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
                 </button>
                 <button
                   onClick={() => setConfirmDelete(row)}
                   className="md3-btn md3-btn--text text-xs"
-                  style={{ minHeight: 32, padding: '0 10px', color: 'var(--md-sys-color-error)' }}
+                  style={{ minHeight: 32, padding: '0 8px', color: 'var(--md-sys-color-error)' }}
                 >
                   حذف
                 </button>

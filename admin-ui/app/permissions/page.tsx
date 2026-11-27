@@ -135,14 +135,14 @@ function PermissionMatrix({
           {inheritHint}
         </p>
       )}
-      <div className="overflow-auto max-h-[70vh] rounded-md3-md border border-outline-variant">
-        <table className="w-full text-sm min-w-[520px] border-collapse">
+      <div className="md3-table-wrap max-h-[70vh] overflow-y-auto">
+        <table className="md3-table min-w-[520px]">
           <caption className="sr-only">مصفوفة الصلاحيات</caption>
           <thead>
             <tr>
-              <th scope="col" className="text-start py-3 px-3 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10">القسم</th>
-              <th scope="col" className="py-3 px-2 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10 w-24">عرض</th>
-              <th scope="col" className="py-3 px-2 font-semibold text-on-surface bg-surface-container-high sticky top-0 z-10 w-24">تعديل</th>
+              <th scope="col" className="text-start sticky top-0 z-10">القسم</th>
+              <th scope="col" className="text-center sticky top-0 z-10 w-24">عرض</th>
+              <th scope="col" className="text-center sticky top-0 z-10 w-24">تعديل</th>
             </tr>
           </thead>
           <tbody>
@@ -150,8 +150,8 @@ function PermissionMatrix({
               const actions = parseActions(value[section.key]);
               const locked = disabled || section.managerOnly;
               return (
-                <tr key={section.key} className="border-t border-outline-variant align-top">
-                  <th scope="row" className="text-start py-3 px-3 font-normal">
+                <tr key={section.key} className="md3-table-row align-top">
+                  <th scope="row" className="text-start py-3.5 px-4 font-normal border-b" style={{ borderColor: 'var(--md-sys-color-outline-variant)', backgroundColor: 'var(--md-sys-color-surface-container-lowest)' }}>
                     <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-on-surface">
                       <span aria-hidden>{section.icon}</span>
                       <span>{section.label}</span>
@@ -169,7 +169,7 @@ function PermissionMatrix({
                     const active = actions.includes(action);
                     const label = action === 'read' ? 'عرض' : 'تعديل';
                     return (
-                      <td key={action} className="py-2 px-2 text-center">
+                      <td key={action} className="text-center">
                         <label
                           className={`inline-flex items-center justify-center min-h-[44px] min-w-[44px] ${locked ? 'cursor-not-allowed' : 'cursor-pointer'}`}
                         >
@@ -562,9 +562,9 @@ export default function PermissionsPage() {
       key: 'name',
       label: 'الحساب',
       render: (value: string, row: StaffUser) => (
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 max-w-[220px]">
           {row.avatar ? (
-            <img src={row.avatar} alt={value} className="w-8 h-8 rounded-full object-cover" />
+            <img src={row.avatar} alt={value} className="w-8 h-8 rounded-full object-cover shrink-0" />
           ) : (
             <span
               className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 bg-primary-container text-on-primary-container"
@@ -574,15 +574,17 @@ export default function PermissionsPage() {
           )}
           <div className="min-w-0">
             <p className="text-sm font-medium truncate text-on-surface">{value}</p>
-            <p className="text-xs truncate text-on-surface-variant">{row.email}</p>
+            <p className="text-xs truncate text-on-surface-variant" dir="ltr">{row.email}</p>
+            {row.phone && <p className="text-xs truncate text-on-surface-variant" dir="ltr">{row.phone}</p>}
           </div>
         </div>
       ),
     },
-    { key: 'phone', label: 'الهاتف', render: (value: string) => value || <span className="text-on-surface-variant">—</span> },
     {
       key: 'role_id',
       label: 'الدور',
+      align: 'center' as const,
+      nowrap: true,
       render: (value: number, row: StaffUser) => (
         <span
           className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium ${Number(value) === 1 ? 'bg-primary-container text-on-primary-container' : 'bg-surface-container-highest text-on-surface'}`}
@@ -598,21 +600,23 @@ export default function PermissionsPage() {
         const custom = !!value && Object.keys(value).length > 0;
         const effective = mergePermissions(rolePermissionMap(row.role_id), value);
         return (
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 max-w-[200px]">
             <span
-              className={custom ? 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-warning-container text-on-warning-container' : 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-success-container text-on-success-container'}
+              className={custom ? 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium w-fit bg-warning-container text-on-warning-container' : 'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium w-fit bg-success-container text-on-success-container'}
             >
               {custom ? 'مخصصة للحساب' : 'وراثة من الدور'}
             </span>
-            <span className="text-xs text-on-surface-variant">{summarize(effective, sections)}</span>
+            <span className="text-xs text-on-surface-variant truncate" title={summarize(effective, sections)}>{summarize(effective, sections)}</span>
           </div>
         );
       },
     },
-    { key: 'last_login', label: 'آخر دخول', render: (value: string) => <span className="text-xs text-on-surface-variant">{formatDate(value)}</span> },
+    { key: 'last_login', label: 'آخر دخول', align: 'center' as const, nowrap: true, render: (value: string) => <span className="text-xs text-on-surface-variant">{formatDate(value)}</span> },
     {
       key: 'is_active',
       label: 'الحالة',
+      align: 'center' as const,
+      nowrap: true,
       render: (value: number) => (
         <span className={`inline-flex items-center gap-1 text-xs font-medium ${Number(value) ? 'text-success' : 'text-error'}`}>
           <span className={`w-2 h-2 rounded-full ${Number(value) ? 'bg-success' : 'bg-error'}`} />
@@ -623,19 +627,21 @@ export default function PermissionsPage() {
     {
       key: 'actions',
       label: 'الإجراءات',
+      align: 'center' as const,
+      nowrap: true,
       render: (_: unknown, row: StaffUser) => (
-        <div className="flex flex-wrap gap-1" onClick={(event) => event.stopPropagation()}>
-          <button onClick={() => openPermissions(row)} className="md3-btn md3-btn--tonal">
+        <div className="flex flex-nowrap justify-center gap-1" onClick={(event) => event.stopPropagation()}>
+          <button onClick={() => openPermissions(row)} className="md3-btn md3-btn--tonal text-xs" style={{ minHeight: 32, padding: '0 10px' }}>
             الصلاحيات
           </button>
-          <button onClick={() => openEdit(row)} className="md3-btn md3-btn--text">
+          <button onClick={() => openEdit(row)} className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 8px' }}>
             تعديل
           </button>
           <button
             onClick={() => setToggleTarget(row)}
             disabled={row.id === currentUser?.id}
             className="md3-btn md3-btn--text text-xs disabled:cursor-not-allowed"
-            style={{ color: Number(row.is_active) ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-success)' }}
+            style={{ minHeight: 32, padding: '0 8px', color: Number(row.is_active) ? 'var(--md-sys-color-error)' : 'var(--md-sys-color-success)' }}
           >
             {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
           </button>
@@ -643,6 +649,7 @@ export default function PermissionsPage() {
             onClick={() => setDeleteTarget(row)}
             disabled={row.id === currentUser?.id}
             className="md3-btn md3-btn--text text-xs text-error"
+            style={{ minHeight: 32, padding: '0 8px' }}
           >
             حذف
           </button>
@@ -853,44 +860,48 @@ export default function PermissionsPage() {
             <p className="text-sm mb-3 text-on-surface-variant">
               البريد الإلكتروني أو رقم الهاتف يُستخدمان لتسجيل الدخول. كلمات المرور مشفّرة ولا يمكن عرضها — يمكنك إعادة تعيينها فقط.
             </p>
-            <div className="overflow-auto max-h-[70vh] rounded-md3-md border border-outline-variant">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 z-10 bg-surface-container-high">
-                  <tr className="text-sm text-on-surface-variant">
-                    <th className="text-start py-3 px-3 font-semibold">الحساب</th>
-                    <th className="text-start py-3 px-3 font-semibold">البريد الإلكتروني</th>
-                    <th className="text-start py-3 px-3 font-semibold">الهاتف</th>
-                    <th className="text-start py-3 px-3 font-semibold">الدور</th>
-                    <th className="text-start py-3 px-3 font-semibold">آخر دخول</th>
-                    <th className="text-start py-3 px-3 font-semibold">تاريخ الإنشاء</th>
-                    <th className="text-start py-3 px-3 font-semibold">الحالة</th>
-                    <th className="text-start py-3 px-3 font-semibold">كلمة المرور</th>
+            <div className="md3-table-wrap max-h-[70vh] overflow-y-auto">
+              <table className="md3-table">
+                <thead>
+                  <tr>
+                    <th className="text-start sticky top-0 z-10">الحساب</th>
+                    <th className="text-start sticky top-0 z-10">بيانات الدخول</th>
+                    <th className="text-center sticky top-0 z-10">الدور</th>
+                    <th className="text-center sticky top-0 z-10">آخر دخول / الإنشاء</th>
+                    <th className="text-center sticky top-0 z-10">الحالة</th>
+                    <th className="text-center sticky top-0 z-10">كلمة المرور</th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-sm text-on-surface-variant">
+                      <td colSpan={6} className="md3-table-empty">
                         لا توجد حسابات بعد.
                       </td>
                     </tr>
                   )}
                   {users.map((staff) => (
-                    <tr key={staff.id} className="border-t border-outline-variant">
-                      <td className="py-3 px-3">
+                    <tr key={staff.id} className="md3-table-row">
+                      <td>
                         <span className="font-medium text-on-surface">{staff.name}</span>
                       </td>
-                      <td className="py-3 px-3 text-on-surface" dir="ltr">{staff.email}</td>
-                      <td className="py-3 px-3 text-on-surface" dir="ltr">{staff.phone || '—'}</td>
-                      <td className="py-3 px-3 text-on-surface">{roleLabel(staff.role_id, staff.role_name)}</td>
-                      <td className="py-3 px-3 text-sm text-on-surface-variant">{formatDate(staff.last_login)}</td>
-                      <td className="py-3 px-3 text-sm text-on-surface-variant">{formatDate(staff.created_at)}</td>
-                      <td className="py-3 px-3">
+                      <td>
+                        <div className="text-on-surface" dir="ltr">{staff.email}</div>
+                        {staff.phone && (
+                          <div className="text-xs text-on-surface-variant" dir="ltr">{staff.phone}</div>
+                        )}
+                      </td>
+                      <td className="text-center whitespace-nowrap text-on-surface">{roleLabel(staff.role_id, staff.role_name)}</td>
+                      <td className="text-center whitespace-nowrap">
+                        <div className="text-sm text-on-surface-variant">{formatDate(staff.last_login)}</div>
+                        <div className="text-xs text-on-surface-variant">أنشئ: {formatDate(staff.created_at)}</div>
+                      </td>
+                      <td className="text-center whitespace-nowrap">
                         <span className={`text-xs font-medium ${Number(staff.is_active) ? 'text-success' : 'text-error'}`}>
                           {Number(staff.is_active) ? 'نشط' : 'معطل'}
                         </span>
                       </td>
-                      <td className="py-3 px-3">
+                      <td className="text-center whitespace-nowrap">
                         <button
                           onClick={() => { setPasswordTarget(staff); setNewPassword(''); }}
                           className="md3-btn md3-btn--outlined text-xs"

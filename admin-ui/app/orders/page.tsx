@@ -238,12 +238,12 @@ export default function OrdersPage() {
       <div className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
         <DataTable
           columns={[
-            { key: 'id', label: '#' },
+            { key: 'id', label: '#', align: 'center', nowrap: true },
             { key: 'student_name', label: 'الطالب', render: (v: string, r: any) =>
               <span className="cursor-pointer" style={{ color: 'var(--md-sys-color-primary)' }} onClick={() => router.push(`/students/${r.user_id}`)}>{v}</span> },
             { key: 'title_ar', label: 'الكورسات', render: (v: string, r: any) =>
               <span style={{ color: 'var(--md-sys-color-on-surface)' }}>{Array.isArray(r.items) && r.items.length ? r.items.map((i: any) => i.title_ar).join('، ') : v || '-'}</span> },
-            { key: 'amount', label: 'المبلغ', render: (v: number) => `${v} ج.م` },
+            { key: 'amount', label: 'المبلغ', align: 'center', nowrap: true, render: (v: number) => `${v} ج.م` },
             { key: 'sender_phone', label: 'رقم المحوِّل', render: (v: string) => v || '-' },
             { key: 'status', label: 'الحالة', render: (v: string, row: any) => (
               <select value={v} onChange={e => { e.stopPropagation(); updateStatus(row.id, e.target.value); }}
@@ -256,7 +256,7 @@ export default function OrdersPage() {
                 <option value="cancelled">ملغي</option>
               </select>
             )},
-            { key: 'created_at', label: 'التاريخ', render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
+            { key: 'created_at', label: 'التاريخ', align: 'center', nowrap: true, render: (v: string) => new Date(v).toLocaleDateString('ar-EG') },
             { key: 'actions', label: 'الإجراءات', render: (_: any, row: any) => (
               <div className="flex gap-1" onClick={e => e.stopPropagation()}>
                 <button onClick={() => { setSelectedOrder(row); setEditForm({ amount: row.amount, notes_team: row.notes_team || row.notes || '', notes_student: row.notes_student || '', payment_method: row.payment_method || '', sender_phone: row.sender_phone || '' }); setEditing(true); }}

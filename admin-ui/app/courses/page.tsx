@@ -178,12 +178,24 @@ export default function CoursesPage() {
       <section className="p-4" style={{ backgroundColor: 'var(--md-sys-color-surface-container-low)', borderRadius: 'var(--md-sys-shape-corner-medium)' }}>
         <DataTable
           columns={[
-            { key: 'id', label: '#' },
-            { key: 'title_ar', label: 'الاسم (عربي)' },
-            { key: 'title_en', label: 'English' },
+            { key: 'id', label: '#', align: 'center', nowrap: true },
+            {
+              key: 'title_ar',
+              label: 'الكورس',
+              render: (v: string, row: any) => (
+                <div className="min-w-0 max-w-[240px]">
+                  <p className="font-medium truncate" title={v}>{v}</p>
+                  {row.title_en && (
+                    <p className="text-xs truncate" dir="ltr" style={{ color: 'var(--md-sys-color-on-surface-variant)' }} title={row.title_en}>
+                      {row.title_en}
+                    </p>
+                  )}
+                </div>
+              ),
+            },
             { key: 'category_name_ar', label: 'التصنيف', render: (v: string) => v || '—' },
-            { key: 'price', label: 'السعر', render: (v: number) => `${v} ج.م` },
-            { key: 'course_mode', label: 'النوع', render: (v: string) => (
+            { key: 'price', label: 'السعر', align: 'center', nowrap: true, render: (v: number) => `${v} ج.م` },
+            { key: 'course_mode', label: 'النوع', align: 'center', nowrap: true, render: (v: string) => (
               <span className="inline-flex items-center gap-1.5 text-sm">
                 <span className="material-symbols-outlined text-[16px]" aria-hidden>
                   {v === 'offline' ? 'school' : 'laptop_mac'}
@@ -191,7 +203,7 @@ export default function CoursesPage() {
                 {v === 'offline' ? 'حضوري' : 'أونلاين'}
               </span>
             ) },
-            { key: 'is_active', label: 'الحالة', render: (v: any) => (
+            { key: 'is_active', label: 'الحالة', align: 'center', nowrap: true, render: (v: any) => (
               <span className="inline-flex items-center gap-1.5 text-sm">
                 <span className="material-symbols-outlined text-[16px]" aria-hidden
                   style={{ color: Number(v) ? 'var(--md-sys-color-success)' : 'var(--md-sys-color-error)' }}>
@@ -200,21 +212,21 @@ export default function CoursesPage() {
                 {Number(v) ? 'نشط' : 'غير نشط'}
               </span>
             ) },
-            { key: 'actions', label: 'الإجراءات',
+            { key: 'actions', label: 'الإجراءات', align: 'center', nowrap: true,
               render: (_: any, row: any) => (
-                <div className="flex flex-wrap gap-1" onClick={e => e.stopPropagation()}>
+                <div className="flex flex-nowrap justify-center gap-1" onClick={e => e.stopPropagation()}>
                   <button onClick={() => router.push(`/courses/${row.id}`)}
-                    className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 10px' }}>عرض</button>
+                    className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 8px' }}>عرض</button>
                   <button onClick={() => startEdit(row)}
-                    className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 10px' }}>تعديل</button>
+                    className="md3-btn md3-btn--text text-xs" style={{ minHeight: 32, padding: '0 8px' }}>تعديل</button>
                   <button onClick={() => setConfirmToggle(row)}
                     className="md3-btn md3-btn--text text-xs"
-                    style={{ minHeight: 32, padding: '0 10px' }}>
+                    style={{ minHeight: 32, padding: '0 8px' }}>
                     {Number(row.is_active) ? 'تعطيل' : 'تفعيل'}
                   </button>
                   <button onClick={() => setConfirmDelete(row)}
                     className="md3-btn md3-btn--text text-xs"
-                    style={{ minHeight: 32, padding: '0 10px', color: 'var(--md-sys-color-error)' }}>حذف</button>
+                    style={{ minHeight: 32, padding: '0 8px', color: 'var(--md-sys-color-error)' }}>حذف</button>
                 </div>
               )
             },
