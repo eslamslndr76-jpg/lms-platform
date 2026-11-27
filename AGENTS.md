@@ -10,14 +10,19 @@
 - `GROUP_WORKFLOW.md` is a human guide (group states, notifications). Read it only when touching group-state or notification logic.
 
 ## The agent and the current plan
-One agent works on the whole project: `backend/`, `admin-ui/`, `user-ui/` and `flutter_app/`.
+Several AI agents may work on this project, one after another or in parallel.
 
-- The current work plan is `admin_plan.md` + `admin_plan/phase-N-*.md`. Read the master file and ONLY the current phase file. Each phase file states its area (platform = `backend/` `admin-ui/` `user-ui/`, app = `flutter_app/`).
+- The current work plan is `ui-fix-plan/`. Start with `ui-fix-plan/README.md` (protocol and decisions), then `ui-fix-plan/PROGRESS.md` (status board), then `01-diagnosis.md` and ONLY the file of your phase.
+- When the owner says "continue" / "كمل من المرحلة اللي وقفنا عندها": pull branch `ui-excel-fixes`, read `PROGRESS.md` and its handover log, then:
+  1. A task marked `[~]` or `[!]` is unfinished: if the owner asked you to resume it, read its notes and continue it. If it may still be running with another agent, ask first.
+  2. Otherwise take the first `[ ]` task whose dependencies are all `[x]`.
+  3. Claim it in `PROGRESS.md` before editing any code, as the README describes.
+- Work only on branch `ui-excel-fixes`. Never merge into `main` or deploy without the owner's approval.
+- When a task is finished, mark it `[x]` with date and time (Africa/Cairo) in `PROGRESS.md`, add a handover line, commit and push the branch.
 - `api-contract.md` (root) is the live description of the API the app consumes. Keep it accurate whenever you change an endpoint the app uses.
 - Reference documents for forms (survey, instructor evaluation, report, proposal) live in `docs/forms-refs/*.md`. Read them only when a phase says so.
 - The certificate design reference lives in `docs/certificate-design/` (design file + image assets). Read it only in the certificate-design phase.
 - Brand assets live in `brand-assets/`: unit logo (`logo.png`, `logo.svg`, `logo-white.png`) and the institute logo (`institute-logo.png`, HIMS).
-- When a phase is finished write the completion line in the phase file and update the status table in `admin_plan.md`.
 
 ## Layout
 npm workspace with three pillars (+ the standalone Flutter project):
@@ -45,7 +50,7 @@ npm workspace with three pillars (+ the standalone Flutter project):
 ## Conventions
 - RTL Arabic: `<html lang="ar" dir="rtl">` in both root layouts. All new UI must be RTL-aware, mobile first.
 - No `next/image`: images are base64 data URLs (`lib/imageUtils.ts` → `compressAndEncode`, max 800px / JPEG 0.7) in plain `<img>`.
-- Design system: the Material 3 tokens in `user-ui/app/globals.css` are the source of truth; `admin-ui` mirrors them (admin_plan phases 8 to 14). Never hard-code colors or use `opacity` to dim text; minimum text size 12px (14px for content).
+- Design system: the Material 3 tokens in `user-ui/app/globals.css` are the source of truth; `admin-ui` mirrors them. Never hard-code colors or use `opacity` to dim text; minimum text size 12px (14px for content).
 - State: React Context only. Animations: hand-rolled CSS keyframes. Icons: emoji glyphs. No extra libraries.
 - TypeScript `strict: true`. Alias `@/*` exists, but code mostly uses relative imports.
 - DB columns, API fields, and frontend variables use the same names. Define request/response JSON before wiring frontend to backend.
