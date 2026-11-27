@@ -115,6 +115,7 @@ Frontends: `NEXT_PUBLIC_API_URL` (default `http://localhost:3001`).
 - OTP fixes: expiry stored in SQLite format matching the verify query (was ISO vs `datetime('now')` — codes stayed valid ~24h), and the per-minute send limit now parses SQLite timestamps as UTC (never fired before) — 2026-11-23
 - `GET /api/courses/:id` now Number()-converts all boolean flags like the list endpoint (`featured`, `enable_direct_purchase`, …) — clients compare strictly — 2026-11-23
 - Booking expiry now also runs lazily on order list reads (`GET /api/orders/my`, admin orders list) since the 6-hour interval never runs on a warm production instance — 2026-11-23
+- GET /api/exports/attendance — XLSX matrix (one row per student, one column per lecture with COUNTIF totals/rate, one sheet per group) when exported for group/course/all without lectureId/studentId/status; row format + CSV/JSON/preview also apply unheld/unconfirmed rules (`— لم تُعقد`, `؟ غير مؤكدة`); all Excel exports unfreeze panes, use official 110px dual-logo header, 2-col info block, A1 signatures, Arabic enum labels, and `Africa/Cairo` timestamps — 2026-11-27
 
 ## Language & branding
 - Platform name: "وحدة التدريب و التطوير" (formerly "فريق تدريب X2").

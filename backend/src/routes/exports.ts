@@ -7,11 +7,13 @@ import {
   ExportDataset,
   ExportParams,
   ORDER_STATUS_LABELS,
+  buildAttendanceMatrixSheets,
   findDataset,
   runDataset,
 } from '../services/exportDatasets';
 import {
   buildBrandedWorkbook,
+  buildMultiSheetWorkbook,
   formatCairoDateTime,
   loadBranding,
   safeFilename,
@@ -295,8 +297,16 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'No valid columns selected' });
     }
 
-    const rows = await runDataset(dataset, params);
     const format = String(req.query.format || 'xlsx');
+    const useAttendanceMatrix =
+      dataset.key === 'attendance' &&
+      format === 'xlsx' &&
+      !isPreview &&
+      !params.lectureId &&
+      !params.studentId &&
+      !params.status;
+
+    const rows = useAttendanceMatrix ? [] : await runDataset(dataset, params);
 
     // ── Preview for the admin UI ────────────────────────────────
     if (isPreview) {
@@ -330,46 +340,83 @@ router.get('/:dataset', async (req: Request, res: Response) => {
       describeFilters(dataset, params),
       exporterIdentity(req),
     ]);
-    const footerNote = dataset.buildNote ? await dataset.buildNote(params) : undefined;
-    const infoBlock = dataset.buildInfo ? await dataset.buildInfo(params, rows) : undefined;
 
-    const showInstructorSignature = Boolean(params.groupId || params.lectureId);
-    let instructorName: string | undefined;
-    if (showInstructorSignature) {
-      const fromInfo = infoBlock?.find((item) => item.label === 'المحاضر')?.value;
-      if (fromInfo && fromInfo !== '—') {
-        instructorName = fromInfo;
+    let buffer: Buffer;
+    if (useAttendanceMatrix) {
+      const sheets = await buildAttendanceMatrixSheets(params, requestedColumns, filters);
+      if (sheets.length === 1) {
+        buffer = await buildBrandedWorkbook({
+          ...sheets[0],
+          branding,
+          exportedBy: identity.name,
+          exportedByRole: identity.role,
+        });
+      } else if (sheets.length > 1) {
+        buffer = await buildMultiSheetWorkbook({
+          title: dataset.name,
+          description: 'كشف حضور الطلاب حسب المحاضرات (صف لكل طالب، ورقة عمل لكل مجموعة).',
+          branding,
+          filters,
+          exportedBy: identity.name,
+          exportedByRole: identity.role,
+          sheets,
+        });
       } else {
-        try {
-          const r = params.lectureId
-            ? await sql(
-                'SELECT g.instructor_name FROM lectures l JOIN groups g ON l.group_id = g.id WHERE l.id = ? LIMIT 1',
-                params.lectureId,
-              )
-            : await sql('SELECT instructor_name FROM groups WHERE id = ? LIMIT 1', params.groupId);
-          const name = (r.rows[0] as any)?.instructor_name;
-          if (name) instructorName = String(name);
-        } catch {
-          /* optional instructor name */
+        buffer = await buildBrandedWorkbook({
+          sheetName: dataset.name,
+          title: dataset.name,
+          description: dataset.description,
+          columns,
+          rows: [],
+          branding,
+          filters,
+          exportedBy: identity.name,
+          exportedByRole: identity.role,
+          emptyMessage: 'لا توجد مجموعات مطابقة للفلاتر الحالية',
+        });
+      }
+    } else {
+      const footerNote = dataset.buildNote ? await dataset.buildNote(params) : undefined;
+      const infoBlock = dataset.buildInfo ? await dataset.buildInfo(params, rows) : undefined;
+
+      const showInstructorSignature = Boolean(params.groupId || params.lectureId);
+      let instructorName: string | undefined;
+      if (showInstructorSignature) {
+        const fromInfo = infoBlock?.find((item) => item.label === 'المحاضر')?.value;
+        if (fromInfo && fromInfo !== '—') {
+          instructorName = fromInfo;
+        } else {
+          try {
+            const r = params.lectureId
+              ? await sql(
+                  'SELECT g.instructor_name FROM lectures l JOIN groups g ON l.group_id = g.id WHERE l.id = ? LIMIT 1',
+                  params.lectureId,
+                )
+              : await sql('SELECT instructor_name FROM groups WHERE id = ? LIMIT 1', params.groupId);
+            const name = (r.rows[0] as any)?.instructor_name;
+            if (name) instructorName = String(name);
+          } catch {
+            /* optional instructor name */
+          }
         }
       }
-    }
 
-    const buffer = await buildBrandedWorkbook({
-      sheetName: dataset.name,
-      title: dataset.name,
-      description: dataset.description,
-      columns,
-      rows,
-      branding,
-      filters,
-      exportedBy: identity.name,
-      exportedByRole: identity.role,
-      footerNote,
-      infoBlock,
-      showInstructorSignature,
-      instructorName,
-    });
+      buffer = await buildBrandedWorkbook({
+        sheetName: dataset.name,
+        title: dataset.name,
+        description: dataset.description,
+        columns,
+        rows,
+        branding,
+        filters,
+        exportedBy: identity.name,
+        exportedByRole: identity.role,
+        footerNote,
+        infoBlock,
+        showInstructorSignature,
+        instructorName,
+      });
+    }
 
     const filename = safeFilename(
       [dataset.name, ...filters.filter((f) => f.label === 'الكورس' || f.label === 'المجموعة').map((f) => f.value)]

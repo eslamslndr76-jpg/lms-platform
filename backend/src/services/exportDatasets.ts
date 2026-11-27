@@ -1,5 +1,9 @@
 import { sql } from '../db/helpers';
-import { formatCairoDateTime, type ExportColumn } from './excelExportService';
+import {
+  formatCairoDateTime,
+  type ExportColumn,
+  type SheetBuildOptions,
+} from './excelExportService';
 
 /**
  * Registry of every exportable dataset in the system.
@@ -94,6 +98,56 @@ function formatDateShort(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!m) return value;
   return `${Number(m[3])}/${Number(m[2])}/${Number(m[1])}`;
+}
+
+/** 'YYYY-MM-DD…' → 'd/m' for matrix lecture headers. */
+function formatDayMonth(value: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
+  if (!m) return value;
+  return `${Number(m[3])}/${Number(m[2])}`;
+}
+
+export type AttendanceCellState = 'attended' | 'absent' | 'unconfirmed' | 'not_held';
+
+export const ATTENDANCE_STATE_LABELS: Record<AttendanceCellState, string> = {
+  attended: '✓ حضر',
+  absent: '✗ غاب',
+  unconfirmed: '؟ غير مؤكدة',
+  not_held: '— لم تُعقد',
+};
+
+const ATTENDANCE_STATE_BADGE: ExportColumn['badge'] = {
+  attended: { label: '✓ حضر', tone: 'success' },
+  absent: { label: '✗ غاب', tone: 'danger' },
+  unconfirmed: { label: '؟ غير مؤكدة', tone: 'neutral' },
+  not_held: { label: '— لم تُعقد', tone: 'neutral' },
+};
+
+const MATRIX_CELL_BADGE: ExportColumn['badge'] = {
+  '✓ حضر': { label: '✓ حضر', tone: 'success' },
+  '✗ غاب': { label: '✗ غاب', tone: 'danger' },
+  '؟ غير مؤكدة': { label: '؟ غير مؤكدة', tone: 'neutral' },
+  '— لم تُعقد': { label: '— لم تُعقد', tone: 'neutral' },
+};
+
+const ATTENDANCE_LEGEND_NOTE =
+  'مفتاح الرموز: ✓ حضر (حضر المحاضرة)  |  ✗ غاب (محاضرة معقودة ولم يحضر)  |  ؟ غير مؤكدة (مرّ تاريخها ولم تُؤكَّد بعد ولا تُحسب غياباً)  |  — لم تُعقد (لم يُسجَّل عقدها بعد ولا تدخل في الغياب أو النسبة)';
+
+function resolveAttendanceState(input: {
+  attended: unknown;
+  isCompleted: unknown;
+  hasAnyAttendance: unknown;
+  lectureDate: unknown;
+  todayCairo: string;
+}): AttendanceCellState {
+  if (Number(input.attended) === 1) return 'attended';
+  const held = Number(input.isCompleted) === 1 || Number(input.hasAnyAttendance) === 1;
+  if (held) return 'absent';
+  const dateStr = String(input.lectureDate ?? '').slice(0, 10);
+  if (dateStr && /^\d{4}-\d{2}-\d{2}$/.test(dateStr) && dateStr < input.todayCairo) {
+    return 'unconfirmed';
+  }
+  return 'not_held';
 }
 
 function formatCairoFromRaw(value: unknown): string {
@@ -530,11 +584,8 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         key: 'attended',
         header: 'الحالة',
         type: 'text',
-        width: 14,
-        badge: {
-          '1': { label: '✓ حضر', tone: 'success' },
-          '0': { label: '✗ لم يحضر', tone: 'danger' },
-        },
+        width: 15,
+        badge: ATTENDANCE_STATE_BADGE,
       },
       { key: 'verification_method', header: 'طريقة التحقق', type: 'text', width: 14 },
       { key: 'attended_at', header: 'وقت الحضور', type: 'datetime', width: 18 },
@@ -571,7 +622,10 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       const args: unknown[] = [];
       let where = '1=1';
       if (params.status === 'attended') where += ' AND la.attended = 1';
-      if (params.status === 'absent') where += ' AND COALESCE(la.attended, 0) = 0';
+      if (params.status === 'absent') {
+        where +=
+          ' AND COALESCE(la.attended, 0) = 0 AND (l.is_completed = 1 OR EXISTS (SELECT 1 FROM lecture_attendance a2 WHERE a2.lecture_id = l.id AND a2.attended = 1))';
+      }
       if (params.courseId) {
         where += ' AND g.course_id = ?';
         args.push(params.courseId);
@@ -590,21 +644,24 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       }
       where += searchClause(['u.name', 'u.phone'], params, args);
       where += dateClause('l.date', params, args);
-      // Every enrolled student × every lecture of their group, with the
-      // attendance row LEFT JOINed on — absentees (no row / attended=0) come
-      // from the join, never inserted into the database for exporting.
+      // Every distinct enrolled student × every lecture of their group, with the
+      // attendance row LEFT JOINed on — absentees come from the join, never
+      // inserted into the database for exporting.
       return {
         text: `SELECT la.id AS id, u.id AS student_id, u.name AS student, u.phone,
                  c.title_ar AS course, g.name AS group_name,
-                 l.date AS lecture_date, l.topic, COALESCE(la.attended, 0) AS attended,
+                 l.id AS lecture_id, l.date AS lecture_date, l.topic,
+                 l.is_completed,
+                 EXISTS (SELECT 1 FROM lecture_attendance a2 WHERE a2.lecture_id = l.id AND a2.attended = 1) AS lecture_has_attendance,
+                 COALESCE(la.attended, 0) AS attended,
                  la.verification_method, la.attended_at
                FROM groups g
                JOIN lectures l ON l.group_id = g.id
-               JOIN group_students gs ON gs.group_id = g.id
+               JOIN (SELECT DISTINCT group_id, user_id FROM group_students) gs ON gs.group_id = g.id
                JOIN users u ON u.id = gs.user_id
                LEFT JOIN lecture_attendance la ON la.lecture_id = l.id AND la.user_id = u.id
                LEFT JOIN courses c ON c.id = g.course_id
-               WHERE ${where} ORDER BY u.name ASC, l.date ASC`,
+               WHERE ${where} ORDER BY u.name ASC, l.date ASC, l.sort_order ASC`,
         args,
       };
     },
@@ -655,8 +712,8 @@ export const EXPORT_DATASETS: ExportDataset[] = [
               ? dates.map(formatDateShort).join('، ')
               : `من ${formatDateShort(dates[0])} إلى ${formatDateShort(dates[dates.length - 1])} (${dates.length} محاضرات)`;
       const students = new Set(rows.map((r) => String(r.student_id ?? ''))).size;
-      const present = rows.filter((r) => Number(r.attended) === 1).length;
-      const absent = rows.length - present;
+      const present = rows.filter((r) => r.attended === 'attended').length;
+      const absent = rows.filter((r) => r.attended === 'absent').length;
       const place =
         scope.course_mode !== 'offline' ? 'أونلاين' : scope.place_name || scope.location || '—';
 
@@ -676,13 +733,25 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       );
       return info;
     },
-    mapRow: (row) => ({
-      ...row,
-      verification_method:
-        Number(row.attended) === 0
-          ? '—'
-          : translate(row.verification_method, VERIFICATION_METHOD_LABELS),
-    }),
+    buildNote: async () => ATTENDANCE_LEGEND_NOTE,
+    mapRow: (row) => {
+      const todayCairo = formatCairoDateTime(new Date()).slice(0, 10);
+      const state = resolveAttendanceState({
+        attended: row.attended,
+        isCompleted: row.is_completed,
+        hasAnyAttendance: row.lecture_has_attendance,
+        lectureDate: row.lecture_date,
+        todayCairo,
+      });
+      return {
+        ...row,
+        attended: state,
+        verification_method:
+          state === 'attended'
+            ? translate(row.verification_method, VERIFICATION_METHOD_LABELS)
+            : '—',
+      };
+    },
   },
   {
     key: 'enrollments',
@@ -1201,4 +1270,294 @@ export async function runDataset(
   const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 50_000) : 50_000;
   const rows = result.rows.slice(0, limit) as Record<string, unknown>[];
   return dataset.mapRow ? rows.map(dataset.mapRow) : rows;
+}
+
+/**
+ * Build per-group matrix sheets for the XLSX attendance export (D2, D3, D4, A2).
+ * Each group becomes one worksheet with one row per distinct student, one column
+ * per lecture ordered by date, live COUNTIF totals with precomputed results, and
+ * a clear empty message if a group has no students or no lectures.
+ */
+export async function buildAttendanceMatrixSheets(
+  params: ExportParams,
+  requestedColumns: string[],
+  filters: { label: string; value: string }[],
+): Promise<SheetBuildOptions[]> {
+  const scopeWhereParts: string[] = ['1=1'];
+  const scopeArgs: unknown[] = [];
+  if (params.courseId) {
+    scopeWhereParts.push('g.course_id = ?');
+    scopeArgs.push(params.courseId);
+  }
+  if (params.groupId) {
+    scopeWhereParts.push('g.id = ?');
+    scopeArgs.push(params.groupId);
+  }
+  const scopeWhere = scopeWhereParts.join(' AND ');
+
+  const groupsRes = await sql(
+    `SELECT g.id, g.name AS group_name, g.instructor_name, g.location,
+            p.name AS place_name, c.id AS course_id, c.title_ar AS course, c.course_mode
+     FROM groups g
+     JOIN courses c ON c.id = g.course_id
+     LEFT JOIN places p ON p.id = g.place_id
+     WHERE ${scopeWhere}
+     ORDER BY c.title_ar ASC, g.name ASC, g.id ASC`,
+    ...scopeArgs,
+  );
+
+  const groups = groupsRes.rows as Record<string, any>[];
+  if (groups.length === 0) return [];
+
+  // Lectures matching scope + date filter
+  const lecArgs = [...scopeArgs];
+  let lecWhere = scopeWhere + dateClause('l.date', params, lecArgs);
+  const lecRes = await sql(
+    `SELECT l.id, l.group_id, l.date, l.topic, l.is_completed, l.sort_order,
+            EXISTS (SELECT 1 FROM lecture_attendance a2 WHERE a2.lecture_id = l.id AND a2.attended = 1) AS has_attendance
+     FROM lectures l
+     JOIN groups g ON g.id = l.group_id
+     WHERE ${lecWhere}
+     ORDER BY l.group_id ASC, l.date ASC, l.sort_order ASC, l.id ASC`,
+    ...lecArgs,
+  );
+
+  // Distinct students per group matching scope + search filter
+  const stuArgs = [...scopeArgs];
+  const stuWhere = scopeWhere + searchClause(['u.name', 'u.phone'], params, stuArgs);
+  const stuRes = await sql(
+    `SELECT DISTINCT gs.group_id, u.id AS student_id, u.name AS student, u.phone
+     FROM group_students gs
+     JOIN groups g ON g.id = gs.group_id
+     JOIN users u ON u.id = gs.user_id
+     WHERE ${stuWhere}
+     ORDER BY u.name ASC, u.id ASC`,
+    ...stuArgs,
+  );
+
+  // Attended pairs for matching scope
+  const attRes = await sql(
+    `SELECT la.lecture_id, la.user_id
+     FROM lecture_attendance la
+     JOIN lectures l ON l.id = la.lecture_id
+     JOIN groups g ON g.id = l.group_id
+     WHERE ${scopeWhere} AND la.attended = 1`,
+    ...scopeArgs,
+  );
+
+  const lecturesByGroup = new Map<number, Record<string, any>[]>();
+  for (const l of lecRes.rows as Record<string, any>[]) {
+    const gid = Number(l.group_id);
+    const arr = lecturesByGroup.get(gid) ?? [];
+    arr.push(l);
+    lecturesByGroup.set(gid, arr);
+  }
+
+  const studentsByGroup = new Map<number, Record<string, any>[]>();
+  const seenStudent = new Set<string>();
+  for (const s of stuRes.rows as Record<string, any>[]) {
+    const gid = Number(s.group_id);
+    const sid = Number(s.student_id);
+    const key = `${gid}:${sid}`;
+    if (seenStudent.has(key)) continue;
+    seenStudent.add(key);
+    const arr = studentsByGroup.get(gid) ?? [];
+    arr.push(s);
+    studentsByGroup.set(gid, arr);
+  }
+
+  const attendedSet = new Set<string>();
+  for (const a of attRes.rows as Record<string, any>[]) {
+    attendedSet.add(`${Number(a.lecture_id)}:${Number(a.user_id)}`);
+  }
+
+  const todayCairo = formatCairoDateTime(new Date()).slice(0, 10);
+
+  // Determine which fixed leading columns to include (columns= affects fixed columns only)
+  const baseFixedColumns: ExportColumn[] = [
+    { key: 'id', header: '#', type: 'number', width: 7 },
+    { key: 'student', header: 'الطالب', type: 'text', width: 24 },
+    { key: 'phone', header: 'الهاتف', type: 'text', width: 15 },
+  ];
+  let fixedColumns = baseFixedColumns;
+  if (requestedColumns.length > 0) {
+    const picked = baseFixedColumns.filter((c) => requestedColumns.includes(c.key));
+    fixedColumns = picked.length > 0 ? picked : [baseFixedColumns[1]];
+  }
+
+  return groups.map((group) => {
+    const gid = Number(group.id);
+    const groupLectures = lecturesByGroup.get(gid) ?? [];
+    const groupStudents = studentsByGroup.get(gid) ?? [];
+
+    const heldCount = groupLectures.filter(
+      (l) => Number(l.is_completed) === 1 || Number(l.has_attendance) === 1,
+    ).length;
+
+    const lectureColumns: ExportColumn[] = groupLectures.map((l, idx) => {
+      const dm = l.date ? formatDayMonth(String(l.date)) : `#${idx + 1}`;
+      const topic = l.topic ? String(l.topic).trim() : '';
+      const header = topic ? `${dm}\n${topic}` : dm;
+      const maxLine = Math.max(dm.length, Math.min(20, topic.length));
+      return {
+        key: `lec_${l.id}`,
+        header,
+        type: 'text',
+        width: Math.max(13, Math.min(20, maxLine + 3)),
+        badge: MATRIX_CELL_BADGE,
+      };
+    });
+
+    const firstLecKey = lectureColumns[0]?.key;
+    const lastLecKey = lectureColumns[lectureColumns.length - 1]?.key;
+
+    const summaryColumns: ExportColumn[] =
+      groupLectures.length > 0
+        ? [
+            {
+              key: 'present_count',
+              header: 'الحضور',
+              type: 'number',
+              width: 10,
+              total: 'sum',
+              formula: ({ rowNumber, record, colLetter }) => ({
+                formula: `COUNTIF(${colLetter(firstLecKey!)}${rowNumber}:${colLetter(lastLecKey!)}${rowNumber},"✓ حضر")`,
+                result: Number(record.present_count ?? 0),
+              }),
+            },
+            {
+              key: 'absent_count',
+              header: 'الغياب',
+              type: 'number',
+              width: 10,
+              total: 'sum',
+              formula: ({ rowNumber, record, colLetter }) => ({
+                formula: `COUNTIF(${colLetter(firstLecKey!)}${rowNumber}:${colLetter(lastLecKey!)}${rowNumber},"✗ غاب")`,
+                result: Number(record.absent_count ?? 0),
+              }),
+            },
+            {
+              key: 'rate',
+              header: 'نسبة الحضور',
+              type: 'percent',
+              width: 13,
+              formula: ({ rowNumber, record, colLetter }) => {
+                const pCol = colLetter('present_count');
+                const aCol = colLetter('absent_count');
+                const p = Number(record.present_count ?? 0);
+                const a = Number(record.absent_count ?? 0);
+                return {
+                  formula: `IF((${pCol}${rowNumber}+${aCol}${rowNumber})=0,"—",${pCol}${rowNumber}/(${pCol}${rowNumber}+${aCol}${rowNumber}))`,
+                  result: p + a === 0 ? '—' : p / (p + a),
+                };
+              },
+              totalFormula: ({ totalsRowNumber, rows, colLetter }) => {
+                const pCol = colLetter('present_count');
+                const aCol = colLetter('absent_count');
+                const tp = rows.reduce((s, r) => s + Number(r.present_count ?? 0), 0);
+                const ta = rows.reduce((s, r) => s + Number(r.absent_count ?? 0), 0);
+                return {
+                  formula: `IF((${pCol}${totalsRowNumber}+${aCol}${totalsRowNumber})=0,"—",${pCol}${totalsRowNumber}/(${pCol}${totalsRowNumber}+${aCol}${totalsRowNumber}))`,
+                  result: tp + ta === 0 ? '—' : tp / (tp + ta),
+                };
+              },
+            },
+          ]
+        : [
+            { key: 'present_count', header: 'الحضور', type: 'number', width: 10 },
+            { key: 'absent_count', header: 'الغياب', type: 'number', width: 10 },
+            { key: 'rate', header: 'نسبة الحضور', type: 'percent', width: 13 },
+          ];
+
+    const columns: ExportColumn[] = [...fixedColumns, ...lectureColumns, ...summaryColumns];
+
+    let totalPresent = 0;
+    let totalAbsent = 0;
+    const rows: Record<string, unknown>[] =
+      groupStudents.length > 0 && groupLectures.length > 0
+        ? groupStudents.map((stu, idx) => {
+            const sid = Number(stu.student_id);
+            const row: Record<string, unknown> = {
+              id: idx + 1,
+              student: stu.student || '—',
+              phone: stu.phone || '—',
+            };
+            let present = 0;
+            let absent = 0;
+            for (const l of groupLectures) {
+              const lid = Number(l.id);
+              const state = resolveAttendanceState({
+                attended: attendedSet.has(`${lid}:${sid}`) ? 1 : 0,
+                isCompleted: l.is_completed,
+                hasAnyAttendance: l.has_attendance,
+                lectureDate: l.date,
+                todayCairo,
+              });
+              row[`lec_${lid}`] = ATTENDANCE_STATE_LABELS[state];
+              if (state === 'attended') present += 1;
+              else if (state === 'absent') absent += 1;
+            }
+            row.present_count = present;
+            row.absent_count = absent;
+            row.rate = present + absent === 0 ? '—' : present / (present + absent);
+            totalPresent += present;
+            totalAbsent += absent;
+            return row;
+          })
+        : [];
+
+    const dates = [...new Set(groupLectures.map((l) => String(l.date ?? '')).filter(Boolean))].sort();
+    const datesText =
+      dates.length === 0
+        ? '—'
+        : dates.length === 1
+          ? formatDateShort(dates[0])
+          : dates.length <= 3
+            ? dates.map(formatDateShort).join('، ')
+            : `من ${formatDateShort(dates[0])} إلى ${formatDateShort(dates[dates.length - 1])} (${dates.length} محاضرات)`;
+
+    const place =
+      group.course_mode !== 'offline' ? 'أونلاين' : group.place_name || group.location || '—';
+    const avgRate =
+      totalPresent + totalAbsent === 0
+        ? '—'
+        : `${((totalPresent / (totalPresent + totalAbsent)) * 100).toFixed(1)}%`;
+
+    const infoBlock: { label: string; value: string }[] = [
+      { label: 'الكورس', value: String(group.course || '—') },
+      { label: 'المجموعة', value: String(group.group_name || '—') },
+      { label: 'المحاضر', value: String(group.instructor_name || '—') },
+      { label: 'المكان', value: place },
+      { label: 'عدد الطلاب', value: String(groupStudents.length) },
+      { label: 'المحاضرات المعقودة / الكلية', value: `${heldCount} / ${groupLectures.length}` },
+      { label: 'متوسط الحضور', value: avgRate },
+      { label: 'تواريخ المحاضرات', value: datesText },
+    ];
+
+    const emptyMessage =
+      groupStudents.length === 0
+        ? params.search
+          ? 'لا يوجد طلاب مطابقون للبحث في هذه المجموعة'
+          : 'لا يوجد طلاب مسجَّلون في هذه المجموعة'
+        : 'لا توجد محاضرات مسجَّلة لهذه المجموعة';
+
+    const rawSheetName =
+      !params.courseId && !params.groupId
+        ? `${group.group_name || 'مجموعة'} - ${group.course || ''}`
+        : String(group.group_name || 'المجموعة');
+
+    return {
+      sheetName: rawSheetName,
+      title: `كشف حضور: ${group.group_name || ''}`.trim(),
+      description: 'كشف حضور الطلاب حسب المحاضرات (صف لكل طالب).',
+      columns,
+      rows,
+      filters,
+      infoBlock,
+      footerNote: ATTENDANCE_LEGEND_NOTE,
+      emptyMessage,
+      showInstructorSignature: true,
+      instructorName: group.instructor_name ? String(group.instructor_name) : undefined,
+    };
+  });
 }

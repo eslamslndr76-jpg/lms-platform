@@ -207,7 +207,7 @@
 | `POST /api/groups/:id/report/word` | admin/employee | تنزيل تقرير Word؛ حقل multipart اختياري `images` (حتى 8 صور JPG/PNG، لا تُخزَّن) |
 | `GET /api/settings/report` | مستخدم | نصوص التقرير الافتراضية (المنسق، الشهادة، الملاحظات، التوصيات، نوع النشاط) |
 | `PUT /api/settings/report` | admin | حفظ النصوص الافتراضية |
-| `GET /api/exports/:dataset?groupId=` | صلاحية القراءة للقسم | ملف Excel: `group_roster` (كشف المجموعة) · `survey_results` (نتائج الاستبيان + متوسطات البنود؛ يقبل `studentId=` لتصدير رد طالب بعينه — الردود المجهولة لا تطابق أبداً) · `instructor_eval` (تقييم المحاضر للطلاب) · `attendance` (يقبل `lectureId=`/`studentId=`؛ يعرض الحاضرين والغائبين معاً وعمود «الحالة» بعلامة) |
+| `GET /api/exports/:dataset?groupId=` | صلاحية القراءة للقسم | ملف Excel/CSV/JSON: `group_roster` · `survey_results` · `instructor_eval` · `attendance` (في XLSX بدون `lectureId`/`studentId`/`status`: صف لكل طالب وعمود لكل محاضرة مع `COUNTIF` للحضور والغياب والنسبة، وشيت لكل مجموعة؛ وفي `lectureId`/`studentId`/`status` أو CSV/JSON/preview: شكل الصفوف مع حالات `✓ حضر`/`✗ غاب`/`؟ غير مؤكدة`/`— لم تُعقد`) |
 | `GET/POST/PUT/DELETE /api/admin/payment-methods` | admin | إدارة طرق الدفع (الطرق المستخدمة في طلبات تُعطَّل ولا تُحذف) |
 | `GET /api/settings/booking` | admin/employee | مدة الحجز بالساعات `{ hours }` (افتراضي 168) |
 | `PUT /api/settings/booking` | admin | تعديل مدة الحجز (1..720 ساعة) |

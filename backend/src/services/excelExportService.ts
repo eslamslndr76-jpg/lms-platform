@@ -24,6 +24,20 @@ export type CellType =
   | 'boolean'
   | 'duration';
 
+export interface FormulaContext {
+  rowNumber: number;
+  record: Record<string, unknown>;
+  colLetter: (key: string) => string;
+}
+
+export interface TotalFormulaContext {
+  firstDataRow: number;
+  lastDataRow: number;
+  totalsRowNumber: number;
+  rows: Record<string, unknown>[];
+  colLetter: (key: string) => string;
+}
+
 export interface ExportColumn {
   key: string;
   header: string;
@@ -31,6 +45,10 @@ export interface ExportColumn {
   width?: number;
   /** Add this column to the totals row (formula-based, editable). */
   total?: 'sum' | 'count';
+  /** Optional custom formula for the totals row (with precomputed result). */
+  totalFormula?: (ctx: TotalFormulaContext) => { formula: string; result?: number | string };
+  /** Optional formula builder for data cells (with precomputed result). */
+  formula?: (ctx: FormulaContext) => { formula: string; result?: number | string };
   /** Value → status badge rendering (matched on the raw cell value, e.g. attendance status). */
   badge?: Record<string, { label: string; tone: 'success' | 'danger' | 'neutral' }>;
 }
@@ -46,24 +64,39 @@ export interface BrandingInfo {
   secondaryColor: string;
 }
 
-export interface BuildOptions {
+export interface SheetBuildOptions {
   sheetName: string;
   title: string;
   description?: string;
   columns: ExportColumn[];
   rows: Record<string, unknown>[];
-  branding: BrandingInfo;
   filters?: { label: string; value: string }[];
-  exportedBy?: string;
-  exportedByRole?: string;
   /** Extra lines shown in the footer of the data sheet. */
   footerNote?: string;
   /** Optional label/value pairs rendered above the table (report info block, e.g. course/group header). */
   infoBlock?: { label: string; value: string }[];
+  /** Custom message shown when rows is empty. */
+  emptyMessage?: string;
   /** Show the instructor signature block alongside the unit director signature (per A1, for group/lecture reports). */
   showInstructorSignature?: boolean;
   /** Name of instructor to show under the instructor signature label. */
   instructorName?: string;
+}
+
+export interface BuildOptions extends SheetBuildOptions {
+  branding: BrandingInfo;
+  exportedBy?: string;
+  exportedByRole?: string;
+}
+
+export interface MultiSheetBuildOptions {
+  title: string;
+  description?: string;
+  branding: BrandingInfo;
+  filters?: { label: string; value: string }[];
+  exportedBy?: string;
+  exportedByRole?: string;
+  sheets: SheetBuildOptions[];
 }
 
 const DEFAULT_BRANDING: BrandingInfo = {
@@ -313,41 +346,68 @@ const BADGE_STYLE: Record<'success' | 'danger' | 'neutral', { fill: string; colo
   neutral: { fill: 'FFF3F4F6', color: 'FF374151' },
 };
 
-export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffer> {
+/** Generate a unique, Excel-safe worksheet name (≤ 31 chars). */
+export function uniqueSheetName(raw: string, used: Set<string>): string {
+  const clean =
+    (raw || 'البيانات').replace(/[\\/*?:[\]]/g, ' ').replace(/\s+/g, ' ').trim() || 'البيانات';
+  let candidate = clean.slice(0, 31);
+  let n = 2;
+  while (used.has(candidate)) {
+    const suffix = ` (${n})`;
+    candidate = clean.slice(0, 31 - suffix.length) + suffix;
+    n += 1;
+  }
+  used.add(candidate);
+  return candidate;
+}
+
+interface Palette {
+  primary: string;
+  secondary: string;
+  primarySoft: string;
+  secondarySoft: string;
+  stripe: string;
+  headerText: string;
+}
+
+function makePalette(branding: BrandingInfo): Palette {
+  const primary = toArgb(branding.primaryColor, '#2563eb');
+  const secondary = toArgb(branding.secondaryColor, '#7c3aed');
+  return {
+    primary,
+    secondary,
+    primarySoft: mixArgb(primary, 'white', 0.9),
+    secondarySoft: mixArgb(secondary, 'white', 0.88),
+    stripe: mixArgb(primary, 'white', 0.965),
+    headerText: readableText(primary),
+  };
+}
+
+function addBrandedDataSheet(
+  workbook: ExcelJS.Workbook,
+  sheetOptions: SheetBuildOptions,
+  branding: BrandingInfo,
+  palette: Palette,
+  now: Date,
+  usedNames: Set<string>,
+): void {
   const {
     sheetName,
     title,
     description,
     columns,
     rows,
-    branding,
     filters = [],
-    exportedBy,
-    exportedByRole,
     footerNote,
     infoBlock = [],
+    emptyMessage = 'لا توجد بيانات مطابقة للفلاتر الحالية',
     showInstructorSignature = false,
     instructorName,
-  } = options;
+  } = sheetOptions;
 
-  const primary = toArgb(branding.primaryColor, '#2563eb');
-  const secondary = toArgb(branding.secondaryColor, '#7c3aed');
-  const primarySoft = mixArgb(primary, 'white', 0.9);
-  const secondarySoft = mixArgb(secondary, 'white', 0.88);
-  const stripe = mixArgb(primary, 'white', 0.965);
-  const headerText = readableText(primary);
-  const now = new Date();
+  const { primary, secondary, primarySoft, secondarySoft, stripe, headerText } = palette;
 
-  const workbook = new ExcelJS.Workbook();
-  workbook.creator = branding.systemName;
-  workbook.lastModifiedBy = exportedBy || branding.systemName;
-  workbook.created = now;
-  workbook.modified = now;
-  workbook.company = branding.systemName;
-  workbook.title = title;
-  workbook.subject = description || title;
-
-  const dataSheetName = (sheetName || title).replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'البيانات';
+  const dataSheetName = uniqueSheetName(sheetName || title, usedNames);
   const ws = workbook.addWorksheet(dataSheetName, {
     views: [{ rightToLeft: true, showGridLines: false }],
     properties: { defaultRowHeight: 22, tabColor: { argb: primary } },
@@ -543,13 +603,21 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
       right: { style: 'thin', color: { argb: mixArgb(primary, 'white', 0.25) } },
     };
   });
-  headerRow.height = 34;
+  const hasMultiLineHeader = columns.some((c) => c.header.includes('\n'));
+  headerRow.height = hasMultiLineHeader ? 42 : 34;
 
   ws.autoFilter = {
     from: { row: headerRowIndex, column: 1 },
     to: { row: headerRowIndex, column: columnCount },
   };
   ws.views = [{ rightToLeft: true, showGridLines: false }];
+
+  const colIndexByKey = new Map<string, number>();
+  columns.forEach((c, idx) => colIndexByKey.set(c.key, idx));
+  const colLetter = (key: string) => {
+    const idx = colIndexByKey.get(key);
+    return idx !== undefined ? ws.getColumn(idx + 1).letter : 'A';
+  };
 
   // ── Data rows ─────────────────────────────────────────────────
   const firstDataRow = headerRowIndex + 1;
@@ -558,24 +626,32 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     const row = ws.getRow(firstDataRow);
     ws.mergeCells(`A${firstDataRow}:${lastCol}${firstDataRow}`);
     const cell = row.getCell(1);
-    cell.value = 'لا توجد بيانات مطابقة للفلاتر الحالية';
+    cell.value = emptyMessage;
     cell.font = { name: FONT, size: 11, italic: true, color: { argb: 'FF6B7280' } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF9FAFB' } };
     row.height = 30;
   } else {
     rows.forEach((record, rowIndex) => {
-      const row = ws.getRow(firstDataRow + rowIndex);
+      const rowNumber = firstDataRow + rowIndex;
+      const row = ws.getRow(rowNumber);
       columns.forEach((column, columnIndex) => {
         const cell = row.getCell(columnIndex + 1);
         // Status badge columns: value → label with a tone fill (text is always
         // present, so the color is never the only signal).
         const badge = column.badge?.[String(record[column.key] ?? '')];
-        cell.value = badge ? badge.label : cellValue(record[column.key], column.type);
+        if (column.formula) {
+          const f = column.formula({ rowNumber, record, colLetter });
+          cell.value = { formula: f.formula, result: f.result } as ExcelJS.CellFormulaValue;
+        } else {
+          cell.value = badge ? badge.label : cellValue(record[column.key], column.type);
+        }
         cell.font = badge
           ? { name: FONT, size: 11, bold: true, color: { argb: BADGE_STYLE[badge.tone].color } }
           : { name: FONT, size: 11, color: { argb: 'FF111827' } };
-        cell.alignment = cellAlignment(badge ? 'text' : column.type);
+        cell.alignment = badge
+          ? { horizontal: 'center', vertical: 'middle', readingOrder: 'rtl' }
+          : cellAlignment(column.type);
         const format = numFmt(column.type);
         if (format) cell.numFmt = format;
         cell.fill = {
@@ -606,14 +682,14 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   // ── Totals row (live formulas, so the file stays editable) ────
   const totalColumns = columns
     .map((column, index) => ({ column, index }))
-    .filter(({ column }) => column.total === 'sum' || column.total === 'count');
+    .filter(({ column }) => column.total === 'sum' || column.total === 'count' || Boolean(column.totalFormula));
 
   if (totalColumns.length > 0 && rows.length > 0) {
     const totalsRow = ws.getRow(cursor);
     columns.forEach((column, index) => {
       const cell = totalsRow.getCell(index + 1);
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: secondarySoft } };
-      cell.font = { name: FONT, size: 10, bold: true, color: { argb: 'FF111827' } };
+      cell.font = { name: FONT, size: 11, bold: true, color: { argb: 'FF111827' } };
       cell.border = {
         top: { style: 'medium', color: { argb: secondary } },
         bottom: { style: 'double', color: { argb: secondary } },
@@ -623,15 +699,43 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
 
     const labelCell = totalsRow.getCell(1);
     labelCell.value = 'الإجمالي';
-    labelCell.font = { name: FONT, size: 10, bold: true, color: { argb: secondary } };
+    labelCell.font = { name: FONT, size: 11, bold: true, color: { argb: secondary } };
 
     const letter = (index: number) => ws.getColumn(index + 1).letter;
     totalColumns.forEach(({ column, index }) => {
       const cell = totalsRow.getCell(index + 1);
-      const range = `${letter(index)}${firstDataRow}:${letter(index)}${lastDataRow}`;
-      // SUBTOTAL(109, …) sums only visible rows, so totals follow the autofilter.
-      cell.value = { formula: column.total === 'count' ? `SUBTOTAL(103,${range})` : `SUBTOTAL(109,${range})` } as ExcelJS.CellFormulaValue;
-      if (column.total === 'count') cell.numFmt = '#,##0';
+      if (column.totalFormula) {
+        const tf = column.totalFormula({
+          firstDataRow,
+          lastDataRow,
+          totalsRowNumber: cursor,
+          rows,
+          colLetter,
+        });
+        cell.value = { formula: tf.formula, result: tf.result } as ExcelJS.CellFormulaValue;
+        const format = numFmt(column.type);
+        if (format) cell.numFmt = format;
+      } else {
+        const range = `${letter(index)}${firstDataRow}:${letter(index)}${lastDataRow}`;
+        const computedResult =
+          column.total === 'count'
+            ? rows.filter((r) => r[column.key] !== null && r[column.key] !== undefined && r[column.key] !== '').length
+            : rows.reduce((sum, r) => {
+                const n = Number(r[column.key]);
+                return Number.isFinite(n) ? sum + n : sum;
+              }, 0);
+        // SUBTOTAL(109, …) sums only visible rows, so totals follow the autofilter.
+        cell.value = {
+          formula: column.total === 'count' ? `SUBTOTAL(103,${range})` : `SUBTOTAL(109,${range})`,
+          result: computedResult,
+        } as ExcelJS.CellFormulaValue;
+        if (column.total === 'count') {
+          cell.numFmt = '#,##0';
+        } else {
+          const format = numFmt(column.type);
+          if (format) cell.numFmt = format;
+        }
+      }
     });
     totalsRow.height = 24;
     cursor += 1;
@@ -699,9 +803,45 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     oddHeader: `&R&"${FONT},Bold"&10${branding.systemName}&L&"${FONT}"&9${title}`,
     oddFooter: `&C&"${FONT}"&8صفحة &P من &N`,
   };
+}
 
-  // ── Info sheet ────────────────────────────────────────────────
-  const info = workbook.addWorksheet('معلومات التقرير', {
+function addInfoSheet(
+  workbook: ExcelJS.Workbook,
+  params: {
+    title: string;
+    description?: string;
+    branding: BrandingInfo;
+    palette: Palette;
+    filters: { label: string; value: string }[];
+    totalRows: number;
+    columnHeaders: string[];
+    exportedBy?: string;
+    exportedByRole?: string;
+    now: Date;
+    usedNames: Set<string>;
+    extraRows?: [string, string][];
+  },
+): void {
+  const {
+    title,
+    description,
+    branding,
+    palette,
+    filters,
+    totalRows,
+    columnHeaders,
+    exportedBy,
+    exportedByRole,
+    now,
+    usedNames,
+    extraRows = [],
+  } = params;
+  const { primary, secondary, primarySoft } = palette;
+  const unitSz = { height: 110, width: Math.round(110 * (478 / 365)) };
+  const instSz = { height: 110, width: Math.round(110 * (351 / 298)) };
+
+  const infoName = uniqueSheetName('معلومات التقرير', usedNames);
+  const info = workbook.addWorksheet(infoName, {
     views: [{ rightToLeft: true, showGridLines: false }],
     properties: { tabColor: { argb: secondary } },
     pageSetup: {
@@ -754,12 +894,13 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     ['اسم المنصة', branding.systemName],
     ['نوع البيانات', title],
     ['الوصف', description || '—'],
-    ['عدد السجلات', String(rows.length)],
+    ['عدد السجلات', String(totalRows)],
+    ...extraRows,
     ['الفلاتر المطبقة', filters.length ? filters.map((f) => `${f.label}: ${f.value}`).join(' | ') : 'بدون فلاتر'],
     ['تاريخ الإصدار', formatCairoDateTime(now)],
     ['تم التصدير بواسطة', exportedBy || '—'],
     ['صلاحية المُصدِّر', exportedByRole || '—'],
-    ['الأعمدة', columns.map((c) => c.header).join('، ')],
+    ['الأعمدة', columnHeaders.join('، ')],
     ['ملاحظة', 'الملف قابل للتعديل بالكامل ويمكن إعادة استخدامه كقاعدة بيانات.'],
     ['إخلاء مسؤولية', DISCLAIMER],
   ];
@@ -781,6 +922,74 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     valueCell.border = { bottom: { style: 'thin', color: { argb: BORDER } } };
     info.getRow(infoCursor).height = label === 'الأعمدة' || label === 'إخلاء مسؤولية' ? 34 : 22;
     infoCursor += 1;
+  });
+}
+
+function initWorkbook(branding: BrandingInfo, title: string, description: string | undefined, exportedBy: string | undefined, now: Date) {
+  const workbook = new ExcelJS.Workbook();
+  workbook.creator = branding.systemName;
+  workbook.lastModifiedBy = exportedBy || branding.systemName;
+  workbook.created = now;
+  workbook.modified = now;
+  workbook.company = branding.systemName;
+  workbook.title = title;
+  workbook.subject = description || title;
+  return workbook;
+}
+
+export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffer> {
+  const { branding, exportedBy, exportedByRole, filters = [] } = options;
+  const now = new Date();
+  const palette = makePalette(branding);
+  const workbook = initWorkbook(branding, options.title, options.description, exportedBy, now);
+  const usedNames = new Set<string>();
+
+  addBrandedDataSheet(workbook, options, branding, palette, now, usedNames);
+  addInfoSheet(workbook, {
+    title: options.title,
+    description: options.description,
+    branding,
+    palette,
+    filters,
+    totalRows: options.rows.length,
+    columnHeaders: options.columns.map((c) => c.header),
+    exportedBy,
+    exportedByRole,
+    now,
+    usedNames,
+  });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  return Buffer.from(buffer);
+}
+
+export async function buildMultiSheetWorkbook(options: MultiSheetBuildOptions): Promise<Buffer> {
+  const { title, description, branding, filters = [], exportedBy, exportedByRole, sheets } = options;
+  const now = new Date();
+  const palette = makePalette(branding);
+  const workbook = initWorkbook(branding, title, description, exportedBy, now);
+  const usedNames = new Set<string>();
+
+  for (const sheet of sheets) {
+    addBrandedDataSheet(workbook, sheet, branding, palette, now, usedNames);
+  }
+
+  const totalRows = sheets.reduce((sum, s) => sum + s.rows.length, 0);
+  const firstHeaders = sheets[0]?.columns.map((c) => c.header) ?? [];
+
+  addInfoSheet(workbook, {
+    title,
+    description,
+    branding,
+    palette,
+    filters,
+    totalRows,
+    columnHeaders: firstHeaders,
+    exportedBy,
+    exportedByRole,
+    now,
+    usedNames,
+    extraRows: [['عدد أوراق العمل', String(sheets.length)]],
   });
 
   const buffer = await workbook.xlsx.writeBuffer();
