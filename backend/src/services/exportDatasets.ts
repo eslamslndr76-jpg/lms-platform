@@ -1,5 +1,5 @@
 import { sql } from '../db/helpers';
-import type { ExportColumn } from './excelExportService';
+import { formatCairoDateTime, type ExportColumn } from './excelExportService';
 
 /**
  * Registry of every exportable dataset in the system.
@@ -61,6 +61,8 @@ export interface ExportDataset {
   ) => Promise<{ label: string; value: string }[] | undefined>;
   /** Optional extra footer line (aggregates that do not fit a row, e.g. survey averages). */
   buildNote?: (params: ExportParams) => Promise<string | undefined>;
+  /** Optional per-row translator applied in runDataset (keeps XLSX, CSV and JSON consistent). */
+  mapRow?: (row: Record<string, unknown>) => Record<string, unknown>;
 }
 
 // ─── Shared filter fragments ───────────────────────────────────────
@@ -92,6 +94,109 @@ function formatDateShort(value: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(value);
   if (!m) return value;
   return `${Number(m[3])}/${Number(m[2])}/${Number(m[1])}`;
+}
+
+function formatCairoFromRaw(value: unknown): string {
+  if (!value) return '—';
+  const raw = String(value).trim();
+  if (!raw) return '—';
+  const normalized = raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`;
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? raw : formatCairoDateTime(d);
+}
+
+// ─── Arabic value dictionaries ─────────────────────────────────────
+
+const VERIFICATION_METHOD_LABELS: Record<string, string> = {
+  qr: 'كود QR',
+  manual: 'يدوي',
+  bluetooth: 'بلوتوث',
+  code: 'كود',
+};
+
+export const ORDER_STATUS_LABELS: Record<string, string> = {
+  pending: 'قيد الانتظار',
+  review: 'قيد المراجعة',
+  paid: 'مدفوع',
+  cancelled: 'ملغي',
+};
+
+const ORDER_STATUS_BADGE: ExportColumn['badge'] = {
+  'مدفوع': { label: 'مدفوع', tone: 'success' },
+  'قيد المراجعة': { label: 'قيد المراجعة', tone: 'neutral' },
+  'قيد الانتظار': { label: 'قيد الانتظار', tone: 'neutral' },
+  'ملغي': { label: 'ملغي', tone: 'danger' },
+};
+
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  cash: 'نقدي (خزنة المعهد)',
+  wallet: 'محفظة إلكترونية',
+  instapay: 'إنستاباي',
+  transfer: 'تحويل بنكي',
+  bank_transfer: 'تحويل بنكي',
+  free: 'مجاني',
+};
+
+const GROUP_STATUS_LABELS: Record<string, string> = {
+  pending: 'قيد الانتظار',
+  active: 'نشطة',
+  completed: 'مكتملة',
+  cancelled: 'ملغاة',
+};
+
+const GROUP_STATUS_BADGE: ExportColumn['badge'] = {
+  'نشطة': { label: 'نشطة', tone: 'success' },
+  'مكتملة': { label: 'مكتملة', tone: 'success' },
+  'قيد الانتظار': { label: 'قيد الانتظار', tone: 'neutral' },
+  'ملغاة': { label: 'ملغاة', tone: 'danger' },
+};
+
+const EVAL_STATUS_LABELS: Record<string, string> = {
+  draft: 'مسودة',
+  submitted: 'تم الإرسال',
+};
+
+const EVAL_STATUS_BADGE: ExportColumn['badge'] = {
+  'تم الإرسال': { label: 'تم الإرسال', tone: 'success' },
+  'مسودة': { label: 'مسودة', tone: 'neutral' },
+};
+
+const CERT_STATUS_LABELS: Record<string, string> = {
+  active: 'سارية',
+  revoked: 'مسحوبة',
+};
+
+const CERT_STATUS_BADGE: ExportColumn['badge'] = {
+  'سارية': { label: 'سارية', tone: 'success' },
+  'مسحوبة': { label: 'مسحوبة', tone: 'danger' },
+};
+
+const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
+  order_created: 'إنشاء طلب',
+  order_paid: 'تأكيد دفع',
+  order_cancelled: 'إلغاء طلب',
+  order_expired: 'انتهاء مهلة الحجز',
+  order_receipt_uploaded: 'رفع إيصال',
+  order_course_removed: 'إزالة كورس من طلب',
+  attendance_confirmed: 'تسجيل حضور',
+  assigned_to_group: 'تسكين في مجموعة',
+  removed_from_group: 'إزالة من مجموعة',
+  moved_to_group: 'نقل لمجموعة',
+  certificate_issued: 'إصدار شهادة',
+  certificate_revoked: 'سحب شهادة',
+  certificate_restored: 'استعادة شهادة',
+  account_created: 'إنشاء حساب',
+  password_reset_done: 'إعادة تعيين كلمة المرور',
+  instructor_eval_opened: 'فتح تقييم المحاضر',
+  instructor_eval_submitted: 'إرسال تقييم المحاضر',
+  survey_opened: 'فتح الاستبيان',
+  app_update: 'تحديث التطبيق',
+};
+
+function translate(value: unknown, dict: Record<string, string>, fallback = '—'): string {
+  if (value === null || value === undefined || value === '') return fallback;
+  const key = String(value).trim();
+  return dict[key] ?? key;
 }
 
 const ACTIVE_FILTER: ExportFilterDef = {
@@ -165,8 +270,8 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'email', header: 'البريد الإلكتروني', type: 'text' },
       { key: 'course', header: 'الكورس', type: 'text' },
       { key: 'amount', header: 'المبلغ', type: 'currency', width: 15, total: 'sum' },
-      { key: 'status', header: 'الحالة', type: 'text', width: 14 },
-      { key: 'payment_method', header: 'طريقة الدفع', type: 'text', width: 14 },
+      { key: 'status', header: 'الحالة', type: 'text', width: 14, badge: ORDER_STATUS_BADGE },
+      { key: 'payment_method', header: 'طريقة الدفع', type: 'text', width: 18 },
       { key: 'created_at', header: 'تاريخ الطلب', type: 'datetime', width: 18 },
       { key: 'notes', header: 'ملاحظات', type: 'text', width: 30 },
     ],
@@ -215,6 +320,11 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({
+      ...row,
+      status: translate(row.status, ORDER_STATUS_LABELS),
+      payment_method: translate(row.payment_method, PAYMENT_METHOD_LABELS),
+    }),
   },
   {
     key: 'courses',
@@ -300,7 +410,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'max_students', header: 'السعة', type: 'number', width: 10 },
       { key: 'lectures_count', header: 'المحاضرات', type: 'number', width: 12, total: 'sum' },
       { key: 'completed_lectures', header: 'مكتملة', type: 'number', width: 10, total: 'sum' },
-      { key: 'status', header: 'الحالة', type: 'text', width: 12 },
+      { key: 'status', header: 'الحالة', type: 'text', width: 13, badge: GROUP_STATUS_BADGE },
     ],
     filters: [
       {
@@ -340,6 +450,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, status: translate(row.status, GROUP_STATUS_LABELS) }),
   },
   {
     key: 'lectures',
@@ -565,6 +676,13 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       );
       return info;
     },
+    mapRow: (row) => ({
+      ...row,
+      verification_method:
+        Number(row.attended) === 0
+          ? '—'
+          : translate(row.verification_method, VERIFICATION_METHOD_LABELS),
+    }),
   },
   {
     key: 'enrollments',
@@ -579,7 +697,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'phone', header: 'الهاتف', type: 'text', width: 16 },
       { key: 'course', header: 'الكورس', type: 'text' },
       { key: 'group_name', header: 'المجموعة', type: 'text' },
-      { key: 'status', header: 'حالة المجموعة', type: 'text', width: 14 },
+      { key: 'status', header: 'حالة المجموعة', type: 'text', width: 14, badge: GROUP_STATUS_BADGE },
       { key: 'joined_at', header: 'تاريخ التسكين', type: 'datetime', width: 18 },
     ],
     filters: [
@@ -616,6 +734,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, status: translate(row.status, GROUP_STATUS_LABELS) }),
   },
   {
     key: 'group_roster',
@@ -627,7 +746,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'course', header: 'الكورس', type: 'text' },
       { key: 'group_name', header: 'المجموعة', type: 'text' },
       { key: 'instructor_name', header: 'المدرب', type: 'text', width: 18 },
-      { key: 'group_status', header: 'حالة المجموعة', type: 'text', width: 14 },
+      { key: 'group_status', header: 'حالة المجموعة', type: 'text', width: 14, badge: GROUP_STATUS_BADGE },
       { key: 'start_date', header: 'تبدأ', type: 'date', width: 13 },
       { key: 'end_date', header: 'تنتهي', type: 'date', width: 13 },
       { key: 'student', header: 'الطالب', type: 'text' },
@@ -665,6 +784,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, group_status: translate(row.group_status, GROUP_STATUS_LABELS) }),
   },
   {
     key: 'survey_results',
@@ -761,7 +881,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         { label: 'المجموعة', value: String(row.group_name || '—') },
         {
           label: 'وقت التسليم',
-          value: row.submitted_at ? new Date(String(row.submitted_at)).toLocaleString('ar-EG') : '—',
+          value: formatCairoFromRaw(row.submitted_at),
         },
       ];
     },
@@ -814,7 +934,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'conduct', header: 'التعامل اللائق', type: 'number', width: 15 },
       { key: 'participation', header: 'المشاركة الإيجابية', type: 'number', width: 16 },
       { key: 'total', header: 'المجموع', type: 'number', width: 12, total: 'sum' },
-      { key: 'eval_status', header: 'حالة التقييم', type: 'text', width: 13 },
+      { key: 'eval_status', header: 'حالة التقييم', type: 'text', width: 14, badge: EVAL_STATUS_BADGE },
       { key: 'submitted_at', header: 'وقت الإرسال', type: 'datetime', width: 18 },
     ],
     filters: [
@@ -848,6 +968,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, eval_status: translate(row.eval_status, EVAL_STATUS_LABELS) }),
   },
   {
     key: 'unassigned',
@@ -906,7 +1027,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
       { key: 'student', header: 'الطالب', type: 'text' },
       { key: 'email', header: 'البريد الإلكتروني', type: 'text' },
       { key: 'course', header: 'الكورس', type: 'text' },
-      { key: 'status', header: 'الحالة', type: 'text', width: 12 },
+      { key: 'status', header: 'الحالة', type: 'text', width: 12, badge: CERT_STATUS_BADGE },
       { key: 'issued_at', header: 'تاريخ الإصدار', type: 'datetime', width: 18 },
       { key: 'revoked_at', header: 'تاريخ السحب', type: 'datetime', width: 18 },
       { key: 'revoke_reason', header: 'سبب السحب', type: 'text', width: 28 },
@@ -952,6 +1073,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, status: translate(row.status, CERT_STATUS_LABELS) }),
   },
   {
     key: 'employees',
@@ -1062,6 +1184,7 @@ export const EXPORT_DATASETS: ExportDataset[] = [
         args,
       };
     },
+    mapRow: (row) => ({ ...row, type: translate(row.type, NOTIFICATION_TYPE_LABELS) }),
   },
 ];
 
@@ -1076,5 +1199,6 @@ export async function runDataset(
   const { text, args } = dataset.build(params);
   const result = await sql(text, ...args);
   const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 50_000) : 50_000;
-  return result.rows.slice(0, limit) as Record<string, unknown>[];
+  const rows = result.rows.slice(0, limit) as Record<string, unknown>[];
+  return dataset.mapRow ? rows.map(dataset.mapRow) : rows;
 }

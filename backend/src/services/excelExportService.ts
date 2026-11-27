@@ -82,7 +82,7 @@ const DISCLAIMER =
   'هذه المنصة مقدمة من وحدة التدريب و التطوير بالتعاون مع المعهد العالي للعلوم الإدارية بالقطامية (HIMS)';
 
 const FONT = 'Arial';
-const BORDER = 'FFE2E8F0';
+const BORDER = 'FFCBD5E1';
 
 // ─── Colour helpers ────────────────────────────────────────────────
 
@@ -153,15 +153,68 @@ function safeMerge(
 
 // ─── Value/type helpers ────────────────────────────────────────────
 
-function parseDate(value: unknown): Date | null {
+const CAIRO_PARTS_FMT = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Africa/Cairo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  hour12: false,
+});
+
+function getCairoParts(date: Date) {
+  const parts = CAIRO_PARTS_FMT.formatToParts(date);
+  const get = (type: string) => Number(parts.find((p) => p.type === type)?.value ?? 0);
+  return {
+    year: get('year'),
+    month: get('month'),
+    day: get('day'),
+    hour: get('hour') % 24,
+    minute: get('minute'),
+    second: get('second'),
+  };
+}
+
+/** Format a Date in Africa/Cairo timezone with ASCII digits: YYYY-MM-DD HH:MM */
+export function formatCairoDateTime(date: Date): string {
+  const p = getCairoParts(date);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${p.year}-${pad(p.month)}-${pad(p.day)} ${pad(p.hour)}:${pad(p.minute)}`;
+}
+
+/**
+ * Parse a date/datetime value into a UTC-wallclock Date matching Africa/Cairo
+ * so ExcelJS writes Cairo time (Excel has no timezone metadata).
+ * Date-only strings ("YYYY-MM-DD") are never shifted across days.
+ */
+function parseDateForExcel(value: unknown, dateOnly: boolean): Date | null {
   if (!value) return null;
-  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    const p = getCairoParts(value);
+    return dateOnly
+      ? new Date(Date.UTC(p.year, p.month - 1, p.day))
+      : new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second));
+  }
   const raw = String(value).trim();
   if (!raw) return null;
+
+  const pureDate = /^(\d{4})-(\d{2})-(\d{2})$/.exec(raw);
+  if (pureDate) {
+    return new Date(Date.UTC(Number(pureDate[1]), Number(pureDate[2]) - 1, Number(pureDate[3])));
+  }
+
   // SQLite timestamps are "YYYY-MM-DD HH:MM:SS" (UTC)
-  const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T') + (raw.length <= 10 ? 'T00:00:00' : 'Z');
-  const date = new Date(normalized);
-  return Number.isNaN(date.getTime()) ? null : date;
+  const normalized = raw.includes('T') ? raw : `${raw.replace(' ', 'T')}Z`;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  const p = getCairoParts(parsed);
+  return dateOnly
+    ? new Date(Date.UTC(p.year, p.month - 1, p.day))
+    : new Date(Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second));
 }
 
 function numeric(value: unknown): number | null {
@@ -172,9 +225,12 @@ function numeric(value: unknown): number | null {
 
 function cellValue(value: unknown, type: CellType | undefined): ExcelJS.CellValue {
   switch (type) {
-    case 'date':
+    case 'date': {
+      const d = parseDateForExcel(value, true);
+      return d ?? (value === null || value === undefined ? null : String(value));
+    }
     case 'datetime': {
-      const d = parseDate(value);
+      const d = parseDateForExcel(value, false);
       return d ?? (value === null || value === undefined ? null : String(value));
     }
     case 'number':
@@ -229,6 +285,12 @@ function visualLength(value: unknown): number {
 }
 
 function columnWidth(column: ExportColumn, rows: Record<string, unknown>[]): number {
+  const allEmpty =
+    rows.length > 0 &&
+    rows.every((r) => r[column.key] === null || r[column.key] === undefined || String(r[column.key]).trim() === '');
+  if (allEmpty) {
+    return Math.max(10, Math.ceil(visualLength(column.header)) + 4);
+  }
   if (column.width) return column.width;
   if (column.type === 'datetime') return 18;
   if (column.type === 'date') return 13;
@@ -288,7 +350,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   const dataSheetName = (sheetName || title).replace(/[\\/*?:[\]]/g, ' ').slice(0, 31) || 'البيانات';
   const ws = workbook.addWorksheet(dataSheetName, {
     views: [{ rightToLeft: true, showGridLines: false }],
-    properties: { defaultRowHeight: 20, tabColor: { argb: primary } },
+    properties: { defaultRowHeight: 22, tabColor: { argb: primary } },
     pageSetup: {
       paperSize: 9,
       orientation: 'landscape',
@@ -405,7 +467,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
   const infoBlockLabels = new Set(infoBlock.map((x) => x.label));
   const filteredFilters = filters.filter((f) => !infoBlockLabels.has(f.label));
   const filterText = filteredFilters.length ? filteredFilters.map((f) => `${f.label}: ${f.value}`).join('  |  ') : 'بدون فلاتر';
-  metaCell.value = `عدد السجلات: ${rows.length}   |   ${filterText}   |   تاريخ الإصدار: ${now.toLocaleString('ar-EG')}`;
+  metaCell.value = `عدد السجلات: ${rows.length}   |   ${filterText}   |   تاريخ الإصدار: ${formatCairoDateTime(now)}`;
   metaCell.font = { name: FONT, size: 9, color: { argb: 'FF4B5563' } };
   metaCell.alignment = { horizontal: 'right', vertical: 'middle', readingOrder: 'rtl' };
   metaCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: primarySoft } };
@@ -511,8 +573,8 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
         const badge = column.badge?.[String(record[column.key] ?? '')];
         cell.value = badge ? badge.label : cellValue(record[column.key], column.type);
         cell.font = badge
-          ? { name: FONT, size: 10, bold: true, color: { argb: BADGE_STYLE[badge.tone].color } }
-          : { name: FONT, size: 10, color: { argb: 'FF111827' } };
+          ? { name: FONT, size: 11, bold: true, color: { argb: BADGE_STYLE[badge.tone].color } }
+          : { name: FONT, size: 11, color: { argb: 'FF111827' } };
         cell.alignment = cellAlignment(badge ? 'text' : column.type);
         const format = numFmt(column.type);
         if (format) cell.numFmt = format;
@@ -528,13 +590,13 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
           },
         };
         cell.border = {
-          top: { style: 'hair', color: { argb: BORDER } },
-          bottom: { style: 'hair', color: { argb: BORDER } },
-          left: { style: 'hair', color: { argb: BORDER } },
-          right: { style: 'hair', color: { argb: BORDER } },
+          top: { style: 'thin', color: { argb: BORDER } },
+          bottom: { style: 'thin', color: { argb: BORDER } },
+          left: { style: 'thin', color: { argb: BORDER } },
+          right: { style: 'thin', color: { argb: BORDER } },
         };
       });
-      row.height = 20;
+      row.height = 22;
     });
   }
 
@@ -694,7 +756,7 @@ export async function buildBrandedWorkbook(options: BuildOptions): Promise<Buffe
     ['الوصف', description || '—'],
     ['عدد السجلات', String(rows.length)],
     ['الفلاتر المطبقة', filters.length ? filters.map((f) => `${f.label}: ${f.value}`).join(' | ') : 'بدون فلاتر'],
-    ['تاريخ الإصدار', now.toLocaleString('ar-EG')],
+    ['تاريخ الإصدار', formatCairoDateTime(now)],
     ['تم التصدير بواسطة', exportedBy || '—'],
     ['صلاحية المُصدِّر', exportedByRole || '—'],
     ['الأعمدة', columns.map((c) => c.header).join('، ')],
@@ -732,5 +794,5 @@ export function safeFilename(name: string, extension = 'xlsx'): string {
     .replace(/[\\/:*?"<>|]/g, '-')
     .replace(/\s+/g, '-')
     .slice(0, 80);
-  return `${base || 'export'}-${new Date().toISOString().slice(0, 10)}.${extension}`;
+  return `${base || 'export'}-${formatCairoDateTime(new Date()).slice(0, 10)}.${extension}`;
 }

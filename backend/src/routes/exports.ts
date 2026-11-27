@@ -6,11 +6,13 @@ import {
   EXPORT_DATASETS,
   ExportDataset,
   ExportParams,
+  ORDER_STATUS_LABELS,
   findDataset,
   runDataset,
 } from '../services/exportDatasets';
 import {
   buildBrandedWorkbook,
+  formatCairoDateTime,
   loadBranding,
   safeFilename,
   type ExportColumn,
@@ -112,16 +114,34 @@ async function exporterIdentity(req: Request): Promise<{ name: string; role: str
   }
 }
 
+function formatCsvCell(column: ExportColumn, raw: unknown): string {
+  if (raw === null || raw === undefined) return '';
+  if (column.badge) {
+    const badge = column.badge[String(raw)];
+    if (badge) return badge.label;
+  }
+  if (column.type === 'boolean') {
+    if (typeof raw === 'boolean') return raw ? 'نعم' : 'لا';
+    return Number(raw) === 1 ? 'نعم' : 'لا';
+  }
+  if (column.type === 'datetime') {
+    const s = String(raw).trim();
+    if (!s || /^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+    const normalized = s.includes('T') ? s : `${s.replace(' ', 'T')}Z`;
+    const d = new Date(normalized);
+    return Number.isNaN(d.getTime()) ? s : formatCairoDateTime(d);
+  }
+  return String(raw);
+}
+
 function toCsv(columns: ExportColumn[], rows: Record<string, unknown>[]): string {
-  const escapeCell = (value: unknown) => {
-    if (value === null || value === undefined) return '';
-    const text = String(value);
-    return /[",;\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const escapeCell = (value: string) => {
+    return /[",;\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
   };
 
   const lines = [columns.map((c) => escapeCell(c.header)).join(',')];
   for (const row of rows) {
-    lines.push(columns.map((c) => escapeCell(row[c.key])).join(','));
+    lines.push(columns.map((c) => escapeCell(formatCsvCell(c, row[c.key]))).join(','));
   }
   // BOM keeps Arabic readable when the CSV is opened directly in Excel.
   return '\uFEFF' + lines.join('\r\n');
@@ -196,7 +216,10 @@ router.get('/students/:courseId', requirePermission('students', 'read'), async (
       { key: 'order_date', header: 'تاريخ الدفع', type: 'datetime', width: 18 },
     ];
 
-    const rows = students.rows as Record<string, unknown>[];
+    const rows = (students.rows as Record<string, unknown>[]).map((r) => ({
+      ...r,
+      status: ORDER_STATUS_LABELS[String(r.status ?? '')] ?? r.status,
+    }));
     const format = String(req.query.format || 'xlsx');
 
     if (format === 'json') {
